@@ -1,0 +1,8 @@
+# Modern browsers only - no legacy vendor prefixes needed
+last 2 versions
+not dead
+not < 0.2%
+Chrome >= 79
+Edge >= 79
+Firefox >= 78
+Safari >= 14

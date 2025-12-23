@@ -1,0 +1,87 @@
+# Docker Compose configuration for Playlist Polisher
+# Uses pre-built unified image from GitHub Container Registry (GHCR)
+#
+# Quick start:
+#   1. Copy .env.example to .env and configure
+#   2. docker compose up -d
+#   3. Visit http://localhost:8001
+
+services:
+  app:
+    image: ghcr.io/consecrated-hammer/playlistpolisher:${TAG:-latest}
+    container_name: playlistpolisher
+    restart: unless-stopped
+    
+    ports:
+      - "8001:8001"
+    
+    environment:
+      # Load from .env file
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - SECRET_KEY=${SECRET_KEY}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8001}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - BACKEND_HOST=${BACKEND_HOST:-0.0.0.0}
+      - BACKEND_PORT=${BACKEND_PORT:-8001}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-120}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
+    
+    volumes:
+      # Persistent data storage
+      - playlist-polisher-data:/data
+    
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  # Named volume for persistent database and logs
+  playlist-polisher-data:
+    driver: local
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# 
+# Basic Usage:
+#   Start:    docker compose up -d
+#   Stop:     docker compose down
+#   Logs:     docker compose logs -f
+#   Update:   docker compose pull && docker compose up -d
+#
+# Port Configuration:
+#   If ports 80 or 8001 are already in use, change the left side:
+#     - "8080:80"    # Frontend on host port 8080
+#     - "8002:8001"  # Backend on host port 8002
+#   Then update .env: BACKEND_API_URL=http://localhost:8002
+#
+# Data Backup:
+#   docker run --rm -v playlist-polisher-data:/data \
+#     -v $(pwd)/backup:/backup alpine \
+#     tar czf /backup/backup-$(date +%Y%m%d).tar.gz /data
+#
+# Custom Data Location:
+#   Replace volume with bind mount:
+#     volumes:
+#       - ./data:/data
+#
+# HTTPS Setup:
+#   For production with HTTPS, see docker-compose.yml for Traefik example
+#   or use a reverse proxy like Nginx or Caddy in front of this stack
+#
+# Resource Limits:
+#   Add under each service to limit resources:
+#     deploy:
+#       resources:
+#         limits:
+#           cpus: '1.0'
+#           memory: 512M
+#
+# =============================================================================

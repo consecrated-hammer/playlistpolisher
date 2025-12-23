@@ -1,0 +1,256 @@
+# =============================================================================
+# SENSITIVE FILES - NEVER COMMIT THESE
+# =============================================================================
+# Environment configuration
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+*.env
+*.env.*
+
+# Secrets and credentials
+tokens.json
+*.key
+*.pem
+*.cert
+*.crt
+*.p12
+*.pfx
+secret.*
+secrets/
+credentials/
+.secrets/
+
+# Database files (contain user data and tokens)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+
+# =============================================================================
+# PYTHON
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+.ENV/
+.env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath
+*.sage.py
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# pytype
+.pytype/
+
+# Cython
+cython_debug/
+
+# =============================================================================
+# NODE / FRONTEND
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+dist/
+dist-ssr/
+*.local
+build/
+out/
+.next/
+.nuxt/
+.cache/
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =============================================================================
+# IDEs & EDITORS
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# =============================================================================
+# OS FILES
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# =============================================================================
+# DOCKER & DEPLOYMENT
+# =============================================================================
+# Local docker data volumes (if not using named volumes)
+data/
+logs/
+backups/
+
+# Docker override files
+docker-compose.override.yml
+
+# =============================================================================
+# DEVELOPMENT & PERSONAL FILES
+# =============================================================================
+# AI agent instructions
+AGENTS.md
+agents.md
+
+# Development scripts and tools
+/scripts/
+
+# Temporary development files
+/_temp/
+
+# Development environment files
+.env.dev
+
+# Development docker compose files
+docker-compose.dev.yml
+docker-compose.*.dev.yml
+docker-compose.traefik*.yml
+
+# =============================================================================
+# MISC
+# =============================================================================
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~.nib
+local.properties
+
+# Archives
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Keep certain files
+!.gitkeep
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+
+# Docker
+*.pid
+.env.docker
+/.env.docker
+
+# Temporary
+_temp/
