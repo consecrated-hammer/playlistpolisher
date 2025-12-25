@@ -4,6 +4,14 @@ import usePlayerContext from '../context/usePlayerContext';
 import usePlayerProgressContext from '../context/usePlayerProgressContext';
 import { cacheAPI, formatDuration, preferencesAPI } from '../services/api';
 
+const escapeSelectorValue = (value) => {
+  const text = String(value);
+  if (typeof CSS !== 'undefined' && CSS.escape) {
+    return CSS.escape(text);
+  }
+  return text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+};
+
 const NowPlayingPanel = () => {
   const player = usePlayerContext();
   const progress = usePlayerProgressContext();
@@ -65,7 +73,7 @@ const NowPlayingPanel = () => {
     }
     const targetUris = [currentTrack?.uri, currentTrack?.linkedFromUri].filter(Boolean);
     for (const targetUri of targetUris) {
-      const safeUri = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(targetUri) : targetUri.replace(/"/g, '\\"');
+      const safeUri = escapeSelectorValue(targetUri);
       const target = document.querySelector(`[data-track-uri="${safeUri}"], [data-track-linked-uri="${safeUri}"]`);
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });

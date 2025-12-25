@@ -187,6 +187,7 @@ if settings.rate_limit_enabled:
 # Mount static files (frontend) if available
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
+    static_root = static_dir.resolve()
     app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
     
     @app.get("/", response_class=FileResponse)
@@ -197,11 +198,11 @@ if static_dir.exists():
     @app.get("/{full_path:path}", response_class=FileResponse)
     async def catch_all(full_path: str):
         """Catch-all route for frontend routing"""
-        file_path = static_dir / full_path
-        if file_path.is_file():
-            return FileResponse(str(file_path))
+        target_path = (static_root / full_path).resolve()
+        if target_path.is_relative_to(static_root) and target_path.is_file():
+            return FileResponse(str(target_path))
         # For frontend routes, return index.html (SPA)
-        return FileResponse(str(static_dir / "index.html"))
+        return FileResponse(str(static_root / "index.html"))
 else:
     @app.get("/")
     async def root():
