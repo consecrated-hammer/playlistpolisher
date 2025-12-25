@@ -187,21 +187,30 @@ if settings.rate_limit_enabled:
 # Mount static files (frontend) if available
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
-    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    static_root = static_dir.resolve()
+    assets_dir = static_root / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    index_path = static_root / "index.html"
+    static_file_map = {
+        entry.name: entry
+        for entry in static_root.iterdir()
+        if entry.is_file()
+    }
     
     @app.get("/", response_class=FileResponse)
     async def serve_frontend():
         """Serve frontend index.html"""
-        return FileResponse(str(static_dir / "index.html"))
+        return FileResponse(str(index_path))
     
     @app.get("/{full_path:path}", response_class=FileResponse)
     async def catch_all(full_path: str):
         """Catch-all route for frontend routing"""
-        file_path = static_dir / full_path
-        if file_path.is_file():
+        file_path = static_file_map.get(full_path)
+        if file_path and file_path.is_file():
             return FileResponse(str(file_path))
         # For frontend routes, return index.html (SPA)
-        return FileResponse(str(static_dir / "index.html"))
+        return FileResponse(str(index_path))
 else:
     @app.get("/")
     async def root():
