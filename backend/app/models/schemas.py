@@ -156,6 +156,7 @@ class PlaylistSimple(BaseModel):
     owner: PlaylistOwner
     public: Optional[bool] = None
     collaborative: Optional[bool] = None
+    snapshot_id: Optional[str] = None
     uri: str
     
     @property
@@ -401,6 +402,16 @@ class PlaybackTokenResponse(BaseModel):
 class UserPreferences(BaseModel):
     """User preference payload persisted per account."""
     playlist_view: Literal["grid", "list", "table"] = "grid"
+    playlist_sort: Literal[
+        "default",
+        "recently-updated-estimated",
+        "name-asc",
+        "name-desc",
+        "tracks-asc",
+        "tracks-desc",
+        "owner-asc",
+        "owner-desc",
+    ] = "default"
     cache_playlist_scope: Literal["all", "selected", "manual"] = "all"
     cache_selected_playlist_ids: List[str] = []
     cache_auto_include_new: bool = True
@@ -413,6 +424,18 @@ class UserPreferences(BaseModel):
 class UserPreferencesUpdate(BaseModel):
     """Partial updates for user preferences."""
     playlist_view: Optional[Literal["grid", "list", "table"]] = None
+    playlist_sort: Optional[
+        Literal[
+            "default",
+            "recently-updated-estimated",
+            "name-asc",
+            "name-desc",
+            "tracks-asc",
+            "tracks-desc",
+            "owner-asc",
+            "owner-desc",
+        ]
+    ] = None
     cache_playlist_scope: Optional[Literal["all", "selected", "manual"]] = None
     cache_selected_playlist_ids: Optional[List[str]] = None
     cache_auto_include_new: Optional[bool] = None

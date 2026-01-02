@@ -32,16 +32,24 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
   const renderCachedIcon = (playlistId) => {
     const fact = cacheFacts[playlistId];
     if (!fact || !fact.last_cached_at_utc) {
-      return null;
+      return (
+        <div className="relative flex-shrink-0">
+          <span className="icon text-sm text-spotify-gray-light peer">cloud_off</span>
+          <div className="tooltip tooltip-up peer-hover:tooltip-visible z-50">
+            Not cached yet
+          </div>
+        </div>
+      );
     }
     const isDirty = fact.is_dirty === 1;
+    const icon = isDirty ? 'cloud_sync' : 'cloud_done';
+    const colorClass = isDirty ? 'text-amber-300' : 'text-spotify-green';
+    const label = isDirty ? 'Cached playlist (needs refresh)' : 'Cached playlist';
     return (
-      <div className="relative group">
-        <span className={`icon text-sm ${isDirty ? 'text-amber-300' : 'text-spotify-green'}`}>
-          cloud_done
-        </span>
-        <div className="tooltip tooltip-up group-hover:tooltip-visible">
-          {isDirty ? 'Cached playlist (needs refresh)' : 'Cached playlist'}
+      <div className="relative flex-shrink-0">
+        <span className={`icon text-sm ${colorClass} peer`}>{icon}</span>
+        <div className="tooltip tooltip-up peer-hover:tooltip-visible z-50">
+          {label}
         </div>
       </div>
     );
@@ -82,14 +90,16 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                     <p className="text-white font-semibold text-sm sm:text-base truncate" title={playlist.name}>
                       {playlist.name}
                     </p>
-                    {renderCachedIcon(playlist.id)}
                   </div>
                   <p className="text-spotify-gray-light text-xs sm:text-sm truncate">
                     by {ownerName}
                   </p>
                 </div>
-                <div className="text-spotify-gray-light text-xs sm:text-sm sm:ml-auto">
-                  {trackTotal} {trackTotal === 1 ? 'track' : 'tracks'}
+                <div className="flex items-center gap-2 text-spotify-gray-light text-xs sm:text-sm sm:ml-auto">
+                  <span>
+                    {trackTotal} {trackTotal === 1 ? 'track' : 'tracks'}
+                  </span>
+                  {renderCachedIcon(playlist.id)}
                 </div>
               </div>
             </button>
@@ -207,18 +217,18 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <p className="text-white font-semibold truncate max-w-[320px]" title={playlist.name}>
-                        {playlist.name}
-                      </p>
-                      {renderCachedIcon(playlist.id)}
-                    </div>
+                    <p className="text-white font-semibold truncate max-w-[320px]" title={playlist.name}>
+                      {playlist.name}
+                    </p>
                   </td>
                   <td className="px-3 py-2 text-spotify-gray-light">
                     {ownerName}
                   </td>
                   <td className="px-3 py-2 text-spotify-gray-light">
-                    {trackTotal}
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{trackTotal}</span>
+                      {renderCachedIcon(playlist.id)}
+                    </div>
                   </td>
                 </tr>
               );
@@ -235,11 +245,8 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
         {playlists.map((playlist) => (
           <div
             key={playlist.id}
-            className="bg-spotify-gray-dark hover:bg-spotify-gray-mid rounded-lg p-4 transition-all duration-200 hover:scale-105 animate-fade-in group relative"
+            className="bg-spotify-gray-dark hover:bg-spotify-gray-mid rounded-lg p-4 transition-all duration-200 hover:scale-105 hover:z-30 animate-fade-in group relative"
           >
-            <div className="absolute top-3 right-3">
-              {renderCachedIcon(playlist.id)}
-            </div>
             {/* Playlist Cover */}
             <div className="relative mb-4 aspect-square rounded-md cursor-pointer group" onClick={() => onPlaylistClick(playlist.id)}>
               <div className="absolute inset-0 rounded-md overflow-hidden bg-spotify-gray-mid">
@@ -267,9 +274,12 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
             <p className="text-spotify-gray-light text-xs truncate mb-2">
               by {playlist.owner?.display_name || playlist.owner?.id || 'Unknown'}
             </p>
-            <p className="text-spotify-gray-light text-xs">
-              {playlist.tracks?.total || 0} {(playlist.tracks?.total === 1) ? 'track' : 'tracks'}
-            </p>
+            <div className="flex items-center justify-between text-spotify-gray-light text-xs">
+              <span>
+                {playlist.tracks?.total || 0} {(playlist.tracks?.total === 1) ? 'track' : 'tracks'}
+              </span>
+              {renderCachedIcon(playlist.id)}
+            </div>
           </div>
         ))}
       </div>

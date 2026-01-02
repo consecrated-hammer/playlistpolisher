@@ -1,14 +1,19 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import * as Select from '@radix-ui/react-select';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { playlistAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 // Action type configurations for extensibility
+const cacheActionTypes = ['cache_clear', 'cache_refresh', 'cache_refresh_full'];
+
 const actionConfigs = {
   sort: {
     label: 'Sort',
     fields: ['sort_by', 'direction', 'method'],
+    description: 'Reorder playlist tracks based on your selected criteria.',
     summary: (params) => {
       const sortLabels = { date_added: 'Date added', title: 'Title', artist: 'Artist', album: 'Album', duration: 'Duration' };
       const sort = sortLabels[params.sort_by] || 'Date added';
@@ -18,9 +23,22 @@ const actionConfigs = {
     }
   },
   cache_clear: {
+    label: 'Cache cleanup',
+    fields: [],
+    description: 'Clear expired cache entries (cleanup only).',
+    summary: () => 'Clear expired cache entries'
+  },
+  cache_refresh: {
     label: 'Cache refresh',
     fields: [],
-    summary: () => 'Clear expired cache entries'
+    description: 'Refresh playlists that have changed since last cache.',
+    summary: () => 'Refresh playlists that have changed'
+  },
+  cache_refresh_full: {
+    label: 'Cache refresh (full)',
+    fields: [],
+    description: 'Clear and rebuild cache for all playlists.',
+    summary: () => 'Clear and rebuild cache for all playlists'
   },
   // Future: dedupe, reorder, etc.
 };
@@ -178,7 +196,7 @@ const SchedulesPage = ({ user, onLogout }) => {
   };
 
   const handleSaveEdit = async () => {
-    const isCache = editForm.action_type === 'cache_clear';
+    const isCache = cacheActionTypes.includes(editForm.action_type);
     if (!isCache && !editForm.playlistId) {
       showToast('Please select a playlist', 'error');
       return;
@@ -193,9 +211,10 @@ const SchedulesPage = ({ user, onLogout }) => {
       }
     }
     if (creatingNew && isCache) {
-      const existingCache = schedules.find((s) => s.action_type === 'cache_clear');
+      const existingCache = schedules.find((s) => s.action_type === editForm.action_type);
       if (existingCache) {
-        showToast('Cache refresh schedule already exists', 'error');
+        const label = actionConfigs[editForm.action_type]?.label || 'Cache refresh';
+        showToast(`${label} schedule already exists`, 'error');
         return;
       }
     }
@@ -222,14 +241,14 @@ const SchedulesPage = ({ user, onLogout }) => {
 
     try {
       if (editingRowId) {
-        if (editForm.action_type === 'cache_clear') {
+        if (isCache) {
           await playlistAPI.updateCacheSchedule(editingRowId, payload);
         } else {
           await playlistAPI.updateSchedule(editForm.playlistId, editingRowId, payload);
         }
         showToast('Schedule updated', 'success');
       } else {
-        if (editForm.action_type === 'cache_clear') {
+        if (isCache) {
           await playlistAPI.createCacheSchedule(payload);
         } else {
           await playlistAPI.createSchedule(editForm.playlistId, payload);
@@ -249,7 +268,7 @@ const SchedulesPage = ({ user, onLogout }) => {
 
   const toggleEnabled = async (sched) => {
     try {
-      if (sched.action_type === 'cache_clear') {
+      if (cacheActionTypes.includes(sched.action_type)) {
         await playlistAPI.updateCacheSchedule(sched.id, { enabled: !sched.enabled });
       } else {
         await playlistAPI.updateSchedule(sched.playlist_id, sched.id, {
@@ -268,7 +287,7 @@ const SchedulesPage = ({ user, onLogout }) => {
   const handleDelete = async (sched) => {
     if (!window.confirm('Delete this schedule?')) return;
     try {
-      if (sched.action_type === 'cache_clear') {
+      if (cacheActionTypes.includes(sched.action_type)) {
         await playlistAPI.deleteCacheSchedule(sched.id);
       } else {
         await playlistAPI.deleteSchedule(sched.playlist_id, sched.id);
@@ -298,26 +317,68 @@ const SchedulesPage = ({ user, onLogout }) => {
   const renderEditRow = () => {
     const inputClass = "bg-spotify-gray-mid text-white text-sm rounded px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-1 focus:ring-spotify-green";
     const iconBtn = "w-8 h-8 rounded-full border flex items-center justify-center transition-colors";
-    const canSave = editForm.action_type === 'cache_clear' || !!editForm.playlistId;
+    const canSave = cacheActionTypes.includes(editForm.action_type) || !!editForm.playlistId;
+    const selectedAction = actionConfigs[editForm.action_type] || actionConfigs.sort;
     
     return (
       <div className="grid grid-cols-12 px-4 py-3 text-sm items-center bg-spotify-green/5 border-l-4 border-spotify-green">
         {/* Type */}
         <div className="col-span-2 pr-2">
-          <select
-            value={editForm.action_type}
-            onChange={(e) => setEditForm({ ...editForm, action_type: e.target.value })}
-            className={inputClass}
-          >
-            {Object.entries(actionConfigs).map(([key, config]) => (
-              <option key={key} value={key}>{config.label}</option>
-            ))}
-          </select>
+          <Tooltip.Provider delayDuration={120}>
+            <Select.Root
+              value={editForm.action_type}
+              onValueChange={(value) => setEditForm({ ...editForm, action_type: value })}
+            >
+              <Select.Trigger className={`${inputClass} w-full flex items-center justify-between gap-2`}>
+                <Select.Value aria-label={selectedAction.label} />
+                <Select.Icon className="text-spotify-gray-light">
+                  <span className="icon text-base">expand_more</span>
+                </Select.Icon>
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Content
+                  className="z-40 bg-spotify-gray-dark border border-spotify-gray-mid rounded-lg shadow-xl overflow-hidden"
+                  position="popper"
+                  sideOffset={8}
+                >
+                  <Select.Viewport className="max-h-60 overflow-y-auto py-1">
+                    {Object.entries(actionConfigs).map(([key, config]) => (
+                      <Tooltip.Root key={key}>
+                        <Tooltip.Trigger asChild>
+                          <Select.Item
+                            value={key}
+                            className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-spotify-gray-light cursor-pointer select-none outline-none data-[highlighted]:bg-spotify-gray-mid/60 data-[highlighted]:text-white data-[state=checked]:text-white"
+                          >
+                            <Select.ItemText>{config.label}</Select.ItemText>
+                            <Select.ItemIndicator className="text-spotify-green">
+                              <span className="icon text-xs">check</span>
+                            </Select.ItemIndicator>
+                          </Select.Item>
+                        </Tooltip.Trigger>
+                        {config.description && (
+                          <Tooltip.Portal>
+                            <Tooltip.Content
+                              side="right"
+                              sideOffset={8}
+                              className="radix-tooltip z-[70]"
+                            >
+                              {config.description}
+                              <Tooltip.Arrow className="fill-[#1b1b1b]" />
+                            </Tooltip.Content>
+                          </Tooltip.Portal>
+                        )}
+                      </Tooltip.Root>
+                    ))}
+                  </Select.Viewport>
+                </Select.Content>
+              </Select.Portal>
+            </Select.Root>
+          </Tooltip.Provider>
         </div>
 
         {/* Playlist */}
         <div className="col-span-2 pr-2">
-          {editForm.action_type === 'cache_clear' ? (
+          {cacheActionTypes.includes(editForm.action_type) ? (
             <input
               value="Global cache"
               disabled
@@ -527,7 +588,7 @@ const SchedulesPage = ({ user, onLogout }) => {
                   const actionType = s.action_type || 'sort';
                   const config = actionConfigs[actionType];
                   const actionSummary = config ? config.summary(params) : 'Unknown';
-                  const isCache = actionType === 'cache_clear';
+                  const isCache = cacheActionTypes.includes(actionType);
 
                   return (
                     <div 

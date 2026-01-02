@@ -50,6 +50,9 @@ class CacheStatsResponse(BaseModel):
 class CacheWarmRequest(BaseModel):
     """Request model for warming playlist cache."""
     playlist_ids: List[str]
+    source: Optional[str] = None
+    mode: Optional[str] = None
+    schedule_id: Optional[int] = None
 
 
 class CacheWarmStatusResponse(BaseModel):
@@ -272,7 +275,12 @@ async def warm_playlist_cache(
         user_id = session_mgr.get_user_id()
         if not user_id:
             raise HTTPException(status_code=401, detail="Authentication required. Please login with Spotify.")
-        result = start_cache_warm_job(user_id, session_mgr.session_id, body.playlist_ids)
+        meta = {
+            "source": body.source,
+            "mode": body.mode,
+            "schedule_id": body.schedule_id,
+        }
+        result = start_cache_warm_job(user_id, session_mgr.session_id, body.playlist_ids, meta=meta)
         queued = result.get("queued", 0)
         return {
             "queued": queued,

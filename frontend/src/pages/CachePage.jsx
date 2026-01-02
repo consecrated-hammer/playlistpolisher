@@ -13,6 +13,7 @@ const CachePage = ({ user, onLogout }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [cacheSchedule, setCacheSchedule] = useState(null);
+  const [refreshAllStatus, setRefreshAllStatus] = useState(null);
   const [showCacheModal, setShowCacheModal] = useState(false);
   const [cacheModalLoading, setCacheModalLoading] = useState(false);
   const [cacheModalError, setCacheModalError] = useState(null);
@@ -41,7 +42,7 @@ const CachePage = ({ user, onLogout }) => {
   const loadCacheSchedule = async () => {
     try {
       const sched = await playlistAPI.listSchedules();
-      const cacheSched = (sched || []).find((s) => s.action_type === 'cache_clear');
+      const cacheSched = (sched || []).find((s) => String(s.action_type || '').startsWith('cache_'));
       setCacheSchedule(cacheSched || null);
     } catch {
       setCacheSchedule(null);
@@ -149,7 +150,7 @@ const CachePage = ({ user, onLogout }) => {
           playlistIds = cacheSelectedIds;
         }
         if (playlistIds.length > 0) {
-          await cacheAPI.warmPlaylists(playlistIds);
+          await cacheAPI.warmPlaylists(playlistIds, { source: 'manual', mode: 'initial' });
         }
       }
 
@@ -162,23 +163,43 @@ const CachePage = ({ user, onLogout }) => {
     }
   };
 
-  // Clear user cache
+  // Refresh user cache
   const handleClearUserCache = async () => {
-    if (!window.confirm('Clear all tracks from your cache? This will force re-fetching from Spotify next time.')) {
+    if (!window.confirm('Refresh your cache now? This clears your cache and rebuilds it for every playlist. This may take several minutes.')) {
       return;
     }
 
     try {
       setActionLoading(true);
       setActionMessage(null);
-      const result = await cacheAPI.clearUserCache();
-      setActionMessage({ type: 'success', text: result.message });
-      await loadStats(); // Reload stats
+      const playlists = await playlistAPI.getPlaylists();
+      if (!playlists || playlists.length === 0) {
+        setActionMessage({ type: 'error', text: 'No playlists found to refresh.' });
+        setRefreshAllStatus(null);
+        return;
+      }
+      const playlistIds = playlists.map((playlist) => playlist.id).filter(Boolean);
+      await cacheAPI.clearUserCache();
+
+      setRefreshAllStatus({ status: 'running', total: playlistIds.length, completed: 0 });
+      const warmResult = await cacheAPI.warmPlaylists(playlistIds, { source: 'manual', mode: 'refresh_full' });
+      const queued = warmResult?.queued || 0;
+      if (queued === 0) {
+        setActionMessage({ type: 'warning', text: 'No playlists queued for refresh. Another refresh may already be running.' });
+        setRefreshAllStatus(null);
+        return;
+      }
+
+      const finalStatus = await pollCacheWarmStatus(Date.now(), playlistIds.length);
+      const total = finalStatus?.total || queued || playlistIds.length;
+      setActionMessage({ type: 'success', text: `Cleared your cache and refreshed ${total} playlists.` });
+      await loadStats();
     } catch (err) {
-      console.error('Failed to clear user cache:', err);
-      setActionMessage({ type: 'error', text: err.message || 'Failed to clear user cache' });
+      console.error('Failed to refresh user cache:', err);
+      setActionMessage({ type: 'error', text: err.message || 'Failed to refresh your cache' });
     } finally {
       setActionLoading(false);
+      setRefreshAllStatus(null);
     }
   };
 
@@ -199,6 +220,90 @@ const CachePage = ({ user, onLogout }) => {
       setActionMessage({ type: 'error', text: err.message || 'Failed to clear all cache' });
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const pollCacheWarmStatus = async (startedAtMs, expectedTotal) => {
+    let status = await cacheAPI.getWarmStatus();
+    if (status && !status.total && expectedTotal) {
+      status = { ...status, total: expectedTotal };
+    }
+    setRefreshAllStatus(status);
+    while (status?.status === 'running') {
+      if (Date.now() - startedAtMs > 30 * 60 * 1000) {
+        throw new Error('Playlist cache refresh timed out.');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      status = await cacheAPI.getWarmStatus();
+      if (status && !status.total && expectedTotal) {
+        status = { ...status, total: expectedTotal };
+      }
+      setRefreshAllStatus(status);
+    }
+    return status;
+  };
+
+  const getPlaylistsToRefresh = (playlists, factsMap, forceRefresh = false) => {
+    if (forceRefresh) {
+      return playlists.map((playlist) => playlist.id).filter(Boolean);
+    }
+    return playlists.filter((playlist) => {
+      const fact = factsMap[playlist.id];
+      if (!fact || !fact.last_snapshot_id) return true;
+      if (!playlist.snapshot_id) return true;
+      if (fact.last_snapshot_id !== playlist.snapshot_id) return true;
+      if (fact.is_dirty === 1) return true;
+      return false;
+    }).map((playlist) => playlist.id);
+  };
+
+  const handleRefreshAllPlaylists = async () => {
+    if (!window.confirm('Refresh cache for playlists that are out of date? This may take several minutes for large libraries.')) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setActionMessage(null);
+
+      const playlists = await playlistAPI.getPlaylists();
+      if (!playlists || playlists.length === 0) {
+        setActionMessage({ type: 'error', text: 'No playlists found to refresh.' });
+        setRefreshAllStatus(null);
+        return;
+      }
+
+      const playlistIds = playlists.map((playlist) => playlist.id).filter(Boolean);
+      const factsResponse = await cacheAPI.getPlaylistFacts(playlistIds);
+      const factsMap = (factsResponse?.facts || []).reduce((acc, fact) => {
+        acc[fact.playlist_id] = fact;
+        return acc;
+      }, {});
+      const playlistsToRefresh = getPlaylistsToRefresh(playlists, factsMap, false);
+      if (playlistsToRefresh.length === 0) {
+        setActionMessage({ type: 'success', text: 'All playlists are already up to date.' });
+        setRefreshAllStatus(null);
+        return;
+      }
+
+      setRefreshAllStatus({ status: 'running', total: playlistsToRefresh.length, completed: 0 });
+      const warmResult = await cacheAPI.warmPlaylists(playlistsToRefresh, { source: 'manual', mode: 'refresh_changed' });
+      const queued = warmResult?.queued || 0;
+      if (queued === 0) {
+        setActionMessage({ type: 'warning', text: 'No playlists queued for refresh. Another refresh may already be running.' });
+        setRefreshAllStatus(null);
+        return;
+      }
+
+      const finalStatus = await pollCacheWarmStatus(Date.now(), playlistsToRefresh.length);
+      const total = finalStatus?.total || queued || playlistsToRefresh.length;
+      setActionMessage({ type: 'success', text: `Refreshed cache for ${total} playlists.` });
+      await loadStats();
+    } catch (err) {
+      setActionMessage({ type: 'error', text: err.message || 'Failed to refresh playlist cache.' });
+    } finally {
+      setActionLoading(false);
+      setRefreshAllStatus(null);
     }
   };
 
@@ -351,18 +456,62 @@ const CachePage = ({ user, onLogout }) => {
           </button>
         </div>
 
+        {/* Refresh All Playlists */}
+        <div className="flex items-center justify-between p-4 bg-spotify-gray-mid/40 rounded-lg">
+          <div>
+            <div className="text-white font-medium">Refresh All Playlists</div>
+            <div className="text-sm text-spotify-gray-light">
+              Warm the cache only for playlists that have changed
+            </div>
+            <div className="text-xs text-spotify-gray-light mt-1">
+              This may take several minutes for large libraries.
+            </div>
+            {refreshAllStatus?.status === 'running' && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between text-xs text-spotify-gray-light">
+                  <span>Refreshing playlists...</span>
+                  <span>
+                    {refreshAllStatus.total
+                      ? `${refreshAllStatus.completed || 0}/${refreshAllStatus.total}`
+                      : 'Starting...'}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-spotify-gray-mid/60 overflow-hidden">
+                  <div
+                    className="h-full bg-spotify-green transition-all"
+                    style={{
+                      width: refreshAllStatus.total
+                        ? `${Math.min(100, Math.round(((refreshAllStatus.completed || 0) / refreshAllStatus.total) * 100))}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleRefreshAllPlaylists}
+            disabled={actionLoading}
+            className="px-4 py-2 bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {refreshAllStatus?.status === 'running' ? 'Refreshing...' : 'Refresh all'}
+          </button>
+        </div>
+
         {/* Clear User Cache */}
         <div className="flex items-center justify-between p-4 bg-spotify-gray-mid/40 rounded-lg">
           <div>
-            <div className="text-white font-medium">Clear Your Cache</div>
-            <div className="text-sm text-spotify-gray-light">Remove your cached tracks so Spotify data refreshes on the next load</div>
+            <div className="text-white font-medium">Refresh Your Cache</div>
+            <div className="text-sm text-spotify-gray-light">
+              Clear and rebuild your cache for every playlist
+            </div>
           </div>
           <button
             onClick={handleClearUserCache}
-            disabled={actionLoading || stats?.user_tracks === 0}
+            disabled={actionLoading}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Clear
+            Refresh
           </button>
         </div>
 
@@ -594,6 +743,31 @@ const CachePage = ({ user, onLogout }) => {
               <div className="bg-spotify-gray-dark rounded-2xl p-8 border border-spotify-gray-mid/60 shadow-2xl">
                 <LoadingSpinner />
                 <p className="text-white text-center mt-4">Processing...</p>
+                {refreshAllStatus?.status === 'running' && (
+                  <div className="mt-4 w-64 space-y-2">
+                    <p className="text-xs text-spotify-gray-light text-center">
+                      This may take several minutes for large libraries.
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-spotify-gray-light">
+                      <span>Refreshing playlists...</span>
+                      <span>
+                        {refreshAllStatus.total
+                          ? `${refreshAllStatus.completed || 0}/${refreshAllStatus.total}`
+                          : 'Starting...'}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-spotify-gray-mid/60 overflow-hidden">
+                      <div
+                        className="h-full bg-spotify-green transition-all"
+                        style={{
+                          width: refreshAllStatus.total
+                            ? `${Math.min(100, Math.round(((refreshAllStatus.completed || 0) / refreshAllStatus.total) * 100))}%`
+                            : '0%',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

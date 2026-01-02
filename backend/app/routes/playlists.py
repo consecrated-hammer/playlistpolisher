@@ -1208,6 +1208,13 @@ async def get_playlist_history(
                 "no_changes": tracks_moved == 0,
             }
         expected_snapshot = entry.get("snapshot_after")
+        cache_meta = None
+        if entry.get("op_type") in {"cache_refresh", "cache_refresh_full"}:
+            cache_meta = {
+                "mode": payload.get("mode"),
+                "cached_track_count_before": payload.get("cached_track_count_before"),
+                "cached_track_count_after": payload.get("cached_track_count_after"),
+            }
         can_undo = bool(not entry.get("undone") and expected_snapshot and current_snapshot and expected_snapshot == current_snapshot)
         cleaned.append({
             "id": entry.get("id"),
@@ -1218,6 +1225,7 @@ async def get_playlist_history(
             "snapshot_after": expected_snapshot,
             "removed_count": len(payload.get("removed_items") or []) if entry.get("op_type") == "duplicates_remove" else None,
             "sort": sort_meta,
+            "cache_refresh": cache_meta,
             "undone": bool(entry.get("undone")),
             "can_undo": can_undo,
             "changes_made": bool(entry.get("changes_made", True)),
@@ -1307,6 +1315,13 @@ async def get_all_user_history(
             }
         
         playlist_id = entry.get("playlist_id")
+        cache_meta = None
+        if entry.get("op_type") in {"cache_refresh", "cache_refresh_full"}:
+            cache_meta = {
+                "mode": payload.get("mode"),
+                "cached_track_count_before": payload.get("cached_track_count_before"),
+                "cached_track_count_after": payload.get("cached_track_count_after"),
+            }
         cleaned.append({
             "id": entry.get("id"),
             "playlist_id": playlist_id,
@@ -1316,6 +1331,7 @@ async def get_all_user_history(
             "expires_at": entry.get("expires_at"),
             "removed_count": len(payload.get("removed_items") or []) if entry.get("op_type") == "duplicates_remove" else None,
             "sort": sort_meta,
+            "cache_refresh": cache_meta,
             "undone": bool(entry.get("undone")),
             "changes_made": bool(entry.get("changes_made", True)),
             "source": payload.get("source"),

@@ -14,6 +14,7 @@ from uuid import uuid4
 from app.services.spotify_service import SpotifyService
 from app.utils.session_manager import SessionManager
 from app.db import playlist_cache as playlist_cache_store
+from app.db import operations as op_store
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,12 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def start_cache_warm_job(user_id: str, session_id: str, playlist_ids: Iterable[str]) -> Dict:
+def start_cache_warm_job(
+    user_id: str,
+    session_id: str,
+    playlist_ids: Iterable[str],
+    meta: Optional[Dict] = None,
+) -> Dict:
     playlist_list = [pid for pid in playlist_ids if pid]
     if not playlist_list:
         return {
@@ -47,7 +53,7 @@ def start_cache_warm_job(user_id: str, session_id: str, playlist_ids: Iterable[s
     with _jobs_lock:
         _jobs_by_user[user_id] = job
 
-    _executor.submit(_run_cache_warm, user_id, session_id, playlist_list, job_id)
+    _executor.submit(_run_cache_warm, user_id, session_id, playlist_list, job_id, meta)
     logger.info("Queued cache warm for %s playlists (user=%s)", len(playlist_list), user_id)
     return {
         "queued": len(playlist_list),
@@ -77,11 +83,21 @@ def _update_job(user_id: str, **updates: Dict) -> None:
         job["updated_at"] = _now_iso()
 
 
-def _run_cache_warm(user_id: str, session_id: str, playlist_ids: List[str], job_id: str) -> None:
+def _run_cache_warm(
+    user_id: str,
+    session_id: str,
+    playlist_ids: List[str],
+    job_id: str,
+    meta: Optional[Dict] = None,
+) -> None:
     spotify_service = SpotifyService(session_manager=SessionManager(session_id=session_id))
+    record_modes = {"refresh_changed", "refresh_full"}
 
     for playlist_id in playlist_ids:
         try:
+            facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id) or {}
+            snapshot_before = facts.get("last_snapshot_id")
+            cached_count_before = facts.get("track_count_cached") or 0
             playlist = spotify_service.get_playlist_details(playlist_id, should_warm_cache=True)
             snapshot_id = getattr(playlist, "snapshot_id", None)
             items = []
@@ -101,6 +117,23 @@ def _run_cache_warm(user_id: str, session_id: str, playlist_ids: List[str], job_
                 items=items,
                 snapshot_id=snapshot_id,
             )
+            if meta and meta.get("mode") in record_modes:
+                op_store.cleanup_expired()
+                op_store.record_operation(
+                    playlist_id=playlist_id,
+                    user_id=user_id,
+                    op_type="cache_refresh_full" if meta.get("mode") == "refresh_full" else "cache_refresh",
+                    snapshot_before=snapshot_before,
+                    snapshot_after=snapshot_id,
+                    payload={
+                        "source": meta.get("source"),
+                        "schedule_id": meta.get("schedule_id"),
+                        "mode": meta.get("mode"),
+                        "cached_track_count_before": cached_count_before,
+                        "cached_track_count_after": len(items),
+                    },
+                    changes_made=False,
+                )
             logger.info("Warmed cache for playlist %s (user=%s)", playlist_id, user_id)
         except Exception as exc:
             playlist_cache_store.mark_dirty(playlist_id)
