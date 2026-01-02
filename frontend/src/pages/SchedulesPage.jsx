@@ -11,6 +11,7 @@ const actionConfigs = {
   sort: {
     label: 'Sort',
     fields: ['sort_by', 'direction', 'method'],
+    description: 'Reorder playlist tracks based on your selected criteria.',
     summary: (params) => {
       const sortLabels = { date_added: 'Date added', title: 'Title', artist: 'Artist', album: 'Album', duration: 'Duration' };
       const sort = sortLabels[params.sort_by] || 'Date added';
@@ -22,16 +23,19 @@ const actionConfigs = {
   cache_clear: {
     label: 'Cache cleanup',
     fields: [],
+    description: 'Clear expired cache entries (cleanup only).',
     summary: () => 'Clear expired cache entries'
   },
   cache_refresh: {
     label: 'Cache refresh',
     fields: [],
+    description: 'Refresh playlists that have changed since last cache.',
     summary: () => 'Refresh playlists that have changed'
   },
   cache_refresh_full: {
     label: 'Cache refresh (full)',
     fields: [],
+    description: 'Clear and rebuild cache for all playlists.',
     summary: () => 'Clear and rebuild cache for all playlists'
   },
   // Future: dedupe, reorder, etc.
@@ -317,15 +321,28 @@ const SchedulesPage = ({ user, onLogout }) => {
       <div className="grid grid-cols-12 px-4 py-3 text-sm items-center bg-spotify-green/5 border-l-4 border-spotify-green">
         {/* Type */}
         <div className="col-span-2 pr-2">
-          <select
-            value={editForm.action_type}
-            onChange={(e) => setEditForm({ ...editForm, action_type: e.target.value })}
-            className={inputClass}
-          >
-            {Object.entries(actionConfigs).map(([key, config]) => (
-              <option key={key} value={key}>{config.label}</option>
-            ))}
-          </select>
+          <div className="relative group">
+            <select
+              value={editForm.action_type}
+              onChange={(e) => setEditForm({ ...editForm, action_type: e.target.value })}
+              className={inputClass}
+              aria-label="Scheduled action type"
+            >
+              {Object.entries(actionConfigs).map(([key, config]) => (
+                <option key={key} value={key}>{config.label}</option>
+              ))}
+            </select>
+            <div className="tooltip tooltip-up group-hover:tooltip-visible z-30">
+              <div className="text-xs text-white font-semibold mb-1">Action types</div>
+              <div className="text-[11px] text-spotify-gray-light space-y-1">
+                {Object.entries(actionConfigs).map(([key, config]) => (
+                  <div key={key}>
+                    <span className="text-white">{config.label}:</span> {config.description || ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Playlist */}
