@@ -33,9 +33,9 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
     const fact = cacheFacts[playlistId];
     if (!fact || !fact.last_cached_at_utc) {
       return (
-        <div className="relative group flex-shrink-0">
-          <span className="icon text-sm text-spotify-gray-light">cloud_off</span>
-          <div className="tooltip tooltip-up group-hover:tooltip-visible">
+        <div className="relative flex-shrink-0">
+          <span className="icon text-sm text-spotify-gray-light peer">cloud_off</span>
+          <div className="tooltip tooltip-up peer-hover:tooltip-visible z-50">
             Not cached yet
           </div>
         </div>
@@ -46,9 +46,9 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
     const colorClass = isDirty ? 'text-amber-300' : 'text-spotify-green';
     const label = isDirty ? 'Cached playlist (needs refresh)' : 'Cached playlist';
     return (
-      <div className="relative group flex-shrink-0">
-        <span className={`icon text-sm ${colorClass}`}>{icon}</span>
-        <div className="tooltip tooltip-up group-hover:tooltip-visible">
+      <div className="relative flex-shrink-0">
+        <span className={`icon text-sm ${colorClass} peer`}>{icon}</span>
+        <div className="tooltip tooltip-up peer-hover:tooltip-visible z-50">
           {label}
         </div>
       </div>
