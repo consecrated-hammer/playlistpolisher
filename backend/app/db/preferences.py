@@ -7,6 +7,7 @@ from app.db.database import get_db_connection
 
 DEFAULT_PREFERENCES: Dict[str, Any] = {
     "playlist_view": "grid",
+    "playlist_sort": "default",
     "cache_playlist_scope": "all",
     "cache_selected_playlist_ids": [],
     "cache_auto_include_new": True,
@@ -45,6 +46,17 @@ def get_user_preferences(user_id: str) -> Dict[str, Any]:
     merged.update(stored)
     if merged.get("playlist_view") not in {"grid", "list", "table"}:
         merged["playlist_view"] = DEFAULT_PREFERENCES["playlist_view"]
+    if merged.get("playlist_sort") not in {
+        "default",
+        "recently-updated-estimated",
+        "name-asc",
+        "name-desc",
+        "tracks-asc",
+        "tracks-desc",
+        "owner-asc",
+        "owner-desc",
+    }:
+        merged["playlist_sort"] = DEFAULT_PREFERENCES["playlist_sort"]
     if merged.get("cache_playlist_scope") not in {"all", "selected", "manual"}:
         merged["cache_playlist_scope"] = DEFAULT_PREFERENCES["cache_playlist_scope"]
     selected_ids = merged.get("cache_selected_playlist_ids")

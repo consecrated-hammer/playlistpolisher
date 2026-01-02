@@ -67,12 +67,29 @@ const VIEW_MODE_OPTIONS = [
   { value: 'list', label: 'List view', icon: 'view_list' },
   { value: 'table', label: 'Table view', icon: 'table_rows' },
 ];
+const SORT_OPTIONS = new Set([
+  'default',
+  'recently-updated-estimated',
+  'name-asc',
+  'name-desc',
+  'tracks-asc',
+  'tracks-desc',
+  'owner-asc',
+  'owner-desc',
+]);
 
 const normalizeViewMode = (value) => {
   if (value === 'grid' || value === 'list' || value === 'table') {
     return value;
   }
   return 'grid';
+};
+
+const normalizeSortOption = (value) => {
+  if (typeof value === 'string' && SORT_OPTIONS.has(value)) {
+    return value;
+  }
+  return null;
 };
 
 const getViewModeStorageKey = (userId) => {
@@ -486,9 +503,10 @@ const PlaylistsPage = ({ user, onLogout }) => {
   const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sortOption, setSortOption] = useState('default');
+  const [sortPreference, setSortPreference] = useState('default');
   const [filterOption, setFilterOption] = useState('all');
   const [viewMode, setViewMode] = useState('grid');
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [cacheFacts, setCacheFacts] = useState({});
   const [cacheFactsSummary, setCacheFactsSummary] = useState({ coverage_ratio: 0, facts_count: 0, total_playlists: 0 });
   const [cacheScope, setCacheScope] = useState(null);
@@ -504,6 +522,7 @@ const PlaylistsPage = ({ user, onLogout }) => {
 
   useEffect(() => {
     if (!user?.id) {
+      setPrefsLoaded(false);
       return;
     }
 
@@ -518,6 +537,7 @@ const PlaylistsPage = ({ user, onLogout }) => {
       try {
         const prefs = await preferencesAPI.getPreferences();
         const remoteMode = normalizeViewMode(prefs?.playlist_view);
+        const remoteSort = normalizeSortOption(prefs?.playlist_sort);
         if (!isActive) {
           return;
         }
@@ -527,9 +547,16 @@ const PlaylistsPage = ({ user, onLogout }) => {
         } else if (storedMode && remoteMode !== storedMode) {
           await preferencesAPI.updatePreferences({ playlist_view: storedMode });
         }
+        if (remoteSort) {
+          setSortPreference(remoteSort);
+        }
         setCacheScope(prefs?.cache_playlist_scope || null);
       } catch (err) {
         console.error('Failed to load user preferences:', err);
+      } finally {
+        if (isActive) {
+          setPrefsLoaded(true);
+        }
       }
     };
 
@@ -625,11 +652,19 @@ const PlaylistsPage = ({ user, onLogout }) => {
     && cacheFactsSummary.coverage_ratio >= 0.8
     && cacheFactsSummary.facts_count > 0;
 
+  const effectiveSortOption = sortPreference === 'recently-updated-estimated' && !cacheSortEnabled
+    ? 'default'
+    : sortPreference;
+
   useEffect(() => {
-    if (sortOption === 'recently-updated-estimated' && !cacheSortEnabled) {
-      setSortOption('default');
+    if (!user?.id || !prefsLoaded) {
+      return;
     }
-  }, [sortOption, cacheSortEnabled]);
+    const normalized = normalizeSortOption(sortPreference) || 'default';
+    preferencesAPI.updatePreferences({ playlist_sort: normalized }).catch((err) => {
+      console.error('Failed to update playlist sort preference:', err);
+    });
+  }, [sortPreference, user?.id, prefsLoaded]);
 
   const filteredPlaylists = useMemo(() => {
     return playlists.filter((pl) => {
@@ -651,7 +686,7 @@ const PlaylistsPage = ({ user, onLogout }) => {
 
   const sortedPlaylists = useMemo(() => {
     const copy = [...filteredPlaylists];
-    switch (sortOption) {
+    switch (effectiveSortOption) {
       case 'recently-updated-estimated':
         return copy.sort((a, b) => {
           const aFact = cacheFacts[a.id];
@@ -687,7 +722,7 @@ const PlaylistsPage = ({ user, onLogout }) => {
       default:
         return copy;
     }
-  }, [filteredPlaylists, sortOption, cacheFacts]);
+  }, [filteredPlaylists, effectiveSortOption, cacheFacts]);
 
   return (
     <Layout user={user} onLogout={onLogout}>
@@ -723,8 +758,8 @@ const PlaylistsPage = ({ user, onLogout }) => {
                 </label>
                 <select
                   id="playlist-sort"
-                  value={sortOption}
-                  onChange={(e) => setSortOption(e.target.value)}
+                  value={effectiveSortOption}
+                  onChange={(e) => setSortPreference(e.target.value)}
                   className="bg-spotify-gray-dark text-white text-sm rounded-md px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
                 >
                   <option value="default">Default (Spotify order)</option>
@@ -738,7 +773,7 @@ const PlaylistsPage = ({ user, onLogout }) => {
                   <option value="owner-asc">Owner A → Z</option>
                   <option value="owner-desc">Owner Z → A</option>
                 </select>
-                {cacheSortEnabled && sortOption === 'recently-updated-estimated' && (
+                {cacheSortEnabled && effectiveSortOption === 'recently-updated-estimated' && (
                   <div className="relative group">
                     <button
                       type="button"
@@ -784,12 +819,12 @@ const PlaylistsPage = ({ user, onLogout }) => {
             </div>
           </div>
 
-          <PlaylistList
+            <PlaylistList
             playlists={sortedPlaylists}
             onPlaylistClick={handlePlaylistClick}
             viewMode={viewMode}
-            sortOption={sortOption}
-            onSortChange={setSortOption}
+            sortOption={effectiveSortOption}
+            onSortChange={setSortPreference}
             cacheFacts={cacheFacts}
           />
         </>
