@@ -2767,139 +2767,158 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   </>
                 )}
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="mt-3">
                 {(() => {
                   const historyAvailable = Array.isArray(history) && history.length > 0;
                   const baseActions = [
-                  {
-                    label: 'Reorder in Spotify',
-                    onClick: () => setShowSortModal(true),
-                    icon: "reorder",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  },
-                  {
-                    label: 'Find duplicates',
-                    onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
-                    icon: "manage_search",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  },
-                  {
-                    label: 'Edit playlist',
-                    onClick: () => setShowEditModal(true),
-                    icon: "edit",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  },
-                  {
-                    label: cloning ? 'Cloning…' : 'Clone playlist',
+                    {
+                      label: 'Reorder in Spotify',
+                      onClick: () => setShowSortModal(true),
+                      icon: "reorder",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: false
+                    },
+                    {
+                      label: 'Find duplicates',
+                      onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
+                      icon: "manage_search",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: false
+                    },
+                    {
+                      label: 'Edit playlist',
+                      onClick: () => setShowEditModal(true),
+                      icon: "edit",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: false
+                    },
+                    {
+                      label: cloning ? 'Cloning…' : 'Clone playlist',
+                      onClick: async () => {
+                        setEditError(null); setEditMessage(null);
+                        // Generate clone name by checking existing playlists
+                        try {
+                          const allPlaylists = await playlistAPI.getPlaylists();
+                          
+                          // Extract base name by removing existing (clone N) suffix if present
+                          const cloneRegex = /^(.+?)\s*\(clone\s+\d+\)$/i;
+                          const match = currentPlaylist.name.match(cloneRegex);
+                          const baseName = match ? match[1].trim() : currentPlaylist.name;
+                          
+                          // Find all existing clones with this base name
+                          const existingClones = allPlaylists
+                            .map(p => {
+                              const cloneMatch = p.name.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(clone\\s+(\\d+)\\)$`, 'i'));
+                              return cloneMatch ? parseInt(cloneMatch[1], 10) : null;
+                            })
+                            .filter(num => num !== null);
+                          
+                          // Find the next available clone number
+                          const cloneNumber = existingClones.length > 0 ? Math.max(...existingClones) + 1 : 1;
+                          const suggestedName = `${baseName} (clone ${cloneNumber})`;
+                          
+                          setCloneName(suggestedName);
+                          setShowCloneModal(true);
+                        } catch (err) {
+                          setEditError(err.message || 'Failed to prepare clone');
+                        }
+                      },
+                      icon: "difference",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: cloning
+                    },
+                  ];
+
+                  const historyActions = [];
+                  if (historyAvailable) {
+                    historyActions.push({
+                      label: 'Recent actions',
+                      onClick: () => navigate('/history'),
+                      icon: "history",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: false
+                    });
+                  }
+
+                  const deleteAction = {
+                    label: deleting ? 'Deleting…' : 'Delete playlist',
                     onClick: async () => {
+                      if (!window.confirm('Delete this playlist from your library?')) return;
                       setEditError(null); setEditMessage(null);
-                      // Generate clone name by checking existing playlists
+                      setDeleting(true);
                       try {
-                        const allPlaylists = await playlistAPI.getPlaylists();
-                        
-                        // Extract base name by removing existing (clone N) suffix if present
-                        const cloneRegex = /^(.+?)\s*\(clone\s+\d+\)$/i;
-                        const match = currentPlaylist.name.match(cloneRegex);
-                        const baseName = match ? match[1].trim() : currentPlaylist.name;
-                        
-                        // Find all existing clones with this base name
-                        const existingClones = allPlaylists
-                          .map(p => {
-                            const cloneMatch = p.name.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(clone\\s+(\\d+)\\)$`, 'i'));
-                            return cloneMatch ? parseInt(cloneMatch[1], 10) : null;
-                          })
-                          .filter(num => num !== null);
-                        
-                        // Find the next available clone number
-                        const cloneNumber = existingClones.length > 0 ? Math.max(...existingClones) + 1 : 1;
-                        const suggestedName = `${baseName} (clone ${cloneNumber})`;
-                        
-                        setCloneName(suggestedName);
-                        setShowCloneModal(true);
+                        await playlistAPI.deletePlaylist(currentPlaylist.id);
+                        navigate('/playlists');
                       } catch (err) {
-                        setEditError(err.message || 'Failed to prepare clone');
+                        setEditError(err.message || 'Delete failed');
+                      } finally {
+                        setDeleting(false);
                       }
                     },
-                    icon: "difference",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: cloning
-                  },
-                ];
-
-                const historyActions = [];
-                if (historyAvailable) {
-                  historyActions.push({
-                    label: 'Recent actions',
-                    onClick: () => navigate('/history'),
-                    icon: "history",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  });
-                }
-
-                const deleteAction = {
-                  label: deleting ? 'Deleting…' : 'Delete playlist',
-                  onClick: async () => {
-                    if (!window.confirm('Delete this playlist from your library?')) return;
-                    setEditError(null); setEditMessage(null);
-                    setDeleting(true);
-                    try {
-                      await playlistAPI.deletePlaylist(currentPlaylist.id);
-                      navigate('/playlists');
-                    } catch (err) {
-                      setEditError(err.message || 'Delete failed');
-                    } finally {
-                      setDeleting(false);
-                    }
-                  },
                     icon: "delete",
-                  colorClass: 'bg-spotify-gray-mid hover:bg-red-600 hover:text-white text-red-400',
-                  disabled: deleting,
+                    colorClass: 'bg-spotify-gray-mid hover:bg-red-600 hover:text-white text-red-400',
+                    disabled: deleting,
                     tooltipClass: 'tooltip tooltip-down tooltip-danger',
                     tooltipSide: 'down'
-                };
+                  };
 
-                const scheduleAction = {
-                  label: 'View schedules',
-                  onClick: () => navigate(`/schedules?playlistId=${currentPlaylist.id}`),
-                  icon: "event",
-                  colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                  disabled: false
-                };
+                  const scheduleAction = {
+                    label: 'View schedules',
+                    onClick: () => navigate(`/schedules?playlistId=${currentPlaylist.id}`),
+                    icon: "event",
+                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                    disabled: false
+                  };
 
-                const cacheAction = {
-                  label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
-                  onClick: handleCacheRefresh,
-                  icon: "cloud_sync",
-                  colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                  disabled: cacheRefreshLoading
-                };
+                  const cacheAction = {
+                    label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
+                    onClick: handleCacheRefresh,
+                    icon: "cloud_sync",
+                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                    disabled: cacheRefreshLoading
+                  };
 
-                const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, deleteAction];
-              return actions;
-                })().map((action, idx) => (
-                  <div key={idx} className="relative group">
-                    <button
-                      onClick={action.onClick}
-                      onMouseEnter={action.onMouseEnter}
-                      onMouseLeave={action.onMouseLeave}
-                      disabled={action.disabled}
-                      className={`w-10 h-10 rounded-lg ${action.colorClass} text-white flex items-center justify-center transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      <span className="icon text-base">{action.icon}</span>
-                    </button>
-                    {!action.noTooltip && (
-                      <div className={`tooltip ${action.tooltipSide === 'down' ? 'tooltip-down' : 'tooltip-up'} group-hover:tooltip-visible ${action.tooltipClass || ''}`}>
-                        {action.label}
+                  const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, deleteAction];
+                  return (
+                    <>
+                      <div className="flex flex-col gap-2 md:hidden">
+                        {actions.map((action, idx) => (
+                          <button
+                            key={idx}
+                            onClick={action.onClick}
+                            disabled={action.disabled}
+                            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${action.colorClass}`}
+                          >
+                            <span className="icon text-base">{action.icon}</span>
+                            <span>{action.label}</span>
+                          </button>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="hidden md:flex flex-wrap items-center gap-2">
+                        {actions.map((action, idx) => (
+                          <div key={idx} className="relative group">
+                            <button
+                              onClick={action.onClick}
+                              onMouseEnter={action.onMouseEnter}
+                              onMouseLeave={action.onMouseLeave}
+                              disabled={action.disabled}
+                              className={`w-10 h-10 rounded-lg ${action.colorClass} text-white flex items-center justify-center transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                              <span className="icon text-base">{action.icon}</span>
+                            </button>
+                            {!action.noTooltip && (
+                              <div className={`tooltip ${action.tooltipSide === 'down' ? 'tooltip-down' : 'tooltip-up'} group-hover:tooltip-visible ${action.tooltipClass || ''}`}>
+                                {action.label}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
                 {(cacheRefreshMessage || cacheRefreshError) && (
-                  <div className="w-full text-xs">
+                  <div className="mt-2 text-xs">
                     {cacheRefreshMessage && <div className="text-spotify-green">{cacheRefreshMessage}</div>}
                     {cacheRefreshError && <div className="text-red-400">{cacheRefreshError}</div>}
                   </div>
