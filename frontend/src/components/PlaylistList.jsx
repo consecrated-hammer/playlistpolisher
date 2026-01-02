@@ -144,11 +144,11 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
 
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-[680px] w-full border-separate border-spacing-y-2 text-left">
+        <table className="min-w-[560px] w-full border-separate border-spacing-y-1 text-left">
           <thead>
             <tr className="text-xs uppercase tracking-wide text-spotify-gray-light">
-              <th className="px-3 py-2 font-semibold">Artwork</th>
-              <th className="px-3 py-2 font-semibold">
+              <th className="px-2 py-1.5 font-semibold">Artwork</th>
+              <th className="px-2 py-1.5 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('name'))}
@@ -158,7 +158,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('name')}
                 </button>
               </th>
-              <th className="px-3 py-2 font-semibold">
+              <th className="px-2 py-1.5 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('owner'))}
@@ -168,7 +168,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('owner')}
                 </button>
               </th>
-              <th className="px-3 py-2 font-semibold">
+              <th className="px-2 py-1.5 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('tracks'))}
@@ -199,7 +199,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   aria-label={`Open playlist ${playlist.name}`}
                   className="bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 focus:outline-none focus:ring-2 focus:ring-spotify-green rounded-lg transition-colors cursor-pointer"
                 >
-                  <td className="px-3 py-2">
+                  <td className="px-2 py-1.5">
                     <div className="w-10 h-10 rounded-md overflow-hidden bg-spotify-gray-mid">
                       {playlist.images && playlist.images.length > 0 ? (
                         <img
@@ -216,19 +216,16 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2">
-                    <p className="text-white font-semibold truncate max-w-[320px]" title={playlist.name}>
+                  <td className="px-2 py-1.5">
+                    <p className="text-white font-semibold truncate max-w-[260px]" title={playlist.name}>
                       {playlist.name}
                     </p>
                   </td>
-                  <td className="px-3 py-2 text-spotify-gray-light">
+                  <td className="px-2 py-1.5 text-spotify-gray-light">
                     {ownerName}
                   </td>
-                  <td className="px-3 py-2 text-spotify-gray-light">
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{trackTotal}</span>
-                      {renderCachedIcon(playlist.id)}
-                    </div>
+                  <td className="px-2 py-1.5 text-spotify-gray-light">
+                    {trackTotal}
                   </td>
                 </tr>
               );

@@ -3926,7 +3926,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 </label>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:justify-end gap-3 pt-2">
+              <div className="flex flex-row flex-wrap items-center justify-end gap-3 pt-2">
                 <div className="relative group">
                   <button
                     onClick={handleAnalyzeSort}
