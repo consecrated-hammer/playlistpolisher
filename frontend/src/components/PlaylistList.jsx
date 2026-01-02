@@ -144,10 +144,16 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
 
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-[460px] sm:min-w-[560px] w-full table-fixed border-separate border-spacing-y-1 text-left">
+        <table className="min-w-0 sm:min-w-[560px] w-full table-fixed border-separate border-spacing-y-1 text-left">
+          <colgroup>
+            <col className="w-12" />
+            <col className="w-[46%] sm:w-auto" />
+            <col className="w-[30%] sm:w-auto" />
+            <col className="w-[12%] sm:w-20" />
+          </colgroup>
           <thead>
             <tr className="text-xs uppercase tracking-wide text-spotify-gray-light">
-              <th className="px-1 py-1 font-semibold w-12">
+              <th className="px-1 py-1 font-semibold">
                 <span className="hidden sm:inline">Artwork</span>
               </th>
               <th className="px-1 py-1 font-semibold">
@@ -160,7 +166,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('name')}
                 </button>
               </th>
-              <th className="px-1 py-1 font-semibold w-24">
+              <th className="px-1 py-1 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('owner'))}
@@ -170,7 +176,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('owner')}
                 </button>
               </th>
-              <th className="px-1 py-1 font-semibold w-12">
+              <th className="px-1 py-1 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('tracks'))}
@@ -219,14 +225,14 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                     </div>
                   </td>
                   <td className="px-1 py-1">
-                    <p className="text-white font-semibold truncate max-w-[170px] sm:max-w-[260px]" title={playlist.name}>
+                    <p className="text-white font-semibold truncate" title={playlist.name}>
                       {playlist.name}
                     </p>
                   </td>
                   <td className="px-1 py-1 text-spotify-gray-light truncate" title={ownerName}>
                     {ownerName}
                   </td>
-                  <td className="px-1 py-1 text-spotify-gray-light text-right">
+                  <td className="px-1 py-1 text-spotify-gray-light text-right tabular-nums">
                     {trackTotal}
                   </td>
                 </tr>
