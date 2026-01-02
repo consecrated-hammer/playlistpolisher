@@ -56,6 +56,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef(null);
   const trackActionPendingRef = useRef(null);
+  const playlistViewRef = useRef(null);
   const [selectedTrackKeys, setSelectedTrackKeys] = useState([]);
   const [expandedTrackKeys, setExpandedTrackKeys] = useState([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
@@ -188,6 +189,49 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setDuplicatesError(null);
     }
   }, [showDuplicatesModal]);
+
+  const layoutDebugEnabled = useMemo(() => {
+    if (!isMobile) return false;
+    const params = new URLSearchParams(location.search);
+    return params.get('debugLayout') === '1';
+  }, [isMobile, location.search]);
+
+  useEffect(() => {
+    const container = playlistViewRef.current;
+    if (!layoutDebugEnabled || !container) return;
+
+    const clearHighlights = () => {
+      container.querySelectorAll('.debug-overflow').forEach((el) => {
+        el.classList.remove('debug-overflow');
+      });
+    };
+
+    const checkOverflow = () => {
+      clearHighlights();
+      const viewportWidth = window.innerWidth;
+      container.querySelectorAll('*').forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        const overflowsViewport = rect.right > viewportWidth + 1 || rect.left < -1;
+        const overflowsSelf = el.scrollWidth > el.clientWidth + 1;
+        if (overflowsViewport || overflowsSelf) {
+          el.classList.add('debug-overflow');
+        }
+      });
+    };
+
+    const scheduleCheck = () => {
+      window.requestAnimationFrame(checkOverflow);
+    };
+
+    scheduleCheck();
+    window.addEventListener('resize', scheduleCheck);
+    window.addEventListener('scroll', scheduleCheck, true);
+    return () => {
+      window.removeEventListener('resize', scheduleCheck);
+      window.removeEventListener('scroll', scheduleCheck, true);
+      clearHighlights();
+    };
+  }, [layoutDebugEnabled]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2019,7 +2063,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
   return (
     <Tooltip.Provider delayDuration={100}>
-      <div className="animate-fade-in relative w-full max-w-full overflow-x-hidden">
+      <div ref={playlistViewRef} className="animate-fade-in relative w-full max-w-full overflow-x-hidden">
       {refreshing && (
         <div className="absolute inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-lg">
           <LoadingSpinner text="Refreshing playlist..." />

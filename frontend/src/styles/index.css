@@ -114,6 +114,11 @@
     border-color: transparent transparent rgba(220, 38, 38, 0.95) transparent;
   }
 
+  .debug-overflow {
+    outline: 2px solid #f59e0b;
+    outline-offset: 1px;
+  }
+
   /* Right-edge-safe variant */
   .tooltip-right {
     left: auto;
