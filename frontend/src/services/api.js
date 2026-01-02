@@ -539,8 +539,13 @@ export const cacheAPI = {
    * @param {string[]} playlistIds
    * @returns {Promise<object>} Result with queued count
    */
-  warmPlaylists: async (playlistIds) => {
-    const response = await api.post('/cache/warm/playlists', { playlist_ids: playlistIds });
+  warmPlaylists: async (playlistIds, options = {}) => {
+    const response = await api.post('/cache/warm/playlists', {
+      playlist_ids: playlistIds,
+      source: options.source,
+      mode: options.mode,
+      schedule_id: options.schedule_id,
+    });
     return response.data;
   },
 

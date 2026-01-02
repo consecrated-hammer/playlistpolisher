@@ -42,7 +42,7 @@ const CachePage = ({ user, onLogout }) => {
   const loadCacheSchedule = async () => {
     try {
       const sched = await playlistAPI.listSchedules();
-      const cacheSched = (sched || []).find((s) => s.action_type === 'cache_clear');
+      const cacheSched = (sched || []).find((s) => String(s.action_type || '').startsWith('cache_'));
       setCacheSchedule(cacheSched || null);
     } catch {
       setCacheSchedule(null);
@@ -150,7 +150,7 @@ const CachePage = ({ user, onLogout }) => {
           playlistIds = cacheSelectedIds;
         }
         if (playlistIds.length > 0) {
-          await cacheAPI.warmPlaylists(playlistIds);
+          await cacheAPI.warmPlaylists(playlistIds, { source: 'manual', mode: 'initial' });
         }
       }
 
@@ -182,7 +182,7 @@ const CachePage = ({ user, onLogout }) => {
       await cacheAPI.clearUserCache();
 
       setRefreshAllStatus({ status: 'running', total: playlistIds.length, completed: 0 });
-      const warmResult = await cacheAPI.warmPlaylists(playlistIds);
+      const warmResult = await cacheAPI.warmPlaylists(playlistIds, { source: 'manual', mode: 'refresh_full' });
       const queued = warmResult?.queued || 0;
       if (queued === 0) {
         setActionMessage({ type: 'warning', text: 'No playlists queued for refresh. Another refresh may already be running.' });
@@ -287,7 +287,7 @@ const CachePage = ({ user, onLogout }) => {
       }
 
       setRefreshAllStatus({ status: 'running', total: playlistsToRefresh.length, completed: 0 });
-      const warmResult = await cacheAPI.warmPlaylists(playlistsToRefresh);
+      const warmResult = await cacheAPI.warmPlaylists(playlistsToRefresh, { source: 'manual', mode: 'refresh_changed' });
       const queued = warmResult?.queued || 0;
       if (queued === 0) {
         setActionMessage({ type: 'warning', text: 'No playlists queued for refresh. Another refresh may already be running.' });

@@ -10,6 +10,7 @@ from app.services.task_executor import start_sort_job
 from app.services.job_service import SortJobService
 from app.utils.session_manager import SessionManager
 from app.services.cache_service import CacheService
+from app.services.cache_warm_service import start_cache_warm_job
 from app.db import playlist_cache as playlist_cache_store
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,8 @@ class SchedulerService:
             elif action_type == "cache_clear":
                 removed = CacheService.clear_expired()
                 logger.info("Scheduled cache cleanup removed %s expired tracks", removed)
+            elif action_type in {"cache_refresh", "cache_refresh_full"}:
+                self._run_cache_refresh_schedule(action_type, user_id, session_id, schedule_id)
             else:
                 logger.warning("Unsupported scheduled action %s", action_type)
                 schedule_store.mark_run(schedule_id, user_id, frequency_minutes, success=False, error="Unsupported action")
@@ -121,6 +124,63 @@ class SchedulerService:
             method=method,
             session_id=session_id or session_mgr.session_id,
             meta={"source": "scheduled", "schedule_id": schedule_id},
+        )
+
+    def _get_playlists_to_refresh(self, playlists: list) -> list:
+        playlist_ids = [p.id for p in playlists if getattr(p, "id", None)]
+        if not playlist_ids:
+            return []
+        facts_map = playlist_cache_store.get_facts_for_playlists(playlist_ids)
+        to_refresh = []
+        for playlist in playlists:
+            playlist_id = getattr(playlist, "id", None)
+            if not playlist_id:
+                continue
+            fact = facts_map.get(playlist_id)
+            if not fact or not fact.get("last_snapshot_id"):
+                to_refresh.append(playlist_id)
+                continue
+            if not getattr(playlist, "snapshot_id", None):
+                to_refresh.append(playlist_id)
+                continue
+            if fact.get("last_snapshot_id") != playlist.snapshot_id:
+                to_refresh.append(playlist_id)
+                continue
+            if fact.get("is_dirty") == 1:
+                to_refresh.append(playlist_id)
+        return to_refresh
+
+    def _run_cache_refresh_schedule(self, action_type: str, user_id: str, session_id: Optional[str], schedule_id: int):
+        session_mgr = SessionManager(session_id=session_id)
+        spotify_service = SpotifyService(session_manager=session_mgr)
+        sp = spotify_service.get_spotify_client(user_id)
+        if not sp:
+            raise Exception("Spotify authentication expired for scheduled cache refresh")
+
+        playlists = spotify_service.get_user_playlists()
+        if not playlists:
+            logger.info("No playlists found for scheduled cache refresh (user=%s)", user_id)
+            return
+
+        if action_type == "cache_refresh_full":
+            if not session_id:
+                raise Exception("Session required for full cache refresh")
+            CacheService.clear_user_cache(session_id)
+            playlist_ids = [p.id for p in playlists if getattr(p, "id", None)]
+            mode = "refresh_full"
+        else:
+            playlist_ids = self._get_playlists_to_refresh(playlists)
+            mode = "refresh_changed"
+
+        if not playlist_ids:
+            logger.info("Scheduled cache refresh found no playlists to update (user=%s)", user_id)
+            return
+
+        start_cache_warm_job(
+            user_id=user_id,
+            session_id=session_id or session_mgr.session_id,
+            playlist_ids=playlist_ids,
+            meta={"source": "scheduled", "schedule_id": schedule_id, "mode": mode},
         )
 
 

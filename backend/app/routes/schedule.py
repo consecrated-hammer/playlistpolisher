@@ -55,7 +55,7 @@ class ScheduleUpdateRequest(BaseModel):
 
 
 class CacheScheduleRequest(BaseModel):
-    action_type: Literal["cache_clear"] = "cache_clear"
+    action_type: Literal["cache_clear", "cache_refresh", "cache_refresh_full"] = "cache_refresh"
     schedule_type: Literal['daily', 'weekly', 'monthly'] = 'daily'
     hour_of_day: int = Field(3, ge=0, le=23, description="Hour of day (0-23) for scheduled run")
     day_of_week: Literal['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] = 'sun'

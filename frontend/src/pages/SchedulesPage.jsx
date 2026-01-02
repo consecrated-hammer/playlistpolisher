@@ -5,6 +5,8 @@ import { playlistAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 // Action type configurations for extensibility
+const cacheActionTypes = ['cache_clear', 'cache_refresh', 'cache_refresh_full'];
+
 const actionConfigs = {
   sort: {
     label: 'Sort',
@@ -18,9 +20,19 @@ const actionConfigs = {
     }
   },
   cache_clear: {
-    label: 'Cache refresh',
+    label: 'Cache cleanup',
     fields: [],
     summary: () => 'Clear expired cache entries'
+  },
+  cache_refresh: {
+    label: 'Cache refresh',
+    fields: [],
+    summary: () => 'Refresh playlists that have changed'
+  },
+  cache_refresh_full: {
+    label: 'Cache refresh (full)',
+    fields: [],
+    summary: () => 'Clear and rebuild cache for all playlists'
   },
   // Future: dedupe, reorder, etc.
 };
@@ -178,7 +190,7 @@ const SchedulesPage = ({ user, onLogout }) => {
   };
 
   const handleSaveEdit = async () => {
-    const isCache = editForm.action_type === 'cache_clear';
+    const isCache = cacheActionTypes.includes(editForm.action_type);
     if (!isCache && !editForm.playlistId) {
       showToast('Please select a playlist', 'error');
       return;
@@ -193,9 +205,10 @@ const SchedulesPage = ({ user, onLogout }) => {
       }
     }
     if (creatingNew && isCache) {
-      const existingCache = schedules.find((s) => s.action_type === 'cache_clear');
+      const existingCache = schedules.find((s) => s.action_type === editForm.action_type);
       if (existingCache) {
-        showToast('Cache refresh schedule already exists', 'error');
+        const label = actionConfigs[editForm.action_type]?.label || 'Cache refresh';
+        showToast(`${label} schedule already exists`, 'error');
         return;
       }
     }
@@ -222,14 +235,14 @@ const SchedulesPage = ({ user, onLogout }) => {
 
     try {
       if (editingRowId) {
-        if (editForm.action_type === 'cache_clear') {
+        if (isCache) {
           await playlistAPI.updateCacheSchedule(editingRowId, payload);
         } else {
           await playlistAPI.updateSchedule(editForm.playlistId, editingRowId, payload);
         }
         showToast('Schedule updated', 'success');
       } else {
-        if (editForm.action_type === 'cache_clear') {
+        if (isCache) {
           await playlistAPI.createCacheSchedule(payload);
         } else {
           await playlistAPI.createSchedule(editForm.playlistId, payload);
@@ -249,7 +262,7 @@ const SchedulesPage = ({ user, onLogout }) => {
 
   const toggleEnabled = async (sched) => {
     try {
-      if (sched.action_type === 'cache_clear') {
+      if (cacheActionTypes.includes(sched.action_type)) {
         await playlistAPI.updateCacheSchedule(sched.id, { enabled: !sched.enabled });
       } else {
         await playlistAPI.updateSchedule(sched.playlist_id, sched.id, {
@@ -268,7 +281,7 @@ const SchedulesPage = ({ user, onLogout }) => {
   const handleDelete = async (sched) => {
     if (!window.confirm('Delete this schedule?')) return;
     try {
-      if (sched.action_type === 'cache_clear') {
+      if (cacheActionTypes.includes(sched.action_type)) {
         await playlistAPI.deleteCacheSchedule(sched.id);
       } else {
         await playlistAPI.deleteSchedule(sched.playlist_id, sched.id);
@@ -298,7 +311,7 @@ const SchedulesPage = ({ user, onLogout }) => {
   const renderEditRow = () => {
     const inputClass = "bg-spotify-gray-mid text-white text-sm rounded px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-1 focus:ring-spotify-green";
     const iconBtn = "w-8 h-8 rounded-full border flex items-center justify-center transition-colors";
-    const canSave = editForm.action_type === 'cache_clear' || !!editForm.playlistId;
+    const canSave = cacheActionTypes.includes(editForm.action_type) || !!editForm.playlistId;
     
     return (
       <div className="grid grid-cols-12 px-4 py-3 text-sm items-center bg-spotify-green/5 border-l-4 border-spotify-green">
@@ -317,7 +330,7 @@ const SchedulesPage = ({ user, onLogout }) => {
 
         {/* Playlist */}
         <div className="col-span-2 pr-2">
-          {editForm.action_type === 'cache_clear' ? (
+          {cacheActionTypes.includes(editForm.action_type) ? (
             <input
               value="Global cache"
               disabled
@@ -527,7 +540,7 @@ const SchedulesPage = ({ user, onLogout }) => {
                   const actionType = s.action_type || 'sort';
                   const config = actionConfigs[actionType];
                   const actionSummary = config ? config.summary(params) : 'Unknown';
-                  const isCache = actionType === 'cache_clear';
+                  const isCache = cacheActionTypes.includes(actionType);
 
                   return (
                     <div 

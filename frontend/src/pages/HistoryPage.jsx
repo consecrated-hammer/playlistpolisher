@@ -77,6 +77,16 @@ const HistoryPage = ({ user, onLogout }) => {
       return `${by} • ${dir} • ${method}`;
     } else if (entry.op_type === 'duplicates_remove') {
       return `Removed ${entry.removed_count || 0} duplicate tracks`;
+    } else if (entry.op_type === 'cache_refresh' || entry.op_type === 'cache_refresh_full') {
+      const modeLabel = entry.op_type === 'cache_refresh_full' || entry.cache_refresh?.mode === 'refresh_full'
+        ? 'Full cache refresh'
+        : 'Refresh changed playlists';
+      const before = entry.cache_refresh?.cached_track_count_before;
+      const after = entry.cache_refresh?.cached_track_count_after;
+      if (before != null && after != null) {
+        return `${modeLabel} • ${before} to ${after} cached tracks`;
+      }
+      return modeLabel;
     }
     return entry.op_type;
   };
@@ -86,6 +96,10 @@ const HistoryPage = ({ user, onLogout }) => {
       return 'Sort';
     } else if (entry.op_type === 'duplicates_remove') {
       return 'Remove Duplicates';
+    } else if (entry.op_type === 'cache_refresh') {
+      return 'Cache Refresh';
+    } else if (entry.op_type === 'cache_refresh_full') {
+      return 'Cache Refresh (Full)';
     }
     return entry.op_type;
   };
@@ -120,6 +134,9 @@ const HistoryPage = ({ user, onLogout }) => {
   };
 
   const getStatusBadge = (entry) => {
+    if (entry.op_type === 'cache_refresh' || entry.op_type === 'cache_refresh_full') {
+      return null;
+    }
     if (entry.undone) {
       return <span className="text-xs text-spotify-gray-light">Undone</span>;
     }
