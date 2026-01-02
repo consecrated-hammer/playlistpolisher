@@ -52,6 +52,8 @@ const SchedulesPage = ({ user, onLogout }) => {
   const [creatingNew, setCreatingNew] = useState(false);
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const actionMenuRef = useRef(null);
   
   // Edit state for inline editing
   const [editForm, setEditForm] = useState({
@@ -110,6 +112,26 @@ const SchedulesPage = ({ user, onLogout }) => {
     load();
   }, [searchParams]);
 
+  useEffect(() => {
+    if (!actionMenuOpen) return;
+    const handleClick = (event) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
+        setActionMenuOpen(false);
+      }
+    };
+    const handleKey = (event) => {
+      if (event.key === 'Escape') {
+        setActionMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [actionMenuOpen]);
+
   const refreshSchedules = async () => {
     try {
       const schedResp = await playlistAPI.listSchedules();
@@ -155,6 +177,7 @@ const SchedulesPage = ({ user, onLogout }) => {
   };
 
   const handleStartNew = () => {
+    setActionMenuOpen(false);
     setCreatingNew(true);
     setEditingRowId(null);
     setEditForm({
@@ -171,12 +194,14 @@ const SchedulesPage = ({ user, onLogout }) => {
   };
 
   const handleCancelEdit = () => {
+    setActionMenuOpen(false);
     setCreatingNew(false);
     setEditingRowId(null);
     setEditForm({});
   };
 
   const handleStartEdit = (sched) => {
+    setActionMenuOpen(false);
     const p = sched.params || {};
     setEditingRowId(sched.id);
     setCreatingNew(false);
@@ -316,32 +341,60 @@ const SchedulesPage = ({ user, onLogout }) => {
     const inputClass = "bg-spotify-gray-mid text-white text-sm rounded px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-1 focus:ring-spotify-green";
     const iconBtn = "w-8 h-8 rounded-full border flex items-center justify-center transition-colors";
     const canSave = cacheActionTypes.includes(editForm.action_type) || !!editForm.playlistId;
+    const selectedAction = actionConfigs[editForm.action_type] || actionConfigs.sort;
     
     return (
       <div className="grid grid-cols-12 px-4 py-3 text-sm items-center bg-spotify-green/5 border-l-4 border-spotify-green">
         {/* Type */}
         <div className="col-span-2 pr-2">
-          <div className="relative group">
-            <select
-              value={editForm.action_type}
-              onChange={(e) => setEditForm({ ...editForm, action_type: e.target.value })}
-              className={inputClass}
-              aria-label="Scheduled action type"
+          <div className="relative" ref={actionMenuRef}>
+            <button
+              type="button"
+              onClick={() => setActionMenuOpen((prev) => !prev)}
+              className={`${inputClass} w-full flex items-center justify-between gap-2`}
+              aria-haspopup="listbox"
+              aria-expanded={actionMenuOpen}
             >
-              {Object.entries(actionConfigs).map(([key, config]) => (
-                <option key={key} value={key}>{config.label}</option>
-              ))}
-            </select>
-            <div className="tooltip tooltip-up group-hover:tooltip-visible z-30">
-              <div className="text-xs text-white font-semibold mb-1">Action types</div>
-              <div className="text-[11px] text-spotify-gray-light space-y-1">
-                {Object.entries(actionConfigs).map(([key, config]) => (
-                  <div key={key}>
-                    <span className="text-white">{config.label}:</span> {config.description || ''}
-                  </div>
-                ))}
+              <span className="truncate">{selectedAction.label}</span>
+              <span className="icon text-base text-spotify-gray-light">
+                {actionMenuOpen ? 'expand_less' : 'expand_more'}
+              </span>
+            </button>
+            {actionMenuOpen && (
+              <div className="absolute left-0 top-full mt-2 w-64 bg-spotify-gray-dark border border-spotify-gray-mid rounded-lg shadow-xl z-40 overflow-hidden">
+                <div className="max-h-60 overflow-y-auto py-1">
+                  {Object.entries(actionConfigs).map(([key, config]) => {
+                    const isSelected = editForm.action_type === key;
+                    return (
+                      <div key={key} className="relative group">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditForm({ ...editForm, action_type: key });
+                            setActionMenuOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                            isSelected
+                              ? 'bg-spotify-green/15 text-white'
+                              : 'text-spotify-gray-light hover:bg-spotify-gray-mid/60 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">{config.label}</span>
+                            {isSelected && <span className="icon text-xs text-spotify-green">check</span>}
+                          </div>
+                        </button>
+                        {config.description && (
+                          <div className="tooltip tooltip-right group-hover:tooltip-visible z-50">
+                            {config.description}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
