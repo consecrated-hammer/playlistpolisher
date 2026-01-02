@@ -2019,7 +2019,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
   return (
     <Tooltip.Provider delayDuration={100}>
-      <div className="animate-fade-in relative">
+      <div className="animate-fade-in relative w-full max-w-full overflow-x-hidden">
       {refreshing && (
         <div className="absolute inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-lg">
           <LoadingSpinner text="Refreshing playlist..." />
@@ -3005,7 +3005,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   )}
                 </div>
               )}
-              {schedulesOpen && Array.isArray(schedules) && schedules.length > 0 && (
+              {!isMobile && schedulesOpen && Array.isArray(schedules) && schedules.length > 0 && (
                 <div
                   className="absolute right-full mr-2 top-0 p-3 bg-spotify-gray-mid/90 border border-spotify-gray-mid/60 rounded-lg text-sm text-spotify-gray-light space-y-2 max-w-md z-50 shadow-xl"
                   onMouseEnter={() => {
@@ -3098,7 +3098,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </div>
 
       {/* Tracks Table */}
-      <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden">
+      <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden w-full max-w-full">
         <div className="hidden md:block">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm text-spotify-gray-light border-b border-spotify-gray-mid font-semibold">
@@ -3397,7 +3397,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           )}
         </div>
         </div>
-        <div className="md:hidden">
+        <div className="md:hidden w-full max-w-full overflow-x-hidden">
           <div className="divide-y divide-spotify-gray-mid/30">
             {sortedTracks.map((track, index) => {
               const isCurrentTrack = isSamePlaylistEntry(track);
