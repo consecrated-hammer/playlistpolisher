@@ -143,6 +143,9 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [cacheRefreshLoading, setCacheRefreshLoading] = useState(false);
+  const [cacheRefreshMessage, setCacheRefreshMessage] = useState(null);
+  const [cacheRefreshError, setCacheRefreshError] = useState(null);
   const [history, setHistory] = useState(null);
   const [schedules, setSchedules] = useState([]);
   const [schedulesOpen, setSchedulesOpen] = useState(false);
@@ -161,6 +164,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       }
     };
   }, [duplicatesLoading, removingDuplicates, onDedupeStatusChange]);
+
+  useEffect(() => {
+    if (!cacheRefreshMessage && !cacheRefreshError) return;
+    const timer = setTimeout(() => {
+      setCacheRefreshMessage(null);
+      setCacheRefreshError(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [cacheRefreshMessage, cacheRefreshError]);
 
   useEffect(() => {
     if (showDuplicatesModal) {
@@ -938,6 +950,31 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       // non-blocking; leave UI state unchanged
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleCacheRefresh = async () => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    if (!playlistId || cacheRefreshLoading) return;
+    setCacheRefreshLoading(true);
+    setCacheRefreshMessage(null);
+    setCacheRefreshError(null);
+    try {
+      const status = await cacheAPI.getPlaylistCacheStatus(playlistId);
+      if (status?.needs_refresh) {
+        const warmResult = await cacheAPI.warmPlaylists([playlistId]);
+        if ((warmResult?.queued || 0) > 0) {
+          setCacheRefreshMessage('Cache refresh queued.');
+        } else {
+          setCacheRefreshMessage('Cache refresh already running.');
+        }
+      } else {
+        setCacheRefreshMessage('Cache already up to date.');
+      }
+    } catch (err) {
+      setCacheRefreshError(err.message || 'Failed to refresh cache.');
+    } finally {
+      setCacheRefreshLoading(false);
     }
   };
 
@@ -2833,7 +2870,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   disabled: false
                 };
 
-                const actions = [...baseActions, ...historyActions, scheduleAction, deleteAction];
+                const cacheAction = {
+                  label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
+                  onClick: handleCacheRefresh,
+                  icon: "cloud_sync",
+                  colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                  disabled: cacheRefreshLoading
+                };
+
+                const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, deleteAction];
               return actions;
                 })().map((action, idx) => (
                   <div key={idx} className="relative group">
@@ -2853,6 +2898,12 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     )}
                   </div>
                 ))}
+                {(cacheRefreshMessage || cacheRefreshError) && (
+                  <div className="w-full text-xs">
+                    {cacheRefreshMessage && <div className="text-spotify-green">{cacheRefreshMessage}</div>}
+                    {cacheRefreshError && <div className="text-red-400">{cacheRefreshError}</div>}
+                  </div>
+                )}
               </div>
               {searchOpen && (
                 <div className="mt-3 flex items-center gap-3 bg-spotify-gray-dark/50 border border-spotify-gray-mid/60 rounded-xl px-3 py-2">

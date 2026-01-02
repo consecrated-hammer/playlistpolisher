@@ -354,15 +354,15 @@ const CachePage = ({ user, onLogout }) => {
         {/* Clear User Cache */}
         <div className="flex items-center justify-between p-4 bg-spotify-gray-mid/40 rounded-lg">
           <div>
-            <div className="text-white font-medium">Refresh Your Cache</div>
-            <div className="text-sm text-spotify-gray-light">Clear your tracks to force fresh data from Spotify</div>
+            <div className="text-white font-medium">Clear Your Cache</div>
+            <div className="text-sm text-spotify-gray-light">Remove your cached tracks so Spotify data refreshes on the next load</div>
           </div>
           <button
             onClick={handleClearUserCache}
             disabled={actionLoading || stats?.user_tracks === 0}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Refresh
+            Clear
           </button>
         </div>
 
@@ -563,7 +563,7 @@ const CachePage = ({ user, onLogout }) => {
                       onChange={(event) => setCacheRunInitial(event.target.checked)}
                       className="accent-spotify-green"
                     />
-                    <span>Run initial cache now</span>
+                    <span>Warm selected playlists now</span>
                   </label>
                 </div>
 

@@ -71,6 +71,19 @@ class PlaylistFactsResponse(BaseModel):
     summary: dict
 
 
+class PlaylistCacheStatusResponse(BaseModel):
+    """Response for playlist cache freshness check."""
+    playlist_id: str
+    cached: bool
+    needs_refresh: bool
+    is_dirty: bool
+    last_snapshot_id: Optional[str]
+    current_snapshot_id: Optional[str]
+    cached_track_count: int
+    current_track_count: int
+    checked_at: str
+
+
 class TrackPlaylistsResponse(BaseModel):
     playlists: List[dict]
 
@@ -320,6 +333,50 @@ async def get_playlist_facts(
     except Exception as e:
         logger.error(f"Failed to get playlist cache facts: {e}")
         raise HTTPException(status_code=500, detail="Failed to get playlist cache facts")
+
+
+@router.get("/playlist/{playlist_id}/status", response_model=PlaylistCacheStatusResponse)
+async def get_playlist_cache_status(
+    playlist_id: str,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service),
+):
+    """Return cache freshness status for a playlist without loading full tracks."""
+    try:
+        _ = session_mgr.get_user_id()
+        meta = spotify.get_playlist_context_meta(playlist_id)
+        facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
+
+        last_snapshot_id = facts.get("last_snapshot_id") if facts else None
+        cached_track_count = facts.get("track_count_cached") if facts else 0
+        is_dirty = bool(facts.get("is_dirty")) if facts else True
+        current_snapshot_id = meta.snapshot_id
+        current_track_count = meta.total_tracks or 0
+
+        snapshot_mismatch = bool(last_snapshot_id) and bool(current_snapshot_id) and last_snapshot_id != current_snapshot_id
+        count_mismatch = cached_track_count != current_track_count
+        missing_cache = not facts or not last_snapshot_id
+        needs_refresh = missing_cache or is_dirty or snapshot_mismatch or count_mismatch
+
+        if (snapshot_mismatch or count_mismatch) and facts:
+            playlist_cache_store.mark_dirty(playlist_id)
+
+        return {
+            "playlist_id": playlist_id,
+            "cached": bool(facts),
+            "needs_refresh": needs_refresh,
+            "is_dirty": is_dirty,
+            "last_snapshot_id": last_snapshot_id,
+            "current_snapshot_id": current_snapshot_id,
+            "cached_track_count": cached_track_count,
+            "current_track_count": current_track_count,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get playlist cache status for {playlist_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get playlist cache status")
 
 
 @router.get("/track/{track_id}/playlists", response_model=TrackPlaylistsResponse)

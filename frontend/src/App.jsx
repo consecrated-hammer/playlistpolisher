@@ -807,6 +807,7 @@ const PlaylistDetailPage = ({ user, onLogout, globalJob, setGlobalJob, globalJob
   const player = usePlayerContext();
   const [playlist, setPlaylist] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState('Loading playlist details...');
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -816,9 +817,28 @@ const PlaylistDetailPage = ({ user, onLogout, globalJob, setGlobalJob, globalJob
 
   const loadPlaylistDetails = async () => {
     setLoading(true);
+    setLoadingMessage('Checking playlist cache...');
     setError(null);
     
     try {
+      const cacheStatus = await cacheAPI.getPlaylistCacheStatus(playlistId);
+      if (cacheStatus?.needs_refresh) {
+        setLoadingMessage('Refreshing playlist cache...');
+        const warmResult = await cacheAPI.warmPlaylists([playlistId]);
+        if ((warmResult?.queued || 0) > 0) {
+          const startedAt = Date.now();
+          let warmStatus = await cacheAPI.getWarmStatus();
+          while (warmStatus?.status === 'running') {
+            if (Date.now() - startedAt > 10 * 60 * 1000) {
+              throw new Error('Playlist cache refresh timed out.');
+            }
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+            warmStatus = await cacheAPI.getWarmStatus();
+          }
+        }
+      }
+
+      setLoadingMessage('Loading playlist details...');
       // Load playlist summary (metadata only)
       const summary = await playlistAPI.getPlaylistSummary(playlistId);
       
@@ -854,7 +874,7 @@ const PlaylistDetailPage = ({ user, onLogout, globalJob, setGlobalJob, globalJob
   return (
     <Layout user={user} onLogout={onLogout} jobStatus={jobStatus} onJobIndicatorClick={onJobIndicatorClick}>
       {loading ? (
-        <LoadingSpinner text="Loading playlist details..." />
+        <LoadingSpinner text={loadingMessage} />
       ) : error ? (
         <ErrorMessage message={error} onRetry={loadPlaylistDetails} />
       ) : playlist ? (
