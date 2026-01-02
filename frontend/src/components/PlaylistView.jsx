@@ -435,16 +435,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       minute: '2-digit',
       hour12: true
     });
-    return `${dateStr}, ${timeStr}`;
-  };
-
-  const formatDateShort = (isoString) => {
-    if (!isoString) return 'Unknown';
-    const date = new Date(isoString);
-    return date.toLocaleDateString('en-AU', {
-      day: 'numeric',
-      month: 'short'
-    });
+    return `${dateStr}, ${timeStr.toLowerCase()}`;
   };
 
   const formatReleaseDate = (dateString, precision) => {
@@ -2979,10 +2970,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                             key={idx}
                             onClick={action.onClick}
                             disabled={action.disabled}
-                            className={`w-full rounded-lg px-3 py-2 text-sm font-semibold text-white flex items-center justify-start gap-2 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${action.colorClass}`}
+                            className={`w-full rounded-lg px-10 py-2 text-sm font-semibold text-white flex items-center justify-center text-center transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden relative ${action.colorClass}`}
                           >
-                            <span className="icon text-sm flex-shrink-0">{action.icon}</span>
-                            <span className="min-w-0 text-left leading-snug break-words">{action.label}</span>
+                            <span className="icon text-sm absolute left-3">{action.icon}</span>
+                            <span className="min-w-0 text-center leading-snug break-words">{action.label}</span>
                           </button>
                         ))}
                       </div>
@@ -3478,7 +3469,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       </p>
                       {isExpanded && (
                         <div className="text-[11px] text-spotify-gray-light mt-1">
-                          {formatDuration(track.duration_ms)} • Added {formatDateShort(track.added_at)}
+                          Added {formatDateTime(track.added_at)}
                         </div>
                       )}
                     </div>
