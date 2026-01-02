@@ -2598,7 +2598,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </button>
 
       {/* Playlist Header */}
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-hidden">
         <div className="flex flex-col md:flex-row gap-6">
           {/* Cover Image */}
           <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group">
@@ -2635,7 +2635,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           </div>
 
       {/* Playlist Info */}
-      <div className="flex flex-col justify-end min-w-0">
+      <div className="flex flex-col justify-end min-w-0 w-full max-w-full">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">{currentPlaylist.name}</h1>
             {playlistDescription && (
@@ -2930,16 +2930,16 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, deleteAction];
                   return (
                     <>
-                      <div className="flex flex-col gap-2 md:hidden">
+                      <div className="flex flex-col gap-2 md:hidden w-full max-w-full">
                         {actions.map((action, idx) => (
                           <button
                             key={idx}
                             onClick={action.onClick}
                             disabled={action.disabled}
-                            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-start gap-3 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${action.colorClass}`}
+                            className={`w-full max-w-full min-w-0 rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-start gap-3 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${action.colorClass}`}
                           >
                             <span className="icon text-base">{action.icon}</span>
-                            <span className="min-w-0 flex-1 text-left leading-snug">{action.label}</span>
+                            <span className="min-w-0 flex-1 text-left leading-snug whitespace-normal break-words">{action.label}</span>
                           </button>
                         ))}
                       </div>
@@ -3407,7 +3407,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <div
                   key={track.selectionKey}
                   onClick={(event) => openContextMenu(event, track, index)}
-                  className={`w-full px-4 py-3 text-sm transition-colors cursor-pointer ${
+                  className={`w-full max-w-full px-4 py-3 text-sm transition-colors cursor-pointer overflow-hidden ${
                     isCurrentTrack ? 'bg-spotify-green/10 border-l-2 border-spotify-green/80' : 'hover:bg-spotify-gray-mid/30'
                   }`}
                   data-track-id={track.id}
