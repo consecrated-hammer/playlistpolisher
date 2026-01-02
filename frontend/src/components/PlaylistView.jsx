@@ -2635,7 +2635,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full overflow-hidden">
         <div className="flex flex-col md:flex-row gap-6 min-w-0">
           {/* Cover Image */}
-          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group">
+          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group mx-auto md:mx-0">
             <div className="absolute inset-0 rounded-lg overflow-hidden bg-spotify-gray-mid">
               {currentPlaylist.images && currentPlaylist.images.length > 0 ? (
                 <img
