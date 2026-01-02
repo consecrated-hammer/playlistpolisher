@@ -144,11 +144,13 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
 
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-[520px] sm:min-w-[560px] w-full table-fixed border-separate border-spacing-y-1 text-left">
+        <table className="min-w-[460px] sm:min-w-[560px] w-full table-fixed border-separate border-spacing-y-1 text-left">
           <thead>
             <tr className="text-xs uppercase tracking-wide text-spotify-gray-light">
-              <th className="px-1.5 py-1 font-semibold w-14">Artwork</th>
-              <th className="px-1.5 py-1 font-semibold">
+              <th className="px-1 py-1 font-semibold w-12">
+                <span className="hidden sm:inline">Artwork</span>
+              </th>
+              <th className="px-1 py-1 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('name'))}
@@ -158,7 +160,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('name')}
                 </button>
               </th>
-              <th className="px-1.5 py-1 font-semibold w-28">
+              <th className="px-1 py-1 font-semibold w-24">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('owner'))}
@@ -168,7 +170,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('owner')}
                 </button>
               </th>
-              <th className="px-1.5 py-1 font-semibold w-16">
+              <th className="px-1 py-1 font-semibold w-12">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('tracks'))}
@@ -199,7 +201,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   aria-label={`Open playlist ${playlist.name}`}
                   className="bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 focus:outline-none focus:ring-2 focus:ring-spotify-green rounded-lg transition-colors cursor-pointer"
                 >
-                  <td className="px-1.5 py-1">
+                  <td className="px-1 py-1">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-md overflow-hidden bg-spotify-gray-mid">
                       {playlist.images && playlist.images.length > 0 ? (
                         <img
@@ -216,15 +218,15 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                       )}
                     </div>
                   </td>
-                  <td className="px-1.5 py-1">
-                    <p className="text-white font-semibold truncate max-w-[200px] sm:max-w-[260px]" title={playlist.name}>
+                  <td className="px-1 py-1">
+                    <p className="text-white font-semibold truncate max-w-[170px] sm:max-w-[260px]" title={playlist.name}>
                       {playlist.name}
                     </p>
                   </td>
-                  <td className="px-1.5 py-1 text-spotify-gray-light">
+                  <td className="px-1 py-1 text-spotify-gray-light truncate" title={ownerName}>
                     {ownerName}
                   </td>
-                  <td className="px-1.5 py-1 text-spotify-gray-light text-right">
+                  <td className="px-1 py-1 text-spotify-gray-light text-right">
                     {trackTotal}
                   </td>
                 </tr>
