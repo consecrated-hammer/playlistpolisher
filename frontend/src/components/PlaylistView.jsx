@@ -212,8 +212,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       container.querySelectorAll('*').forEach((el) => {
         const rect = el.getBoundingClientRect();
         const overflowsViewport = rect.right > viewportWidth + 1 || rect.left < -1;
-        const overflowsSelf = el.scrollWidth > el.clientWidth + 1;
-        if (overflowsViewport || overflowsSelf) {
+        if (overflowsViewport) {
           el.classList.add('debug-overflow');
         }
       });
