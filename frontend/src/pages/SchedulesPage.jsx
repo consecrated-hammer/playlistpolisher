@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import * as Select from '@radix-ui/react-select';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { playlistAPI } from '../services/api';
@@ -52,8 +54,6 @@ const SchedulesPage = ({ user, onLogout }) => {
   const [creatingNew, setCreatingNew] = useState(false);
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
-  const [actionMenuOpen, setActionMenuOpen] = useState(false);
-  const actionMenuRef = useRef(null);
   
   // Edit state for inline editing
   const [editForm, setEditForm] = useState({
@@ -112,26 +112,6 @@ const SchedulesPage = ({ user, onLogout }) => {
     load();
   }, [searchParams]);
 
-  useEffect(() => {
-    if (!actionMenuOpen) return;
-    const handleClick = (event) => {
-      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
-        setActionMenuOpen(false);
-      }
-    };
-    const handleKey = (event) => {
-      if (event.key === 'Escape') {
-        setActionMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [actionMenuOpen]);
-
   const refreshSchedules = async () => {
     try {
       const schedResp = await playlistAPI.listSchedules();
@@ -177,7 +157,6 @@ const SchedulesPage = ({ user, onLogout }) => {
   };
 
   const handleStartNew = () => {
-    setActionMenuOpen(false);
     setCreatingNew(true);
     setEditingRowId(null);
     setEditForm({
@@ -194,14 +173,12 @@ const SchedulesPage = ({ user, onLogout }) => {
   };
 
   const handleCancelEdit = () => {
-    setActionMenuOpen(false);
     setCreatingNew(false);
     setEditingRowId(null);
     setEditForm({});
   };
 
   const handleStartEdit = (sched) => {
-    setActionMenuOpen(false);
     const p = sched.params || {};
     setEditingRowId(sched.id);
     setCreatingNew(false);
@@ -347,55 +324,56 @@ const SchedulesPage = ({ user, onLogout }) => {
       <div className="grid grid-cols-12 px-4 py-3 text-sm items-center bg-spotify-green/5 border-l-4 border-spotify-green">
         {/* Type */}
         <div className="col-span-2 pr-2">
-          <div className="relative" ref={actionMenuRef}>
-            <button
-              type="button"
-              onClick={() => setActionMenuOpen((prev) => !prev)}
-              className={`${inputClass} w-full flex items-center justify-between gap-2`}
-              aria-haspopup="listbox"
-              aria-expanded={actionMenuOpen}
+          <Tooltip.Provider delayDuration={120}>
+            <Select.Root
+              value={editForm.action_type}
+              onValueChange={(value) => setEditForm({ ...editForm, action_type: value })}
             >
-              <span className="truncate">{selectedAction.label}</span>
-              <span className="icon text-base text-spotify-gray-light">
-                {actionMenuOpen ? 'expand_less' : 'expand_more'}
-              </span>
-            </button>
-            {actionMenuOpen && (
-              <div className="absolute left-0 top-full mt-2 w-64 bg-spotify-gray-dark border border-spotify-gray-mid rounded-lg shadow-xl z-40 overflow-hidden">
-                <div className="max-h-60 overflow-y-auto py-1">
-                  {Object.entries(actionConfigs).map(([key, config]) => {
-                    const isSelected = editForm.action_type === key;
-                    return (
-                      <div key={key} className="relative group">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditForm({ ...editForm, action_type: key });
-                            setActionMenuOpen(false);
-                          }}
-                          className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                            isSelected
-                              ? 'bg-spotify-green/15 text-white'
-                              : 'text-spotify-gray-light hover:bg-spotify-gray-mid/60 hover:text-white'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium">{config.label}</span>
-                            {isSelected && <span className="icon text-xs text-spotify-green">check</span>}
-                          </div>
-                        </button>
+              <Select.Trigger className={`${inputClass} w-full flex items-center justify-between gap-2`}>
+                <Select.Value aria-label={selectedAction.label} />
+                <Select.Icon className="text-spotify-gray-light">
+                  <span className="icon text-base">expand_more</span>
+                </Select.Icon>
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Content
+                  className="z-40 bg-spotify-gray-dark border border-spotify-gray-mid rounded-lg shadow-xl overflow-hidden"
+                  position="popper"
+                  sideOffset={8}
+                >
+                  <Select.Viewport className="max-h-60 overflow-y-auto py-1">
+                    {Object.entries(actionConfigs).map(([key, config]) => (
+                      <Tooltip.Root key={key}>
+                        <Tooltip.Trigger asChild>
+                          <Select.Item
+                            value={key}
+                            className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-spotify-gray-light cursor-pointer select-none outline-none data-[highlighted]:bg-spotify-gray-mid/60 data-[highlighted]:text-white data-[state=checked]:text-white"
+                          >
+                            <Select.ItemText>{config.label}</Select.ItemText>
+                            <Select.ItemIndicator className="text-spotify-green">
+                              <span className="icon text-xs">check</span>
+                            </Select.ItemIndicator>
+                          </Select.Item>
+                        </Tooltip.Trigger>
                         {config.description && (
-                          <div className="tooltip tooltip-right group-hover:tooltip-visible z-50">
-                            {config.description}
-                          </div>
+                          <Tooltip.Portal>
+                            <Tooltip.Content
+                              side="right"
+                              sideOffset={8}
+                              className="radix-tooltip z-[70]"
+                            >
+                              {config.description}
+                              <Tooltip.Arrow className="fill-[#1b1b1b]" />
+                            </Tooltip.Content>
+                          </Tooltip.Portal>
                         )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+                      </Tooltip.Root>
+                    ))}
+                  </Select.Viewport>
+                </Select.Content>
+              </Select.Portal>
+            </Select.Root>
+          </Tooltip.Provider>
         </div>
 
         {/* Playlist */}
