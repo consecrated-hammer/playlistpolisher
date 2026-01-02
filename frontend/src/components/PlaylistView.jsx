@@ -2062,7 +2062,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
   return (
     <Tooltip.Provider delayDuration={100}>
-      <div ref={playlistViewRef} className="animate-fade-in relative w-full max-w-full overflow-x-hidden">
+      <div ref={playlistViewRef} className="animate-fade-in relative w-full min-w-0 overflow-x-hidden box-border">
       {refreshing && (
         <div className="absolute inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-lg">
           <LoadingSpinner text="Refreshing playlist..." />
@@ -2641,8 +2641,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </button>
 
       {/* Playlist Header */}
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-hidden">
-        <div className="flex flex-col md:flex-row gap-6">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full overflow-hidden">
+        <div className="flex flex-col md:flex-row gap-6 min-w-0">
           {/* Cover Image */}
           <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group">
             <div className="absolute inset-0 rounded-lg overflow-hidden bg-spotify-gray-mid">
@@ -2678,16 +2678,16 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           </div>
 
       {/* Playlist Info */}
-      <div className="flex flex-col justify-end min-w-0 w-full max-w-full">
+      <div className="flex flex-col justify-end min-w-0 w-full overflow-hidden">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">{currentPlaylist.name}</h1>
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 break-words">{currentPlaylist.name}</h1>
             {playlistDescription && (
-              <p className="text-spotify-gray-light mb-4 max-w-2xl">{playlistDescription}</p>
+              <p className="text-spotify-gray-light mb-4 max-w-2xl break-words">{playlistDescription}</p>
             )}
             <div className="flex flex-wrap items-center gap-2 text-sm text-spotify-gray-light">
               {(currentPlaylist.owner?.display_name || currentPlaylist.owner?.id) && (
                 <>
-                  <span className="font-semibold text-white">{currentPlaylist.owner.display_name || currentPlaylist.owner.id}</span>
+                  <span className="font-semibold text-white break-all">{currentPlaylist.owner.display_name || currentPlaylist.owner.id}</span>
                   <span>•</span>
                 </>
               )}
@@ -2762,7 +2762,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
             )}
           </div>
             <div className="mt-4 relative">
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3">
                 {player?.canUseAppPlayer && (
                   <>
                     <div className="relative group">
@@ -2787,10 +2787,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                             }
                           }
                         }}
-                        className="w-12 h-12 rounded-full bg-spotify-green text-black flex items-center justify-center hover:bg-spotify-green-dark transition-colors"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-spotify-green text-black flex items-center justify-center hover:bg-spotify-green-dark transition-colors"
                         aria-label={isPlaylistPlaying ? 'Pause playlist' : 'Play playlist'}
                       >
-                        <span className="icon text-xl">{isPlaylistPlaying ? 'pause' : 'play_arrow'}</span>
+                        <span className="icon text-lg sm:text-xl">{isPlaylistPlaying ? 'pause' : 'play_arrow'}</span>
                       </button>
                       <div className="tooltip tooltip-up group-hover:tooltip-visible">
                         {isPlaylistPlaying ? 'Pause playlist' : 'Play playlist'}
@@ -2816,10 +2816,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                             player.playTrack({ contextUri: currentPlaylist.uri, offsetIndex, contextMeta, shuffle: true });
                           }
                         }}
-                        className="w-12 h-12 rounded-full border border-spotify-green/60 text-spotify-green flex items-center justify-center hover:bg-spotify-green/10 transition-colors"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-spotify-green/60 text-spotify-green flex items-center justify-center hover:bg-spotify-green/10 transition-colors"
                         aria-label="Shuffle playlist"
                       >
-                        <span className="icon text-xl">shuffle</span>
+                        <span className="icon text-lg sm:text-xl">shuffle</span>
                       </button>
                       <div className="tooltip tooltip-up group-hover:tooltip-visible">
                         Shuffle playlist
@@ -2829,14 +2829,14 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       <button
                         type="button"
                         onClick={() => setSearchOpen((prev) => !prev)}
-                        className={`w-12 h-12 rounded-full border flex items-center justify-center transition-colors ${
+                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border flex items-center justify-center transition-colors ${
                           searchOpen
                             ? 'border-spotify-green text-spotify-green bg-spotify-green/10'
                             : 'border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light'
                         }`}
                         aria-label="Search this playlist"
                       >
-                        <span className="icon text-xl">search</span>
+                        <span className="icon text-lg sm:text-xl">search</span>
                       </button>
                       <div className="tooltip tooltip-up group-hover:tooltip-visible">
                         Search playlist
@@ -2847,10 +2847,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                         type="button"
                         onClick={() => refreshPlaylistDetails({ resetSort: true })}
                         disabled={refreshing}
-                        className="w-12 h-12 rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-label="Refresh playlist"
                       >
-                        <span className={`icon text-xl ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
+                        <span className={`icon text-lg sm:text-xl ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
                       </button>
                       <div className="tooltip tooltip-up group-hover:tooltip-visible">
                         {refreshing ? 'Refreshing…' : 'Refresh playlist'}
@@ -2973,16 +2973,16 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, deleteAction];
                   return (
                     <>
-                      <div className="flex flex-col gap-2 md:hidden w-full max-w-full">
+                      <div className="flex flex-col gap-2 md:hidden w-full max-w-xs mx-auto">
                         {actions.map((action, idx) => (
                           <button
                             key={idx}
                             onClick={action.onClick}
                             disabled={action.disabled}
-                            className={`w-full max-w-full min-w-0 rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-start gap-3 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${action.colorClass}`}
+                            className={`w-full rounded-lg px-3 py-2 text-sm font-semibold text-white flex items-center justify-start gap-2 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${action.colorClass}`}
                           >
-                            <span className="icon text-base">{action.icon}</span>
-                            <span className="min-w-0 flex-1 text-left leading-snug whitespace-normal break-words">{action.label}</span>
+                            <span className="icon text-sm flex-shrink-0">{action.icon}</span>
+                            <span className="min-w-0 text-left leading-snug break-words">{action.label}</span>
                           </button>
                         ))}
                       </div>
@@ -3141,7 +3141,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </div>
 
       {/* Tracks Table */}
-      <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden w-full max-w-full">
+      <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden border border-spotify-gray-mid/60">
         <div className="hidden md:block">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm text-spotify-gray-light border-b border-spotify-gray-mid font-semibold">
@@ -3440,7 +3440,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           )}
         </div>
         </div>
-        <div className="md:hidden w-full max-w-full overflow-x-hidden">
+        <div className="md:hidden overflow-x-hidden">
           <div className="divide-y divide-spotify-gray-mid/30">
             {sortedTracks.map((track, index) => {
               const isCurrentTrack = isSamePlaylistEntry(track);
@@ -3450,7 +3450,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <div
                   key={track.selectionKey}
                   onClick={(event) => openContextMenu(event, track, index)}
-                  className={`w-full max-w-full px-4 py-3 text-sm transition-colors cursor-pointer overflow-hidden ${
+                  className={`px-4 py-3 text-sm transition-colors cursor-pointer ${
                     isCurrentTrack ? 'bg-spotify-green/10 border-l-2 border-spotify-green/80' : 'hover:bg-spotify-gray-mid/30'
                   }`}
                   data-track-id={track.id}
