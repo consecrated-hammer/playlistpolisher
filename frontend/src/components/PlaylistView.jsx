@@ -2598,10 +2598,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </button>
 
       {/* Playlist Header */}
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-8 mb-6">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6">
         <div className="flex flex-col md:flex-row gap-6">
           {/* Cover Image */}
-          <div className="w-60 h-60 flex-shrink-0 shadow-2xl relative group">
+          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group">
             <div className="absolute inset-0 rounded-lg overflow-hidden bg-spotify-gray-mid">
               {currentPlaylist.images && currentPlaylist.images.length > 0 ? (
                 <img
@@ -2635,13 +2635,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           </div>
 
       {/* Playlist Info */}
-      <div className="flex flex-col justify-end">
+      <div className="flex flex-col justify-end min-w-0">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">{currentPlaylist.name}</h1>
             {playlistDescription && (
               <p className="text-spotify-gray-light mb-4 max-w-2xl">{playlistDescription}</p>
             )}
-            <div className="flex items-center space-x-2 text-sm text-spotify-gray-light">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-spotify-gray-light">
               {(currentPlaylist.owner?.display_name || currentPlaylist.owner?.id) && (
                 <>
                   <span className="font-semibold text-white">{currentPlaylist.owner.display_name || currentPlaylist.owner.id}</span>
@@ -3399,14 +3399,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         </div>
         <div className="md:hidden">
           <div className="divide-y divide-spotify-gray-mid/30">
-            {sortedTracks.map((track) => {
+            {sortedTracks.map((track, index) => {
               const isCurrentTrack = isSamePlaylistEntry(track);
               const isExpanded = expandedTrackSet.has(track.selectionKey);
 
               return (
                 <div
                   key={track.selectionKey}
-                  className={`w-full px-4 py-3 text-sm transition-colors ${
+                  onClick={(event) => openContextMenu(event, track, index)}
+                  className={`w-full px-4 py-3 text-sm transition-colors cursor-pointer ${
                     isCurrentTrack ? 'bg-spotify-green/10 border-l-2 border-spotify-green/80' : 'hover:bg-spotify-gray-mid/30'
                   }`}
                   data-track-id={track.id}
@@ -3423,53 +3424,14 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       />
                     )}
                     <div className="min-w-0 flex-1">
-                      {(() => {
-                        const trackUrl = (track.external_urls && track.external_urls.spotify) || (track.id ? `https://open.spotify.com/track/${track.id}` : null);
-                        const trackTitle = track.name || '';
-                        return trackUrl ? (
-                          <a
-                            href={trackUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block text-white font-medium truncate"
-                            onClick={(e) => e.stopPropagation()}
-                            title={trackTitle}
-                          >
-                            {track.name}
-                            {track.explicit && (
-                              <span className="ml-2 text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
-                            )}
-                          </a>
-                        ) : (
-                          <p className="block text-white font-medium truncate" title={trackTitle}>
-                            {track.name}
-                            {track.explicit && (
-                              <span className="ml-2 text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
-                            )}
-                          </p>
-                        );
-                      })()}
+                      <p className="block text-white font-medium truncate" title={track.name || ''}>
+                        {track.name}
+                        {track.explicit && (
+                          <span className="ml-2 text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
+                        )}
+                      </p>
                       <p className="text-spotify-gray-light text-xs truncate">
-                        {track.artists.map((a, i) => {
-                          const url = a.external_urls?.spotify || (a.id ? `https://open.spotify.com/artist/${a.id}` : null);
-                          const name = a.name;
-                          return (
-                            <span key={a.id || `${name}-${i}`}>
-                              {url ? (
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="hover:text-white hover:underline"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {name}
-                                </a>
-                              ) : name}
-                              {i < track.artists.length - 1 ? ', ' : ''}
-                            </span>
-                          );
-                        })}
+                        {(track.artists || []).map((artist) => artist.name).join(', ')}
                       </p>
                       {isExpanded && (
                         <div className="text-[11px] text-spotify-gray-light mt-1">
