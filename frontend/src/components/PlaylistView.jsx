@@ -57,7 +57,9 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const searchInputRef = useRef(null);
   const trackActionPendingRef = useRef(null);
   const [selectedTrackKeys, setSelectedTrackKeys] = useState([]);
+  const [expandedTrackKeys, setExpandedTrackKeys] = useState([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [trackActionMode, setTrackActionMode] = useState(null);
   const [trackActionOpen, setTrackActionOpen] = useState(false);
@@ -187,6 +189,25 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   }, [showDuplicatesModal]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const handleChange = (event) => setIsMobile(event.matches);
+    handleChange(mediaQuery);
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    setSelectedTrackKeys([]);
+    setLastSelectedIndex(null);
+  }, [isMobile]);
+
   const fetchHistory = async (playlistId) => {
     if (!playlistId) return;
     try {
@@ -272,6 +293,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   useEffect(() => {
     setSelectedTrackKeys([]);
     setLastSelectedIndex(null);
+    setExpandedTrackKeys([]);
   }, [currentPlaylist?.id]);
 
   useEffect(() => {
@@ -371,6 +393,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       hour12: true
     });
     return `${dateStr}, ${timeStr}`;
+  };
+
+  const formatDateShort = (isoString) => {
+    if (!isoString) return 'Unknown';
+    const date = new Date(isoString);
+    return date.toLocaleDateString('en-AU', {
+      day: 'numeric',
+      month: 'short'
+    });
   };
 
   const formatReleaseDate = (dateString, precision) => {
@@ -487,6 +518,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   }, [tracksSource]);
 
   const selectedTrackSet = useMemo(() => new Set(selectedTrackKeys), [selectedTrackKeys]);
+  const expandedTrackSet = useMemo(() => new Set(expandedTrackKeys), [expandedTrackKeys]);
 
   const selectedTracks = useMemo(
     () => selectedTrackKeys.map((key) => trackKeyLookup.get(key)).filter(Boolean),
@@ -984,6 +1016,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
   const handleTrackRowSelect = (event, track, visibleIndex) => {
     if (event.button !== 0) return;
+    if (isMobile) return;
     if (isInteractiveTarget(event)) return;
     setTrackActionError(null);
     const isRange = event.shiftKey && lastSelectedIndex !== null;
@@ -1021,6 +1054,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   };
 
   const handleTrackToggleSelect = (event, track, visibleIndex) => {
+    if (isMobile) return;
     event.stopPropagation();
     setTrackActionError(null);
     if (event.shiftKey && lastSelectedIndex !== null) {
@@ -1045,6 +1079,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       return Array.from(next);
     });
     setLastSelectedIndex(visibleIndex);
+  };
+
+  const toggleTrackExpanded = (trackKey) => {
+    setExpandedTrackKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(trackKey)) {
+        next.delete(trackKey);
+      } else {
+        next.add(trackKey);
+      }
+      return Array.from(next);
+    });
   };
 
   const closeContextMenu = useCallback(() => {
@@ -1082,7 +1128,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     event.preventDefault();
     event.stopPropagation();
     
-    if (!selectedTrackSet.has(track.selectionKey)) {
+    if (isMobile) {
+      setSelectedTrackKeys([track.selectionKey]);
+      setLastSelectedIndex(visibleIndex);
+    } else if (!selectedTrackSet.has(track.selectionKey)) {
       setSelectedTrackKeys([track.selectionKey]);
       setLastSelectedIndex(visibleIndex);
     }
@@ -2887,10 +2936,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                             key={idx}
                             onClick={action.onClick}
                             disabled={action.disabled}
-                            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-center gap-2 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${action.colorClass}`}
+                            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-start gap-3 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${action.colorClass}`}
                           >
                             <span className="icon text-base">{action.icon}</span>
-                            <span>{action.label}</span>
+                            <span className="min-w-0 flex-1 text-left leading-snug">{action.label}</span>
                           </button>
                         ))}
                       </div>
@@ -3050,8 +3099,9 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
       {/* Tracks Table */}
       <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden">
-        {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm text-spotify-gray-light border-b border-spotify-gray-mid font-semibold">
+        <div className="hidden md:block">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm text-spotify-gray-light border-b border-spotify-gray-mid font-semibold">
           <div className="col-span-1 text-center">
             {selectedTrackCount > 0 ? (
               <div className="flex items-center justify-center gap-2 text-[11px] text-spotify-gray-light">
@@ -3345,6 +3395,130 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               )}
             </div>
           )}
+        </div>
+        </div>
+        <div className="md:hidden">
+          <div className="divide-y divide-spotify-gray-mid/30">
+            {sortedTracks.map((track) => {
+              const isCurrentTrack = isSamePlaylistEntry(track);
+              const isExpanded = expandedTrackSet.has(track.selectionKey);
+
+              return (
+                <div
+                  key={track.selectionKey}
+                  className={`w-full px-4 py-3 text-sm transition-colors ${
+                    isCurrentTrack ? 'bg-spotify-green/10 border-l-2 border-spotify-green/80' : 'hover:bg-spotify-gray-mid/30'
+                  }`}
+                  data-track-id={track.id}
+                  data-track-uri={track.uri}
+                  data-track-linked-id={track.linked_from?.id}
+                  data-track-linked-uri={track.linked_from?.uri}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    {track.album?.images?.length > 0 && (
+                      <img
+                        src={getBestImage(track.album.images)}
+                        alt={track.album?.name || 'Album art'}
+                        className="w-12 h-12 rounded flex-shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      {(() => {
+                        const trackUrl = (track.external_urls && track.external_urls.spotify) || (track.id ? `https://open.spotify.com/track/${track.id}` : null);
+                        const trackTitle = track.name || '';
+                        return trackUrl ? (
+                          <a
+                            href={trackUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block text-white font-medium truncate"
+                            onClick={(e) => e.stopPropagation()}
+                            title={trackTitle}
+                          >
+                            {track.name}
+                            {track.explicit && (
+                              <span className="ml-2 text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
+                            )}
+                          </a>
+                        ) : (
+                          <p className="block text-white font-medium truncate" title={trackTitle}>
+                            {track.name}
+                            {track.explicit && (
+                              <span className="ml-2 text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
+                            )}
+                          </p>
+                        );
+                      })()}
+                      <p className="text-spotify-gray-light text-xs truncate">
+                        {track.artists.map((a, i) => {
+                          const url = a.external_urls?.spotify || (a.id ? `https://open.spotify.com/artist/${a.id}` : null);
+                          const name = a.name;
+                          return (
+                            <span key={a.id || `${name}-${i}`}>
+                              {url ? (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="hover:text-white hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {name}
+                                </a>
+                              ) : name}
+                              {i < track.artists.length - 1 ? ', ' : ''}
+                            </span>
+                          );
+                        })}
+                      </p>
+                      {isExpanded && (
+                        <div className="text-[11px] text-spotify-gray-light mt-1">
+                          {formatDuration(track.duration_ms)} • Added {formatDateShort(track.added_at)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[11px] text-spotify-gray-light tabular-nums text-right min-w-[40px]">
+                        {formatDuration(track.duration_ms)}
+                      </span>
+                      <button
+                        type="button"
+                        data-no-select
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleTrackExpanded(track.selectionKey);
+                        }}
+                        className="w-7 h-7 rounded-full text-spotify-gray-light hover:text-white hover:bg-spotify-gray-mid/60 flex items-center justify-center transition-colors"
+                        aria-label={isExpanded ? 'Collapse track details' : 'Expand track details'}
+                        aria-expanded={isExpanded}
+                      >
+                        <span className={`icon text-base transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {loadingMore && (
+              <div className="py-8 flex items-center justify-center">
+                <div className="flex items-center gap-3 text-spotify-gray-light">
+                  <div className="w-5 h-5 border-2 border-spotify-green border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">Loading more tracks...</span>
+                </div>
+              </div>
+            )}
+
+            {!hasMoreTracks && allTracks.length > 0 && (
+              <div className="py-6 text-center text-spotify-gray-light text-sm">
+                {totalTrackCount > 0 ? (
+                  <span>All {totalTrackCount} tracks loaded</span>
+                ) : (
+                  <span>End of playlist</span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
