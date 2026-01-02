@@ -142,6 +142,14 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [cloning, setCloning] = useState(false);
   const [showCloneModal, setShowCloneModal] = useState(false);
   const [cloneName, setCloneName] = useState('');
+  const [showBackupModal, setShowBackupModal] = useState(false);
+  const [backupStatus, setBackupStatus] = useState(null);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupError, setBackupError] = useState(null);
+  const [backupRestoreLoading, setBackupRestoreLoading] = useState(false);
+  const [backupRestoreMessage, setBackupRestoreMessage] = useState(null);
+  const [backupRestoreError, setBackupRestoreError] = useState(null);
+  const [backupCloneName, setBackupCloneName] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
@@ -1041,6 +1049,62 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setCacheRefreshError(err.message || 'Failed to refresh cache.');
     } finally {
       setCacheRefreshLoading(false);
+    }
+  };
+
+  const openBackupModal = async () => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    if (!playlistId) return;
+    setShowBackupModal(true);
+    setBackupError(null);
+    setBackupRestoreError(null);
+    setBackupRestoreMessage(null);
+    setBackupLoading(true);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    setBackupCloneName(`${currentPlaylist?.name || 'Playlist'} (backup ${dateStamp})`);
+    try {
+      const status = await playlistAPI.getBackupStatus(playlistId);
+      setBackupStatus(status);
+    } catch (err) {
+      setBackupError(err.message || 'Failed to load backup status.');
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleBackupRestore = async (mode) => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    if (!playlistId || backupRestoreLoading) return;
+    setBackupRestoreError(null);
+    setBackupRestoreMessage(null);
+
+    if (mode === 'overwrite') {
+      const confirmed = window.confirm('Restore this playlist from the cached backup? This will replace the current order.');
+      if (!confirmed) return;
+    }
+
+    const payload = { mode };
+    const trimmedName = backupCloneName.trim();
+    if (mode === 'clone' && trimmedName) {
+      payload.name = trimmedName;
+    }
+
+    setBackupRestoreLoading(true);
+    try {
+      const result = await playlistAPI.restoreFromBackup(playlistId, payload);
+      setBackupRestoreMessage(result.message || 'Restore completed.');
+      if (mode === 'clone' && result.new_playlist_id) {
+        navigate(`/playlist/${result.new_playlist_id}`);
+        setShowBackupModal(false);
+      } else {
+        await refreshPlaylistDetails({ resetSort: true });
+        const status = await playlistAPI.getBackupStatus(playlistId);
+        setBackupStatus(status);
+      }
+    } catch (err) {
+      setBackupRestoreError(err.message || 'Failed to restore playlist.');
+    } finally {
+      setBackupRestoreLoading(false);
     }
   };
 
@@ -2961,7 +3025,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     disabled: cacheRefreshLoading
                   };
 
-                  const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, deleteAction];
+                  const backupAction = {
+                    label: 'Backup & restore',
+                    onClick: openBackupModal,
+                    icon: "backup",
+                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                    disabled: false
+                  };
+
+                  const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, backupAction, deleteAction];
                   return (
                     <>
                       <div className="flex flex-col gap-2 md:hidden w-full max-w-xs mx-auto">
@@ -4194,6 +4266,89 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               {editMessage && <p className="text-spotify-green text-sm">{editMessage}</p>}
               {editError && <p className="text-red-400 text-sm">{editError}</p>}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backup & Restore Modal */}
+      {showBackupModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="bg-spotify-gray-dark rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 border border-spotify-gray-mid/60">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Playlist actions</p>
+                <h3 className="text-2xl font-semibold text-white">Backup & restore</h3>
+                <p className="text-sm text-spotify-gray-light mt-1">
+                  Restores use the cached playlist snapshot. Open the playlist to refresh the cache if needed.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBackupModal(false)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-spotify-gray-light hover:text-white hover:bg-spotify-gray-mid/60"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {backupLoading ? (
+              <div className="flex items-center gap-3 text-spotify-gray-light text-sm">
+                <div className="w-5 h-5 border-2 border-spotify-green border-t-transparent rounded-full animate-spin" />
+                <span>Loading backup status…</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-spotify-gray-mid rounded-lg p-4 text-sm text-white border border-spotify-gray-mid/60 space-y-1">
+                  <p><span className="text-spotify-gray-light">Status:</span> {backupStatus?.cached ? 'Cached' : 'Not cached'}</p>
+                  <p><span className="text-spotify-gray-light">Tracks:</span> {backupStatus?.track_count ?? 0}</p>
+                  {backupStatus?.last_cached_at_utc && (
+                    <p>
+                      <span className="text-spotify-gray-light">Last cached:</span>{' '}
+                      {new Date(backupStatus.last_cached_at_utc).toLocaleString()}
+                    </p>
+                  )}
+                  {backupStatus?.is_dirty && (
+                    <p className="text-amber-300">Cache is out of date; refresh the playlist before restoring.</p>
+                  )}
+                </div>
+
+                <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
+                  Restore to new playlist name
+                  <input
+                    type="text"
+                    value={backupCloneName}
+                    onChange={(event) => setBackupCloneName(event.target.value)}
+                    className="w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                    placeholder="New playlist name"
+                  />
+                </label>
+
+                {backupError && <div className="text-red-400 text-sm">{backupError}</div>}
+                {backupRestoreError && <div className="text-red-400 text-sm">{backupRestoreError}</div>}
+                {backupRestoreMessage && <div className="text-spotify-green text-sm">{backupRestoreMessage}</div>}
+
+                <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleBackupRestore('overwrite')}
+                    disabled={backupRestoreLoading || !backupStatus?.cached || (backupStatus?.track_count || 0) === 0}
+                    className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Restore here
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBackupRestore('clone')}
+                    disabled={backupRestoreLoading || !backupStatus?.cached || (backupStatus?.track_count || 0) === 0}
+                    className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Restore to new
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -239,6 +239,24 @@ def get_cached_track_ids(playlist_id: str) -> List[str]:
         return [row["track_id"] for row in cur.fetchall()]
 
 
+def get_cached_playlist_items(playlist_id: str) -> List[Dict]:
+    if not playlist_id:
+        return []
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT position, track_id, added_at
+            FROM playlist_cache_items
+            WHERE playlist_id = ?
+              AND track_id IS NOT NULL
+            ORDER BY position ASC
+            """,
+            (playlist_id,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def get_cached_playlist_tracks(playlist_id: str, cutoff_iso: Optional[str] = None) -> List[Dict]:
     if not playlist_id:
         return []

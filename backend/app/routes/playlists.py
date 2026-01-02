@@ -10,7 +10,7 @@ All routes are prefixed with /playlists and require authentication.
 
 from fastapi import APIRouter, HTTPException, Depends, Path, Request
 from fastapi.responses import StreamingResponse
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 import logging
 from spotipy.exceptions import SpotifyException
 import time
@@ -453,6 +453,22 @@ class PlaylistCreateRequest(BaseModel):
     track_uris: List[str] = Field(default_factory=list)
 
 
+class PlaylistBackupStatusResponse(BaseModel):
+    cached: bool
+    track_count: int
+    last_cached_at_utc: Optional[str] = None
+    last_snapshot_id: Optional[str] = None
+    is_dirty: bool = False
+
+
+class PlaylistRestoreRequest(BaseModel):
+    mode: Literal["overwrite", "clone"] = "overwrite"
+    name: Optional[str] = None
+    description: Optional[str] = None
+    public: Optional[bool] = None
+    collaborative: Optional[bool] = None
+
+
 class PlaylistCacheMatchTrack(BaseModel):
     client_key: str
     track_id: Optional[str] = None
@@ -785,6 +801,99 @@ async def create_playlist_from_tracks(
     except Exception as e:
         logger.error("Failed to create playlist for user %s: %s", user_id, e)
         raise HTTPException(status_code=500, detail="Failed to create playlist")
+
+
+@router.get("/{playlist_id}/backup/status", response_model=PlaylistBackupStatusResponse)
+async def get_playlist_backup_status(
+    playlist_id: str,
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
+    if not facts:
+        return PlaylistBackupStatusResponse(
+            cached=False,
+            track_count=0,
+            last_cached_at_utc=None,
+            last_snapshot_id=None,
+            is_dirty=False,
+        )
+    return PlaylistBackupStatusResponse(
+        cached=True,
+        track_count=int(facts.get("track_count_cached") or 0),
+        last_cached_at_utc=facts.get("last_cached_at_utc"),
+        last_snapshot_id=facts.get("last_snapshot_id"),
+        is_dirty=bool(facts.get("is_dirty") == 1),
+    )
+
+
+def _replace_playlist_tracks(sp: Any, playlist_id: str, track_uris: List[str]) -> None:
+    if not track_uris:
+        sp.playlist_replace_items(playlist_id, [])
+        return
+    first_batch = track_uris[:100]
+    rest = track_uris[100:]
+    sp.playlist_replace_items(playlist_id, first_batch)
+    for i in range(0, len(rest), 100):
+        sp.playlist_add_items(playlist_id, rest[i:i + 100])
+
+
+@router.post("/{playlist_id}/backup/restore")
+async def restore_playlist_from_backup(
+    playlist_id: str,
+    body: PlaylistRestoreRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service)
+):
+    sp = spotify.get_spotify_client(session_mgr.get_user_id())
+    if not sp:
+        raise HTTPException(status_code=401, detail="Spotify authentication expired")
+
+    cached_items = playlist_cache_store.get_cached_playlist_items(playlist_id)
+    track_ids = [item.get("track_id") for item in cached_items if item.get("track_id")]
+    if not track_ids:
+        raise HTTPException(
+            status_code=409,
+            detail="No cached backup available. Open the playlist once to warm the cache before restoring.",
+        )
+    track_uris = [f"spotify:track:{track_id}" for track_id in track_ids]
+
+    target_playlist_id = playlist_id
+    if body.mode == "clone":
+        meta = sp.playlist(playlist_id, fields="name,description,public,collaborative,owner(id)")
+        base_name = meta.get("name") or "Restored playlist"
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        target_name = body.name or f"{base_name} (backup {timestamp})"
+        payload_public = body.public if body.public is not None else meta.get("public")
+        payload_collab = body.collaborative if body.collaborative is not None else meta.get("collaborative")
+        if payload_public:
+            payload_collab = False
+        target_description = body.description if body.description is not None else (meta.get("description") or "")
+        new_playlist = sp.user_playlist_create(
+            user=session_mgr.get_user_id(),
+            name=target_name,
+            public=payload_public,
+            collaborative=payload_collab,
+            description=target_description,
+        )
+        target_playlist_id = new_playlist.get("id")
+        if not target_playlist_id:
+            raise HTTPException(status_code=502, detail="Failed to create restored playlist")
+
+    _replace_playlist_tracks(sp, target_playlist_id, track_uris)
+    snapshot_after = sp.playlist(target_playlist_id, fields="snapshot_id").get("snapshot_id")
+    playlist_cache_store.mark_dirty(target_playlist_id)
+    _queue_cache_refresh(session_mgr, target_playlist_id, "backup_restore")
+
+    if body.mode == "clone":
+        return {
+            "message": "Playlist restored to new playlist",
+            "new_playlist_id": target_playlist_id,
+            "snapshot_id": snapshot_after,
+        }
+    return {
+        "message": "Playlist restored",
+        "snapshot_id": snapshot_after,
+    }
 
 
 @router.post("/{playlist_id}/cache/matches", response_model=PlaylistCacheMatchResponse)

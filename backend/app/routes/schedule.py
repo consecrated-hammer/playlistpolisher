@@ -65,6 +65,17 @@ class CacheScheduleRequest(BaseModel):
     first_run_at: Optional[str] = Field(None, description="ISO datetime for first run (UTC). Defaults to next scheduled time")
 
 
+class BackupScheduleRequest(BaseModel):
+    action_type: Literal["backup"] = "backup"
+    schedule_type: Literal['daily', 'weekly', 'monthly'] = 'daily'
+    hour_of_day: int = Field(2, ge=0, le=23, description="Hour of day (0-23) for scheduled run")
+    day_of_week: Literal['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] = 'sun'
+    day_of_month: int = Field(1, ge=1, le=31)
+    timezone_offset_minutes: int = Field(0, description="Minutes offset from UTC for the user (e.g., +600 for UTC+10)")
+    frequency_minutes: int = Field(ge=15, le=60 * 24 * 30, description="Fallback cadence in minutes", default=1440)
+    first_run_at: Optional[str] = Field(None, description="ISO datetime for first run (UTC). Defaults to next scheduled time")
+
+
 @router.post("", response_model=ScheduleResponse)
 async def create_schedule(
     playlist_id: str = Path(..., description="Spotify playlist ID"),
@@ -82,6 +93,35 @@ async def create_schedule(
         "timezone_offset_minutes": body.timezone_offset_minutes,
     }
     # Set default frequency for reference (daily/weekly/monthly)
+    freq_map = {"daily": 1440, "weekly": 10080, "monthly": 43200}
+    freq_minutes = freq_map.get(body.schedule_type, body.frequency_minutes)
+
+    sched_id = schedule_store.create_schedule(
+        playlist_id=playlist_id,
+        user_id=session_mgr.get_user_id(),
+        session_id=session_mgr.session_id,
+        action_type=body.action_type,
+        params=schedule_params,
+        frequency_minutes=freq_minutes,
+        first_run_at=body.first_run_at,
+    )
+    sched = schedule_store.get_schedule(sched_id, session_mgr.get_user_id())
+    return _to_response(sched)
+
+
+@router.post("/backup", response_model=ScheduleResponse)
+async def create_backup_schedule(
+    playlist_id: str,
+    body: BackupScheduleRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    schedule_params = {
+        "schedule_type": body.schedule_type,
+        "hour_of_day": body.hour_of_day,
+        "day_of_week": body.day_of_week,
+        "day_of_month": body.day_of_month,
+        "timezone_offset_minutes": body.timezone_offset_minutes,
+    }
     freq_map = {"daily": 1440, "weekly": 10080, "monthly": 43200}
     freq_minutes = freq_map.get(body.schedule_type, body.frequency_minutes)
 
@@ -187,6 +227,7 @@ async def list_user_schedules(session_mgr: SessionManager = Depends(require_auth
     return {"schedules": [s for s in valid_schedules if s is not None]}
 
 CACHE_GLOBAL_PLAYLIST_ID = "__cache_global__"
+BACKUP_GLOBAL_PLAYLIST_ID = "__backup_global__"
 
 
 @router_user.post("/cache", response_model=ScheduleResponse)
@@ -206,6 +247,34 @@ async def create_cache_schedule(
 
     sched_id = schedule_store.create_schedule(
         playlist_id=CACHE_GLOBAL_PLAYLIST_ID,
+        user_id=session_mgr.get_user_id(),
+        session_id=session_mgr.session_id,
+        action_type=body.action_type,
+        params=schedule_params,
+        frequency_minutes=freq_minutes,
+        first_run_at=body.first_run_at,
+    )
+    sched = schedule_store.get_schedule(sched_id, session_mgr.get_user_id())
+    return _to_response(sched)
+
+
+@router_user.post("/backup", response_model=ScheduleResponse)
+async def create_backup_all_schedule(
+    body: BackupScheduleRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    schedule_params = {
+        "schedule_type": body.schedule_type,
+        "hour_of_day": body.hour_of_day,
+        "day_of_week": body.day_of_week,
+        "day_of_month": body.day_of_month,
+        "timezone_offset_minutes": body.timezone_offset_minutes,
+    }
+    freq_map = {"daily": 1440, "weekly": 10080, "monthly": 43200}
+    freq_minutes = freq_map.get(body.schedule_type, body.frequency_minutes)
+
+    sched_id = schedule_store.create_schedule(
+        playlist_id=BACKUP_GLOBAL_PLAYLIST_ID,
         user_id=session_mgr.get_user_id(),
         session_id=session_mgr.session_id,
         action_type=body.action_type,
@@ -255,6 +324,44 @@ async def update_cache_schedule(
     return _to_response(updated)
 
 
+@router_user.patch("/backup/{schedule_id}", response_model=ScheduleResponse)
+async def update_backup_schedule(
+    schedule_id: int,
+    body: ScheduleUpdateRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    sched = schedule_store.get_schedule(schedule_id, session_mgr.get_user_id())
+    if not sched or sched.get("playlist_id") != BACKUP_GLOBAL_PLAYLIST_ID:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    fields = {}
+    if body.enabled is not None:
+        fields["enabled"] = 1 if body.enabled else 0
+    params_update = {}
+    for key in ("schedule_type", "hour_of_day", "day_of_week", "day_of_month", "timezone_offset_minutes"):
+        val = getattr(body, key, None)
+        if val is not None:
+            params_update[key] = val
+    if params_update:
+        new_params = (sched.get("params") or {}).copy()
+        new_params.update(params_update)
+        fields["params"] = new_params
+    if body.frequency_minutes is not None:
+        fields["frequency_minutes"] = body.frequency_minutes
+    if params_update or body.frequency_minutes is not None:
+        fields["next_run_at"] = None
+    if not fields:
+        return _to_response(sched)
+
+    schedule_store.update_schedule(schedule_id, session_mgr.get_user_id(), **fields)
+    updated = schedule_store.get_schedule(schedule_id, session_mgr.get_user_id())
+    if updated and updated.get("next_run_at") is None:
+        next_run = schedule_store._compute_next_run(updated)
+        schedule_store.update_schedule(schedule_id, session_mgr.get_user_id(), next_run_at=next_run)
+        updated = schedule_store.get_schedule(schedule_id, session_mgr.get_user_id())
+    return _to_response(updated)
+
+
 @router_user.delete("/cache/{schedule_id}")
 async def delete_cache_schedule(
     schedule_id: int,
@@ -262,6 +369,18 @@ async def delete_cache_schedule(
 ):
     sched = schedule_store.get_schedule(schedule_id, session_mgr.get_user_id())
     if not sched or sched.get("playlist_id") != CACHE_GLOBAL_PLAYLIST_ID:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    schedule_store.delete_schedule(schedule_id, session_mgr.get_user_id())
+    return {"message": "Schedule deleted"}
+
+
+@router_user.delete("/backup/{schedule_id}")
+async def delete_backup_schedule(
+    schedule_id: int,
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    sched = schedule_store.get_schedule(schedule_id, session_mgr.get_user_id())
+    if not sched or sched.get("playlist_id") != BACKUP_GLOBAL_PLAYLIST_ID:
         raise HTTPException(status_code=404, detail="Schedule not found")
     schedule_store.delete_schedule(schedule_id, session_mgr.get_user_id())
     return {"message": "Schedule deleted"}

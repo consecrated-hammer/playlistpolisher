@@ -302,6 +302,22 @@ export const playlistAPI = {
   },
 
   /**
+   * Get backup/cache status for a playlist
+   */
+  getBackupStatus: async (playlistId) => {
+    const response = await api.get(`/playlists/${playlistId}/backup/status`);
+    return response.data;
+  },
+
+  /**
+   * Restore a playlist from cached backup
+   */
+  restoreFromBackup: async (playlistId, payload) => {
+    const response = await api.post(`/playlists/${playlistId}/backup/restore`, payload);
+    return response.data;
+  },
+
+  /**
    * Remove selected duplicate occurrences
    */
   removeDuplicates: async (playlistId, items, snapshotId) => {

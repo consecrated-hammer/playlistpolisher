@@ -15,6 +15,8 @@ from app.db import playlist_cache as playlist_cache_store
 
 logger = logging.getLogger(__name__)
 
+BACKUP_GLOBAL_PLAYLIST_ID = "__backup_global__"
+
 
 class SchedulerService:
     """Lightweight scheduler for recurring playlist actions."""
@@ -68,6 +70,8 @@ class SchedulerService:
         try:
             if action_type == "sort":
                 self._run_sort_schedule(playlist_id, user_id, session_id, params, schedule_id)
+            elif action_type == "backup":
+                self._run_backup_schedule(playlist_id, user_id, session_id, schedule_id)
             elif action_type == "cache_clear":
                 removed = CacheService.clear_expired()
                 logger.info("Scheduled cache cleanup removed %s expired tracks", removed)
@@ -124,6 +128,32 @@ class SchedulerService:
             method=method,
             session_id=session_id or session_mgr.session_id,
             meta={"source": "scheduled", "schedule_id": schedule_id},
+        )
+
+    def _run_backup_schedule(self, playlist_id: str, user_id: str, session_id: Optional[str], schedule_id: int):
+        session_mgr = SessionManager(session_id=session_id)
+        spotify_service = SpotifyService(session_manager=session_mgr)
+        sp = spotify_service.get_spotify_client(user_id)
+        if not sp:
+            raise Exception("Spotify authentication expired for scheduled backup")
+
+        playlist_ids = []
+        if playlist_id == BACKUP_GLOBAL_PLAYLIST_ID:
+            playlists = spotify_service.get_user_playlists()
+            if playlists:
+                playlist_ids = self._get_playlists_to_refresh(playlists)
+        else:
+            playlist_ids = [playlist_id]
+
+        if not playlist_ids:
+            logger.info("Scheduled backup found no playlists to update (user=%s)", user_id)
+            return
+
+        start_cache_warm_job(
+            user_id=user_id,
+            session_id=session_id or session_mgr.session_id,
+            playlist_ids=playlist_ids,
+            meta={"source": "scheduled_backup", "schedule_id": schedule_id, "mode": "backup"},
         )
 
     def _get_playlists_to_refresh(self, playlists: list) -> list:
