@@ -203,8 +203,11 @@ const CachePage = ({ user, onLogout }) => {
     }
   };
 
-  const pollCacheWarmStatus = async (startedAtMs) => {
+  const pollCacheWarmStatus = async (startedAtMs, expectedTotal) => {
     let status = await cacheAPI.getWarmStatus();
+    if (status && !status.total && expectedTotal) {
+      status = { ...status, total: expectedTotal };
+    }
     setRefreshAllStatus(status);
     while (status?.status === 'running') {
       if (Date.now() - startedAtMs > 30 * 60 * 1000) {
@@ -212,20 +215,22 @@ const CachePage = ({ user, onLogout }) => {
       }
       await new Promise((resolve) => setTimeout(resolve, 2000));
       status = await cacheAPI.getWarmStatus();
+      if (status && !status.total && expectedTotal) {
+        status = { ...status, total: expectedTotal };
+      }
       setRefreshAllStatus(status);
     }
     return status;
   };
 
   const handleRefreshAllPlaylists = async () => {
-    if (!window.confirm('Refresh cache for all of your playlists now?')) {
+    if (!window.confirm('Refresh cache for all of your playlists now? This may take several minutes for large libraries.')) {
       return;
     }
 
     try {
       setActionLoading(true);
       setActionMessage(null);
-      setRefreshAllStatus({ status: 'running', total: 0, completed: 0 });
 
       const playlists = await playlistAPI.getPlaylists();
       const playlistIds = (playlists || []).map((playlist) => playlist.id).filter(Boolean);
@@ -235,6 +240,7 @@ const CachePage = ({ user, onLogout }) => {
         return;
       }
 
+      setRefreshAllStatus({ status: 'running', total: playlistIds.length, completed: 0 });
       const warmResult = await cacheAPI.warmPlaylists(playlistIds);
       const queued = warmResult?.queued || 0;
       if (queued === 0) {
@@ -243,7 +249,7 @@ const CachePage = ({ user, onLogout }) => {
         return;
       }
 
-      const finalStatus = await pollCacheWarmStatus(Date.now());
+      const finalStatus = await pollCacheWarmStatus(Date.now(), playlistIds.length);
       const total = finalStatus?.total || queued || playlistIds.length;
       setActionMessage({ type: 'success', text: `Refreshed cache for ${total} playlists.` });
       await loadStats();
@@ -411,9 +417,29 @@ const CachePage = ({ user, onLogout }) => {
             <div className="text-sm text-spotify-gray-light">
               Warm the cache for every playlist in your library
             </div>
+            <div className="text-xs text-spotify-gray-light mt-1">
+              This may take several minutes for large libraries.
+            </div>
             {refreshAllStatus?.status === 'running' && (
-              <div className="text-xs text-spotify-gray-light mt-2">
-                Refreshing {refreshAllStatus.completed || 0}/{refreshAllStatus.total || 0} playlists...
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between text-xs text-spotify-gray-light">
+                  <span>Refreshing playlists...</span>
+                  <span>
+                    {refreshAllStatus.total
+                      ? `${refreshAllStatus.completed || 0}/${refreshAllStatus.total}`
+                      : 'Starting...'}
+                  </span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-spotify-gray-mid/60 overflow-hidden">
+                  <div
+                    className="h-full bg-spotify-green transition-all"
+                    style={{
+                      width: refreshAllStatus.total
+                        ? `${Math.min(100, Math.round(((refreshAllStatus.completed || 0) / refreshAllStatus.total) * 100))}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -422,7 +448,7 @@ const CachePage = ({ user, onLogout }) => {
             disabled={actionLoading}
             className="px-4 py-2 bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {refreshAllStatus?.status === 'running' ? 'Refreshing…' : 'Refresh all'}
+            {refreshAllStatus?.status === 'running' ? 'Refreshing...' : 'Refresh all'}
           </button>
         </div>
 
