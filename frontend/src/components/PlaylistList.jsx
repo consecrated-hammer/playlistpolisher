@@ -144,11 +144,11 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
 
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-[560px] w-full border-separate border-spacing-y-1 text-left">
+        <table className="min-w-[520px] sm:min-w-[560px] w-full table-fixed border-separate border-spacing-y-1 text-left">
           <thead>
             <tr className="text-xs uppercase tracking-wide text-spotify-gray-light">
-              <th className="px-2 py-1.5 font-semibold">Artwork</th>
-              <th className="px-2 py-1.5 font-semibold">
+              <th className="px-1.5 py-1 font-semibold w-14">Artwork</th>
+              <th className="px-1.5 py-1 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('name'))}
@@ -158,7 +158,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('name')}
                 </button>
               </th>
-              <th className="px-2 py-1.5 font-semibold">
+              <th className="px-1.5 py-1 font-semibold w-28">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('owner'))}
@@ -168,7 +168,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('owner')}
                 </button>
               </th>
-              <th className="px-2 py-1.5 font-semibold">
+              <th className="px-1.5 py-1 font-semibold w-16">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('tracks'))}
@@ -180,7 +180,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
               </th>
             </tr>
           </thead>
-          <tbody className="text-sm">
+          <tbody className="text-xs sm:text-sm">
             {playlists.map((playlist) => {
               const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
               const trackTotal = playlist.tracks?.total || 0;
@@ -199,8 +199,8 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   aria-label={`Open playlist ${playlist.name}`}
                   className="bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 focus:outline-none focus:ring-2 focus:ring-spotify-green rounded-lg transition-colors cursor-pointer"
                 >
-                  <td className="px-2 py-1.5">
-                    <div className="w-10 h-10 rounded-md overflow-hidden bg-spotify-gray-mid">
+                  <td className="px-1.5 py-1">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-md overflow-hidden bg-spotify-gray-mid">
                       {playlist.images && playlist.images.length > 0 ? (
                         <img
                           src={getBestImage(playlist.images)}
@@ -216,15 +216,15 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                       )}
                     </div>
                   </td>
-                  <td className="px-2 py-1.5">
-                    <p className="text-white font-semibold truncate max-w-[260px]" title={playlist.name}>
+                  <td className="px-1.5 py-1">
+                    <p className="text-white font-semibold truncate max-w-[200px] sm:max-w-[260px]" title={playlist.name}>
                       {playlist.name}
                     </p>
                   </td>
-                  <td className="px-2 py-1.5 text-spotify-gray-light">
+                  <td className="px-1.5 py-1 text-spotify-gray-light">
                     {ownerName}
                   </td>
-                  <td className="px-2 py-1.5 text-spotify-gray-light">
+                  <td className="px-1.5 py-1 text-spotify-gray-light text-right">
                     {trackTotal}
                   </td>
                 </tr>
