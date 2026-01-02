@@ -2970,9 +2970,9 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                             key={idx}
                             onClick={action.onClick}
                             disabled={action.disabled}
-                            className={`w-full rounded-lg px-10 py-2 text-sm font-semibold text-white flex items-center justify-center text-center transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden relative ${action.colorClass}`}
+                            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-center gap-2 text-center transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${action.colorClass}`}
                           >
-                            <span className="icon text-sm absolute left-3">{action.icon}</span>
+                            <span className="icon text-sm flex-shrink-0">{action.icon}</span>
                             <span className="min-w-0 text-center leading-snug break-words">{action.label}</span>
                           </button>
                         ))}
