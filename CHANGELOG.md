@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2.0 - 2026-01-03
+- Mobile: fix playlist detail overflow, center controls/artwork, and refine action button layout.
+- Mobile: reorder modal uses text buttons; track "Added" shows date + time.
+- Playlists: tighten table view columns on mobile, round row edges, align Tracks header icon, remove cache icon from table rows.
+- UX: remove infinite scroll debug logging.
+- Docs: add ROADMAP.md.
+
 ## v1.1.0 - 2026-01-02
 - Cache: add playlist freshness checks via snapshot IDs to avoid unnecessary refreshes.
 - Cache: support user-wide and per-playlist refresh actions with improved progress feedback.
