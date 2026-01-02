@@ -508,6 +508,16 @@ export const cacheAPI = {
   },
 
   /**
+   * Check playlist cache freshness without loading full tracks
+   * @param {string} playlistId
+   * @returns {Promise<object>} Cache status details
+   */
+  getPlaylistCacheStatus: async (playlistId) => {
+    const response = await api.get(`/cache/playlist/${playlistId}/status`);
+    return response.data;
+  },
+
+  /**
    * Clear expired cache entries
    * @returns {Promise<object>} Result with removed count
    */

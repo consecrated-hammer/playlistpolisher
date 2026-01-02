@@ -712,7 +712,7 @@ const CachePage = ({ user, onLogout }) => {
                       onChange={(event) => setCacheRunInitial(event.target.checked)}
                       className="accent-spotify-green"
                     />
-                    <span>Run initial cache now</span>
+                    <span>Warm selected playlists now</span>
                   </label>
                 </div>
 
