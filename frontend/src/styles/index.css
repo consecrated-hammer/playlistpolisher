@@ -17,6 +17,12 @@
     text-size-adjust: 100%;
   }
 
+  @media (max-width: 767px) {
+    body {
+      overflow-x: hidden;
+    }
+  }
+
   * {
     @apply box-border;
   }
@@ -112,6 +118,18 @@
 
   .tooltip-danger::after {
     border-color: transparent transparent rgba(220, 38, 38, 0.95) transparent;
+  }
+
+  @media (max-width: 767px) {
+    .tooltip,
+    .radix-tooltip {
+      display: none;
+    }
+  }
+
+  .debug-overflow {
+    outline: 2px solid #f59e0b;
+    outline-offset: 1px;
   }
 
   /* Right-edge-safe variant */

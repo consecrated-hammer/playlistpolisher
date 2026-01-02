@@ -209,7 +209,7 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
      </header>
 
       {/* Main Content */}
-      <main className={`container mx-auto px-4 py-8 flex-grow ${showPlayerBar ? 'pb-32' : ''}`}>
+      <main className={`container mx-auto px-4 py-8 flex-grow overflow-x-hidden md:overflow-x-visible ${showPlayerBar ? 'pb-32' : ''}`}>
         <div className="relative">
           {playlistNavPending && (
             <div className="absolute inset-0 z-40 bg-black/50 backdrop-blur-sm rounded-2xl flex items-center justify-center">

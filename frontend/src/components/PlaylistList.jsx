@@ -130,13 +130,13 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
       return null;
     };
 
-    const renderSortIcon = (key) => {
+    const renderSortIcon = (key, marginClass = 'ml-1') => {
       const dir = getSortDirection(key);
       if (!dir) {
-        return <span className="icon text-xs ml-1 text-spotify-gray-light">swap_vert</span>;
+        return <span className={`icon text-xs ${marginClass} text-spotify-gray-light`}>swap_vert</span>;
       }
       return (
-        <span className="icon text-xs ml-1 text-spotify-green">
+        <span className={`icon text-xs ${marginClass} text-spotify-green`}>
           {dir === 'asc' ? 'arrow_drop_up' : 'arrow_drop_down'}
         </span>
       );
@@ -144,11 +144,19 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
 
     return (
       <div className="overflow-x-auto">
-        <table className="min-w-[680px] w-full border-separate border-spacing-y-2 text-left">
+        <table className="min-w-0 sm:min-w-[560px] w-full table-fixed border-separate border-spacing-y-1 text-left">
+          <colgroup>
+            <col className="w-12" />
+            <col className="w-[46%] sm:w-auto" />
+            <col className="w-[30%] sm:w-auto" />
+            <col className="w-[12%] sm:w-20" />
+          </colgroup>
           <thead>
             <tr className="text-xs uppercase tracking-wide text-spotify-gray-light">
-              <th className="px-3 py-2 font-semibold">Artwork</th>
-              <th className="px-3 py-2 font-semibold">
+              <th className="px-1 py-1 font-semibold">
+                <span className="hidden sm:inline">Artwork</span>
+              </th>
+              <th className="px-1 py-1 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('name'))}
@@ -158,7 +166,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('name')}
                 </button>
               </th>
-              <th className="px-3 py-2 font-semibold">
+              <th className="px-1 py-1 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('owner'))}
@@ -168,19 +176,19 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('owner')}
                 </button>
               </th>
-              <th className="px-3 py-2 font-semibold">
+              <th className="px-1 py-1 font-semibold">
                 <button
                   type="button"
                   onClick={() => onSortChange?.(getNextSort('tracks'))}
-                  className="inline-flex items-center hover:text-white transition-colors"
+                  className="w-full inline-flex items-center justify-end hover:text-white transition-colors"
                 >
                   Tracks
-                  {renderSortIcon('tracks')}
+                  {renderSortIcon('tracks', 'ml-0.5')}
                 </button>
               </th>
             </tr>
           </thead>
-          <tbody className="text-sm">
+          <tbody className="text-xs sm:text-sm">
             {playlists.map((playlist) => {
               const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
               const trackTotal = playlist.tracks?.total || 0;
@@ -197,10 +205,10 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   tabIndex={0}
                   role="button"
                   aria-label={`Open playlist ${playlist.name}`}
-                  className="bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 focus:outline-none focus:ring-2 focus:ring-spotify-green rounded-lg transition-colors cursor-pointer"
+                  className="group focus:outline-none focus:ring-2 focus:ring-spotify-green rounded-lg transition-colors cursor-pointer"
                 >
-                  <td className="px-3 py-2">
-                    <div className="w-10 h-10 rounded-md overflow-hidden bg-spotify-gray-mid">
+                  <td className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-l border-spotify-gray-mid/40 rounded-l-lg">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-md overflow-hidden bg-spotify-gray-mid">
                       {playlist.images && playlist.images.length > 0 ? (
                         <img
                           src={getBestImage(playlist.images)}
@@ -216,19 +224,16 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2">
-                    <p className="text-white font-semibold truncate max-w-[320px]" title={playlist.name}>
+                  <td className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-spotify-gray-mid/40">
+                    <p className="text-white font-semibold truncate" title={playlist.name}>
                       {playlist.name}
                     </p>
                   </td>
-                  <td className="px-3 py-2 text-spotify-gray-light">
+                  <td className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-spotify-gray-mid/40 text-spotify-gray-light truncate" title={ownerName}>
                     {ownerName}
                   </td>
-                  <td className="px-3 py-2 text-spotify-gray-light">
-                    <div className="flex items-center justify-between gap-2">
-                      <span>{trackTotal}</span>
-                      {renderCachedIcon(playlist.id)}
-                    </div>
+                  <td className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-r border-spotify-gray-mid/40 rounded-r-lg text-spotify-gray-light text-right tabular-nums">
+                    {trackTotal}
                   </td>
                 </tr>
               );

@@ -56,8 +56,11 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef(null);
   const trackActionPendingRef = useRef(null);
+  const playlistViewRef = useRef(null);
   const [selectedTrackKeys, setSelectedTrackKeys] = useState([]);
+  const [expandedTrackKeys, setExpandedTrackKeys] = useState([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [trackActionMode, setTrackActionMode] = useState(null);
   const [trackActionOpen, setTrackActionOpen] = useState(false);
@@ -187,6 +190,67 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   }, [showDuplicatesModal]);
 
+  const layoutDebugEnabled = useMemo(() => {
+    if (!isMobile) return false;
+    const params = new URLSearchParams(location.search);
+    return params.get('debugLayout') === '1';
+  }, [isMobile, location.search]);
+
+  useEffect(() => {
+    const container = playlistViewRef.current;
+    if (!layoutDebugEnabled || !container) return;
+
+    const clearHighlights = () => {
+      container.querySelectorAll('.debug-overflow').forEach((el) => {
+        el.classList.remove('debug-overflow');
+      });
+    };
+
+    const checkOverflow = () => {
+      clearHighlights();
+      const viewportWidth = window.innerWidth;
+      container.querySelectorAll('*').forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        const overflowsViewport = rect.right > viewportWidth + 1 || rect.left < -1;
+        if (overflowsViewport) {
+          el.classList.add('debug-overflow');
+        }
+      });
+    };
+
+    const scheduleCheck = () => {
+      window.requestAnimationFrame(checkOverflow);
+    };
+
+    scheduleCheck();
+    window.addEventListener('resize', scheduleCheck);
+    window.addEventListener('scroll', scheduleCheck, true);
+    return () => {
+      window.removeEventListener('resize', scheduleCheck);
+      window.removeEventListener('scroll', scheduleCheck, true);
+      clearHighlights();
+    };
+  }, [layoutDebugEnabled]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const handleChange = (event) => setIsMobile(event.matches);
+    handleChange(mediaQuery);
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    setSelectedTrackKeys([]);
+    setLastSelectedIndex(null);
+  }, [isMobile]);
+
   const fetchHistory = async (playlistId) => {
     if (!playlistId) return;
     try {
@@ -272,6 +336,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   useEffect(() => {
     setSelectedTrackKeys([]);
     setLastSelectedIndex(null);
+    setExpandedTrackKeys([]);
   }, [currentPlaylist?.id]);
 
   useEffect(() => {
@@ -370,7 +435,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       minute: '2-digit',
       hour12: true
     });
-    return `${dateStr}, ${timeStr}`;
+    return `${dateStr}, ${timeStr.toLowerCase()}`;
   };
 
   const formatReleaseDate = (dateString, precision) => {
@@ -487,6 +552,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   }, [tracksSource]);
 
   const selectedTrackSet = useMemo(() => new Set(selectedTrackKeys), [selectedTrackKeys]);
+  const expandedTrackSet = useMemo(() => new Set(expandedTrackKeys), [expandedTrackKeys]);
 
   const selectedTracks = useMemo(
     () => selectedTrackKeys.map((key) => trackKeyLookup.get(key)).filter(Boolean),
@@ -984,6 +1050,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
   const handleTrackRowSelect = (event, track, visibleIndex) => {
     if (event.button !== 0) return;
+    if (isMobile) return;
     if (isInteractiveTarget(event)) return;
     setTrackActionError(null);
     const isRange = event.shiftKey && lastSelectedIndex !== null;
@@ -1021,6 +1088,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   };
 
   const handleTrackToggleSelect = (event, track, visibleIndex) => {
+    if (isMobile) return;
     event.stopPropagation();
     setTrackActionError(null);
     if (event.shiftKey && lastSelectedIndex !== null) {
@@ -1045,6 +1113,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       return Array.from(next);
     });
     setLastSelectedIndex(visibleIndex);
+  };
+
+  const toggleTrackExpanded = (trackKey) => {
+    setExpandedTrackKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(trackKey)) {
+        next.delete(trackKey);
+      } else {
+        next.add(trackKey);
+      }
+      return Array.from(next);
+    });
   };
 
   const closeContextMenu = useCallback(() => {
@@ -1082,7 +1162,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     event.preventDefault();
     event.stopPropagation();
     
-    if (!selectedTrackSet.has(track.selectionKey)) {
+    if (isMobile) {
+      setSelectedTrackKeys([track.selectionKey]);
+      setLastSelectedIndex(visibleIndex);
+    } else if (!selectedTrackSet.has(track.selectionKey)) {
       setSelectedTrackKeys([track.selectionKey]);
       setLastSelectedIndex(visibleIndex);
     }
@@ -1970,7 +2053,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
   return (
     <Tooltip.Provider delayDuration={100}>
-      <div className="animate-fade-in relative">
+      <div ref={playlistViewRef} className="animate-fade-in relative w-full min-w-0 overflow-x-hidden box-border">
       {refreshing && (
         <div className="absolute inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-lg">
           <LoadingSpinner text="Refreshing playlist..." />
@@ -2549,10 +2632,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </button>
 
       {/* Playlist Header */}
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-8 mb-6">
-        <div className="flex flex-col md:flex-row gap-6">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full overflow-hidden">
+        <div className="flex flex-col md:flex-row gap-6 min-w-0">
           {/* Cover Image */}
-          <div className="w-60 h-60 flex-shrink-0 shadow-2xl relative group">
+          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group mx-auto md:mx-0">
             <div className="absolute inset-0 rounded-lg overflow-hidden bg-spotify-gray-mid">
               {currentPlaylist.images && currentPlaylist.images.length > 0 ? (
                 <img
@@ -2586,16 +2669,16 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           </div>
 
       {/* Playlist Info */}
-      <div className="flex flex-col justify-end">
+      <div className="flex flex-col justify-end min-w-0 w-full overflow-hidden">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">{currentPlaylist.name}</h1>
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 break-words">{currentPlaylist.name}</h1>
             {playlistDescription && (
-              <p className="text-spotify-gray-light mb-4 max-w-2xl">{playlistDescription}</p>
+              <p className="text-spotify-gray-light mb-4 max-w-2xl break-words">{playlistDescription}</p>
             )}
-            <div className="flex items-center space-x-2 text-sm text-spotify-gray-light">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-spotify-gray-light">
               {(currentPlaylist.owner?.display_name || currentPlaylist.owner?.id) && (
                 <>
-                  <span className="font-semibold text-white">{currentPlaylist.owner.display_name || currentPlaylist.owner.id}</span>
+                  <span className="font-semibold text-white break-all">{currentPlaylist.owner.display_name || currentPlaylist.owner.id}</span>
                   <span>•</span>
                 </>
               )}
@@ -2670,7 +2753,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
             )}
           </div>
             <div className="mt-4 relative">
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3">
                 {player?.canUseAppPlayer && (
                   <>
                     <div className="relative group">
@@ -2695,10 +2778,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                             }
                           }
                         }}
-                        className="w-12 h-12 rounded-full bg-spotify-green text-black flex items-center justify-center hover:bg-spotify-green-dark transition-colors"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-spotify-green text-black flex items-center justify-center hover:bg-spotify-green-dark transition-colors"
                         aria-label={isPlaylistPlaying ? 'Pause playlist' : 'Play playlist'}
                       >
-                        <span className="icon text-xl">{isPlaylistPlaying ? 'pause' : 'play_arrow'}</span>
+                        <span className="icon text-lg sm:text-xl">{isPlaylistPlaying ? 'pause' : 'play_arrow'}</span>
                       </button>
                       <div className="tooltip tooltip-up group-hover:tooltip-visible">
                         {isPlaylistPlaying ? 'Pause playlist' : 'Play playlist'}
@@ -2724,10 +2807,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                             player.playTrack({ contextUri: currentPlaylist.uri, offsetIndex, contextMeta, shuffle: true });
                           }
                         }}
-                        className="w-12 h-12 rounded-full border border-spotify-green/60 text-spotify-green flex items-center justify-center hover:bg-spotify-green/10 transition-colors"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-spotify-green/60 text-spotify-green flex items-center justify-center hover:bg-spotify-green/10 transition-colors"
                         aria-label="Shuffle playlist"
                       >
-                        <span className="icon text-xl">shuffle</span>
+                        <span className="icon text-lg sm:text-xl">shuffle</span>
                       </button>
                       <div className="tooltip tooltip-up group-hover:tooltip-visible">
                         Shuffle playlist
@@ -2737,14 +2820,14 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       <button
                         type="button"
                         onClick={() => setSearchOpen((prev) => !prev)}
-                        className={`w-12 h-12 rounded-full border flex items-center justify-center transition-colors ${
+                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border flex items-center justify-center transition-colors ${
                           searchOpen
                             ? 'border-spotify-green text-spotify-green bg-spotify-green/10'
                             : 'border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light'
                         }`}
                         aria-label="Search this playlist"
                       >
-                        <span className="icon text-xl">search</span>
+                        <span className="icon text-lg sm:text-xl">search</span>
                       </button>
                       <div className="tooltip tooltip-up group-hover:tooltip-visible">
                         Search playlist
@@ -2755,10 +2838,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                         type="button"
                         onClick={() => refreshPlaylistDetails({ resetSort: true })}
                         disabled={refreshing}
-                        className="w-12 h-12 rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-label="Refresh playlist"
                       >
-                        <span className={`icon text-xl ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
+                        <span className={`icon text-lg sm:text-xl ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
                       </button>
                       <div className="tooltip tooltip-up group-hover:tooltip-visible">
                         {refreshing ? 'Refreshing…' : 'Refresh playlist'}
@@ -2767,139 +2850,158 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   </>
                 )}
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="mt-3">
                 {(() => {
                   const historyAvailable = Array.isArray(history) && history.length > 0;
                   const baseActions = [
-                  {
-                    label: 'Reorder in Spotify',
-                    onClick: () => setShowSortModal(true),
-                    icon: "reorder",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  },
-                  {
-                    label: 'Find duplicates',
-                    onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
-                    icon: "manage_search",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  },
-                  {
-                    label: 'Edit playlist',
-                    onClick: () => setShowEditModal(true),
-                    icon: "edit",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  },
-                  {
-                    label: cloning ? 'Cloning…' : 'Clone playlist',
+                    {
+                      label: 'Reorder in Spotify',
+                      onClick: () => setShowSortModal(true),
+                      icon: "reorder",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: false
+                    },
+                    {
+                      label: 'Find duplicates',
+                      onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
+                      icon: "manage_search",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: false
+                    },
+                    {
+                      label: 'Edit playlist',
+                      onClick: () => setShowEditModal(true),
+                      icon: "edit",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: false
+                    },
+                    {
+                      label: cloning ? 'Cloning…' : 'Clone playlist',
+                      onClick: async () => {
+                        setEditError(null); setEditMessage(null);
+                        // Generate clone name by checking existing playlists
+                        try {
+                          const allPlaylists = await playlistAPI.getPlaylists();
+                          
+                          // Extract base name by removing existing (clone N) suffix if present
+                          const cloneRegex = /^(.+?)\s*\(clone\s+\d+\)$/i;
+                          const match = currentPlaylist.name.match(cloneRegex);
+                          const baseName = match ? match[1].trim() : currentPlaylist.name;
+                          
+                          // Find all existing clones with this base name
+                          const existingClones = allPlaylists
+                            .map(p => {
+                              const cloneMatch = p.name.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(clone\\s+(\\d+)\\)$`, 'i'));
+                              return cloneMatch ? parseInt(cloneMatch[1], 10) : null;
+                            })
+                            .filter(num => num !== null);
+                          
+                          // Find the next available clone number
+                          const cloneNumber = existingClones.length > 0 ? Math.max(...existingClones) + 1 : 1;
+                          const suggestedName = `${baseName} (clone ${cloneNumber})`;
+                          
+                          setCloneName(suggestedName);
+                          setShowCloneModal(true);
+                        } catch (err) {
+                          setEditError(err.message || 'Failed to prepare clone');
+                        }
+                      },
+                      icon: "difference",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: cloning
+                    },
+                  ];
+
+                  const historyActions = [];
+                  if (historyAvailable) {
+                    historyActions.push({
+                      label: 'Recent actions',
+                      onClick: () => navigate('/history'),
+                      icon: "history",
+                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                      disabled: false
+                    });
+                  }
+
+                  const deleteAction = {
+                    label: deleting ? 'Deleting…' : 'Delete playlist',
                     onClick: async () => {
+                      if (!window.confirm('Delete this playlist from your library?')) return;
                       setEditError(null); setEditMessage(null);
-                      // Generate clone name by checking existing playlists
+                      setDeleting(true);
                       try {
-                        const allPlaylists = await playlistAPI.getPlaylists();
-                        
-                        // Extract base name by removing existing (clone N) suffix if present
-                        const cloneRegex = /^(.+?)\s*\(clone\s+\d+\)$/i;
-                        const match = currentPlaylist.name.match(cloneRegex);
-                        const baseName = match ? match[1].trim() : currentPlaylist.name;
-                        
-                        // Find all existing clones with this base name
-                        const existingClones = allPlaylists
-                          .map(p => {
-                            const cloneMatch = p.name.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(clone\\s+(\\d+)\\)$`, 'i'));
-                            return cloneMatch ? parseInt(cloneMatch[1], 10) : null;
-                          })
-                          .filter(num => num !== null);
-                        
-                        // Find the next available clone number
-                        const cloneNumber = existingClones.length > 0 ? Math.max(...existingClones) + 1 : 1;
-                        const suggestedName = `${baseName} (clone ${cloneNumber})`;
-                        
-                        setCloneName(suggestedName);
-                        setShowCloneModal(true);
+                        await playlistAPI.deletePlaylist(currentPlaylist.id);
+                        navigate('/playlists');
                       } catch (err) {
-                        setEditError(err.message || 'Failed to prepare clone');
+                        setEditError(err.message || 'Delete failed');
+                      } finally {
+                        setDeleting(false);
                       }
                     },
-                    icon: "difference",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: cloning
-                  },
-                ];
-
-                const historyActions = [];
-                if (historyAvailable) {
-                  historyActions.push({
-                    label: 'Recent actions',
-                    onClick: () => navigate('/history'),
-                    icon: "history",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  });
-                }
-
-                const deleteAction = {
-                  label: deleting ? 'Deleting…' : 'Delete playlist',
-                  onClick: async () => {
-                    if (!window.confirm('Delete this playlist from your library?')) return;
-                    setEditError(null); setEditMessage(null);
-                    setDeleting(true);
-                    try {
-                      await playlistAPI.deletePlaylist(currentPlaylist.id);
-                      navigate('/playlists');
-                    } catch (err) {
-                      setEditError(err.message || 'Delete failed');
-                    } finally {
-                      setDeleting(false);
-                    }
-                  },
                     icon: "delete",
-                  colorClass: 'bg-spotify-gray-mid hover:bg-red-600 hover:text-white text-red-400',
-                  disabled: deleting,
+                    colorClass: 'bg-spotify-gray-mid hover:bg-red-600 hover:text-white text-red-400',
+                    disabled: deleting,
                     tooltipClass: 'tooltip tooltip-down tooltip-danger',
                     tooltipSide: 'down'
-                };
+                  };
 
-                const scheduleAction = {
-                  label: 'View schedules',
-                  onClick: () => navigate(`/schedules?playlistId=${currentPlaylist.id}`),
-                  icon: "event",
-                  colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                  disabled: false
-                };
+                  const scheduleAction = {
+                    label: 'View schedules',
+                    onClick: () => navigate(`/schedules?playlistId=${currentPlaylist.id}`),
+                    icon: "event",
+                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                    disabled: false
+                  };
 
-                const cacheAction = {
-                  label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
-                  onClick: handleCacheRefresh,
-                  icon: "cloud_sync",
-                  colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                  disabled: cacheRefreshLoading
-                };
+                  const cacheAction = {
+                    label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
+                    onClick: handleCacheRefresh,
+                    icon: "cloud_sync",
+                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
+                    disabled: cacheRefreshLoading
+                  };
 
-                const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, deleteAction];
-              return actions;
-                })().map((action, idx) => (
-                  <div key={idx} className="relative group">
-                    <button
-                      onClick={action.onClick}
-                      onMouseEnter={action.onMouseEnter}
-                      onMouseLeave={action.onMouseLeave}
-                      disabled={action.disabled}
-                      className={`w-10 h-10 rounded-lg ${action.colorClass} text-white flex items-center justify-center transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      <span className="icon text-base">{action.icon}</span>
-                    </button>
-                    {!action.noTooltip && (
-                      <div className={`tooltip ${action.tooltipSide === 'down' ? 'tooltip-down' : 'tooltip-up'} group-hover:tooltip-visible ${action.tooltipClass || ''}`}>
-                        {action.label}
+                  const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, deleteAction];
+                  return (
+                    <>
+                      <div className="flex flex-col gap-2 md:hidden w-full max-w-xs mx-auto">
+                        {actions.map((action, idx) => (
+                          <button
+                            key={idx}
+                            onClick={action.onClick}
+                            disabled={action.disabled}
+                            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-center gap-2 text-center transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${action.colorClass}`}
+                          >
+                            <span className="icon text-sm flex-shrink-0">{action.icon}</span>
+                            <span className="min-w-0 text-center leading-snug break-words">{action.label}</span>
+                          </button>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      <div className="hidden md:flex flex-wrap items-center gap-2">
+                        {actions.map((action, idx) => (
+                          <div key={idx} className="relative group">
+                            <button
+                              onClick={action.onClick}
+                              onMouseEnter={action.onMouseEnter}
+                              onMouseLeave={action.onMouseLeave}
+                              disabled={action.disabled}
+                              className={`w-10 h-10 rounded-lg ${action.colorClass} text-white flex items-center justify-center transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                              <span className="icon text-base">{action.icon}</span>
+                            </button>
+                            {!action.noTooltip && (
+                              <div className={`tooltip ${action.tooltipSide === 'down' ? 'tooltip-down' : 'tooltip-up'} group-hover:tooltip-visible ${action.tooltipClass || ''}`}>
+                                {action.label}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
                 {(cacheRefreshMessage || cacheRefreshError) && (
-                  <div className="w-full text-xs">
+                  <div className="mt-2 text-xs">
                     {cacheRefreshMessage && <div className="text-spotify-green">{cacheRefreshMessage}</div>}
                     {cacheRefreshError && <div className="text-red-400">{cacheRefreshError}</div>}
                   </div>
@@ -2937,7 +3039,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   )}
                 </div>
               )}
-              {schedulesOpen && Array.isArray(schedules) && schedules.length > 0 && (
+              {!isMobile && schedulesOpen && Array.isArray(schedules) && schedules.length > 0 && (
                 <div
                   className="absolute right-full mr-2 top-0 p-3 bg-spotify-gray-mid/90 border border-spotify-gray-mid/60 rounded-lg text-sm text-spotify-gray-light space-y-2 max-w-md z-50 shadow-xl"
                   onMouseEnter={() => {
@@ -3030,9 +3132,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </div>
 
       {/* Tracks Table */}
-      <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden">
-        {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm text-spotify-gray-light border-b border-spotify-gray-mid font-semibold">
+      <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden border border-spotify-gray-mid/60">
+        <div className="hidden md:block">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm text-spotify-gray-light border-b border-spotify-gray-mid font-semibold">
           <div className="col-span-1 text-center">
             {selectedTrackCount > 0 ? (
               <div className="flex items-center justify-center gap-2 text-[11px] text-spotify-gray-light">
@@ -3326,6 +3429,92 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               )}
             </div>
           )}
+        </div>
+        </div>
+        <div className="md:hidden overflow-x-hidden">
+          <div className="divide-y divide-spotify-gray-mid/30">
+            {sortedTracks.map((track, index) => {
+              const isCurrentTrack = isSamePlaylistEntry(track);
+              const isExpanded = expandedTrackSet.has(track.selectionKey);
+
+              return (
+                <div
+                  key={track.selectionKey}
+                  onClick={(event) => openContextMenu(event, track, index)}
+                  className={`px-4 py-3 text-sm transition-colors cursor-pointer ${
+                    isCurrentTrack ? 'bg-spotify-green/10 border-l-2 border-spotify-green/80' : 'hover:bg-spotify-gray-mid/30'
+                  }`}
+                  data-track-id={track.id}
+                  data-track-uri={track.uri}
+                  data-track-linked-id={track.linked_from?.id}
+                  data-track-linked-uri={track.linked_from?.uri}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    {track.album?.images?.length > 0 && (
+                      <img
+                        src={getBestImage(track.album.images)}
+                        alt={track.album?.name || 'Album art'}
+                        className="w-12 h-12 rounded flex-shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="block text-white font-medium truncate" title={track.name || ''}>
+                        {track.name}
+                        {track.explicit && (
+                          <span className="ml-2 text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
+                        )}
+                      </p>
+                      <p className="text-spotify-gray-light text-xs truncate">
+                        {(track.artists || []).map((artist) => artist.name).join(', ')}
+                      </p>
+                      {isExpanded && (
+                        <div className="text-[11px] text-spotify-gray-light mt-1">
+                          Added {formatDateTime(track.added_at)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[11px] text-spotify-gray-light tabular-nums text-right min-w-[40px]">
+                        {formatDuration(track.duration_ms)}
+                      </span>
+                      <button
+                        type="button"
+                        data-no-select
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleTrackExpanded(track.selectionKey);
+                        }}
+                        className="w-7 h-7 rounded-full text-spotify-gray-light hover:text-white hover:bg-spotify-gray-mid/60 flex items-center justify-center transition-colors"
+                        aria-label={isExpanded ? 'Collapse track details' : 'Expand track details'}
+                        aria-expanded={isExpanded}
+                      >
+                        <span className={`icon text-base transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {loadingMore && (
+              <div className="py-8 flex items-center justify-center">
+                <div className="flex items-center gap-3 text-spotify-gray-light">
+                  <div className="w-5 h-5 border-2 border-spotify-green border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">Loading more tracks...</span>
+                </div>
+              </div>
+            )}
+
+            {!hasMoreTracks && allTracks.length > 0 && (
+              <div className="py-6 text-center text-spotify-gray-light text-sm">
+                {totalTrackCount > 0 ? (
+                  <span>All {totalTrackCount} tracks loaded</span>
+                ) : (
+                  <span>End of playlist</span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -3737,16 +3926,19 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 </label>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:justify-end gap-3 pt-2">
+              <div className="flex flex-row flex-wrap items-center justify-end gap-3 pt-2">
                 <div className="relative group">
                   <button
                     onClick={handleAnalyzeSort}
                     disabled={analyzing || startingSort || (jobStatus && jobStatus.status !== 'failed')}
                     aria-label="Analyze sort"
-                    className="w-10 h-10 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    className="px-4 py-2 sm:px-0 sm:w-10 sm:h-10 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                   >
-                    <span className="icon text-base">
+                    <span className="icon text-base hidden sm:inline">
                       {analyzing ? 'hourglass_top' : 'travel_explore'}
+                    </span>
+                    <span className="text-sm font-semibold sm:hidden">
+                      {analyzing ? 'Analyzing…' : 'Analyze'}
                     </span>
                   </button>
                   <div className="tooltip group-hover:tooltip-visible">
@@ -3758,10 +3950,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     onClick={handleStartSort}
                     disabled={startingSort || analyzing || (jobStatus && jobStatus.status !== 'failed')}
                     aria-label="Start sort"
-                    className="w-10 h-10 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 sm:px-0 sm:w-10 sm:h-10 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="icon text-base">
+                    <span className="icon text-base hidden sm:inline">
                       {startingSort ? 'hourglass_bottom' : 'play_arrow'}
+                    </span>
+                    <span className="text-sm font-semibold sm:hidden">
+                      {startingSort ? 'Starting…' : 'Start'}
                     </span>
                   </button>
                   <div className="tooltip group-hover:tooltip-visible">Start sort</div>

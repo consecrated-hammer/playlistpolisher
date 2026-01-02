@@ -39,21 +39,8 @@ export const useInfiniteScroll = (loadMore, hasMore, loading, threshold = 0.2) =
       ? scrollHeight * threshold  // Percentage-based (e.g., 0.2 = 20% from bottom)
       : threshold;                 // Pixel-based (e.g., 500 = 500px from bottom)
 
-    // Debug logging (can be removed in production)
-    if (distanceFromBottom < triggerDistance + 100) {
-      console.log('[Infinite Scroll] Near bottom:', {
-        distanceFromBottom,
-        triggerDistance,
-        threshold,
-        hasMore: hasMoreRef.current,
-        loading: loadingRef.current,
-        willTrigger: distanceFromBottom < triggerDistance && hasMoreRef.current && !loadingRef.current
-      });
-    }
-
     // If we're within threshold distance of the bottom and not already loading
     if (distanceFromBottom < triggerDistance && hasMoreRef.current && !loadingRef.current) {
-      console.log('[Infinite Scroll] Triggering loadMore');
       loadMore();
     }
   }, [loadMore, threshold]);
