@@ -321,6 +321,7 @@ class SpotifyService:
                         ),
                         public=item.get("public"),
                         collaborative=item.get("collaborative", False),
+                        snapshot_id=item.get("snapshot_id"),
                         uri=item["uri"]
                     )
                     playlists.append(playlist)

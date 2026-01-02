@@ -156,6 +156,7 @@ class PlaylistSimple(BaseModel):
     owner: PlaylistOwner
     public: Optional[bool] = None
     collaborative: Optional[bool] = None
+    snapshot_id: Optional[str] = None
     uri: str
     
     @property
