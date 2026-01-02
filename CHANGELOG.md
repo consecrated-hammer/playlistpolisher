@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.2.1 - 2026-01-03
+- Cache: refresh playlist cache after mutations (sort, dedupe, add/remove, undo).
+- Sorting: improve move analysis and estimate timing using prior sort history.
+
 ## v1.2.0 - 2026-01-03
 - Mobile: fix playlist detail overflow, center controls/artwork, and refine action button layout.
 - Mobile: reorder modal uses text buttons; track "Added" shows date + time.

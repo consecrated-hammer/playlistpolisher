@@ -1,9 +1,5 @@
 # Playlist Polisher feature list
 
-## Fixes
-- **Caching:** cache should refresh after a dedupe or sort operation.
-- **Reorder playlist analysis:** currently flags all tracks as needing to move, estimated time is always too high. Consider adding time taken history to the backend to accurately reflect this.
-
 ## Persistent config:
 - Ensure user views, sorting, etc, are persisted across sessions.
 

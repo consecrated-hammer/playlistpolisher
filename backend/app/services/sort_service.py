@@ -7,7 +7,7 @@ Implements two methods:
 """
 
 import logging
-from typing import List, Dict, Any, Callable, Tuple
+from typing import List, Dict, Any, Callable, Tuple, Optional
 from spotipy import Spotify
 
 logger = logging.getLogger(__name__)
@@ -61,18 +61,25 @@ def get_sort_key_function(sort_by: str, direction: str) -> Callable:
     return key_func, reverse
 
 
-def calculate_moves_needed(current_order: List[Dict], sorted_order: List[Dict]) -> int:
+def calculate_moves_needed(
+    tracks: List[Dict],
+    key_func: Optional[Callable] = None,
+    reverse: bool = False,
+) -> int:
     """
     Calculate how many tracks need to be moved.
-    
-    Compares track IDs in current vs sorted order.
+
+    Uses a stable sort based on the key function to account for duplicates.
     """
-    moves = 0
-    for i, (current, sorted_track) in enumerate(zip(current_order, sorted_order)):
-        if current['id'] != sorted_track['id']:
-            moves += 1
-    
-    return moves
+    if not tracks:
+        return 0
+
+    if key_func:
+        indexed_tracks = [(i, track, key_func(track)) for i, track in enumerate(tracks)]
+        sorted_indexed = sorted(indexed_tracks, key=lambda x: x[2], reverse=reverse)
+        return sum(1 for i, (orig_idx, _, _) in enumerate(sorted_indexed) if orig_idx != i)
+
+    return 0
 
 
 async def sort_playlist_fast(
@@ -217,7 +224,12 @@ async def sort_playlist_preserve_dates(
     logger.info(f"Preserve dates sort completed: {moves_made} tracks moved")
 
 
-def estimate_sort_time(total_tracks: int, tracks_to_move: int, method: str) -> int:
+def estimate_sort_time(
+    total_tracks: int,
+    tracks_to_move: int,
+    method: str,
+    timing: Optional[Dict[str, float]] = None,
+) -> int:
     """
     Estimate sort time in seconds.
     
@@ -229,12 +241,25 @@ def estimate_sort_time(total_tracks: int, tracks_to_move: int, method: str) -> i
     Returns:
         Estimated time in seconds
     """
+    def clamp(value: float, min_value: float, max_value: float) -> float:
+        return max(min_value, min(max_value, value))
+
+    timing = timing or {}
     if method == 'fast':
-        # Fast method: ~0.5 seconds per batch of 100 tracks
+        per_track = timing.get("seconds_per_track")
+        if per_track:
+            per_track = clamp(per_track, 0.01, 0.2)
+            return max(4, int(round((per_track * total_tracks) + 2)))
         batches = (total_tracks + 99) // 100
-        return max(5, batches * 0.5)
-    else:
-        # Preserve method: ~0.5 seconds per move + overhead
-        # Plus 0.1s sleep every 10 moves
-        sleep_time = (tracks_to_move // 10) * 0.1
-        return max(10, (tracks_to_move * 0.5) + sleep_time + 5)
+        return max(4, int(round((batches * 0.5) + 2)))
+
+    if tracks_to_move <= 0:
+        return 3
+
+    per_move = timing.get("seconds_per_move")
+    if per_move:
+        per_move = clamp(per_move, 0.1, 1.0)
+        return max(6, int(round((per_move * tracks_to_move) + 4)))
+
+    sleep_time = (tracks_to_move // 10) * 0.1
+    return max(8, int(round((tracks_to_move * 0.5) + sleep_time + 5)))
