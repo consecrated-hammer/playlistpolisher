@@ -3932,10 +3932,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     onClick={handleAnalyzeSort}
                     disabled={analyzing || startingSort || (jobStatus && jobStatus.status !== 'failed')}
                     aria-label="Analyze sort"
-                    className="w-10 h-10 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    className="px-4 py-2 sm:px-0 sm:w-10 sm:h-10 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                   >
-                    <span className="icon text-base">
+                    <span className="icon text-base hidden sm:inline">
                       {analyzing ? 'hourglass_top' : 'travel_explore'}
+                    </span>
+                    <span className="text-sm font-semibold sm:hidden">
+                      {analyzing ? 'Analyzing…' : 'Analyze'}
                     </span>
                   </button>
                   <div className="tooltip group-hover:tooltip-visible">
@@ -3947,10 +3950,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     onClick={handleStartSort}
                     disabled={startingSort || analyzing || (jobStatus && jobStatus.status !== 'failed')}
                     aria-label="Start sort"
-                    className="w-10 h-10 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 sm:px-0 sm:w-10 sm:h-10 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="icon text-base">
+                    <span className="icon text-base hidden sm:inline">
                       {startingSort ? 'hourglass_bottom' : 'play_arrow'}
+                    </span>
+                    <span className="text-sm font-semibold sm:hidden">
+                      {startingSort ? 'Starting…' : 'Start'}
                     </span>
                   </button>
                   <div className="tooltip group-hover:tooltip-visible">Start sort</div>
