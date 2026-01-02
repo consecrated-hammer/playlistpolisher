@@ -695,6 +695,31 @@ const CachePage = ({ user, onLogout }) => {
               <div className="bg-spotify-gray-dark rounded-2xl p-8 border border-spotify-gray-mid/60 shadow-2xl">
                 <LoadingSpinner />
                 <p className="text-white text-center mt-4">Processing...</p>
+                {refreshAllStatus?.status === 'running' && (
+                  <div className="mt-4 w-64 space-y-2">
+                    <p className="text-xs text-spotify-gray-light text-center">
+                      This may take several minutes for large libraries.
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-spotify-gray-light">
+                      <span>Refreshing playlists...</span>
+                      <span>
+                        {refreshAllStatus.total
+                          ? `${refreshAllStatus.completed || 0}/${refreshAllStatus.total}`
+                          : 'Starting...'}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-spotify-gray-mid/60 overflow-hidden">
+                      <div
+                        className="h-full bg-spotify-green transition-all"
+                        style={{
+                          width: refreshAllStatus.total
+                            ? `${Math.min(100, Math.round(((refreshAllStatus.completed || 0) / refreshAllStatus.total) * 100))}%`
+                            : '0%',
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
