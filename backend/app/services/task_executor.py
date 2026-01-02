@@ -8,6 +8,7 @@ the API responsive.
 import threading
 import logging
 import asyncio
+import time
 from typing import Dict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -19,8 +20,9 @@ from app.services.sort_service import (
     sort_playlist_preserve_dates,
     calculate_moves_needed,
     estimate_sort_time,
-    get_sort_key_function
+    get_sort_key_function,
 )
+from app.services.cache_warm_service import start_cache_warm_job
 from app.db import operations as op_store
 from app.db import playlist_cache as playlist_cache_store
 
@@ -109,6 +111,7 @@ def _run_sort_job(
         
         # Update job status
         SortJobService.update_job(job_id, status='in_progress', message='Fetching playlist tracks...')
+        start_time = time.monotonic()
         
         # Get Spotify client for this user
         spotify_service = SpotifyService(session_manager=SessionManager(session_id=session_id))
@@ -156,12 +159,12 @@ def _run_sort_job(
         
         # Calculate how many tracks need to be moved
         key_func, reverse = get_sort_key_function(sort_by, direction)
-        sorted_tracks = sorted(tracks, key=key_func, reverse=reverse)
-        tracks_to_move = calculate_moves_needed(tracks, sorted_tracks)
+        tracks_to_move = calculate_moves_needed(tracks, key_func, reverse)
         total_moves = tracks_to_move if method == 'preserve' else len(tracks)
         
         # Estimate time
-        estimated_seconds = estimate_sort_time(len(tracks), tracks_to_move, method)
+        timing_stats = op_store.get_sort_timing_stats(playlist_id, user_id, method)
+        estimated_seconds = estimate_sort_time(len(tracks), tracks_to_move, method, timing=timing_stats)
         
         # Update job with analysis
         SortJobService.update_job(
@@ -220,6 +223,7 @@ def _run_sort_job(
                 op_store.cleanup_expired()
                 # Track whether changes were actually made
                 changes_made = tracks_to_move > 0
+                duration_seconds = max(0, int(round(time.monotonic() - start_time)))
                 op_store.record_operation(
                     playlist_id=playlist_id,
                     user_id=user_id,
@@ -234,11 +238,27 @@ def _run_sort_job(
                         "source": meta.get("source") if meta else None,
                         "schedule_id": meta.get("schedule_id") if meta else None,
                         "tracks_moved": tracks_to_move,
+                        "tracks_total": len(tracks),
+                        "duration_seconds": duration_seconds,
                     },
                     changes_made=changes_made,
                 )
                 if changes_made:
                     playlist_cache_store.mark_dirty(playlist_id)
+                    if session_id:
+                        try:
+                            start_cache_warm_job(
+                                user_id,
+                                session_id,
+                                [playlist_id],
+                                meta={"source": "sort_complete"},
+                            )
+                        except Exception as cache_err:
+                            logger.warning(
+                                "Failed to queue cache refresh after sort for %s: %s",
+                                playlist_id,
+                                cache_err,
+                            )
             except Exception as log_err:
                 logger.warning("Failed to persist sort undo record for job %s: %s", job_id, log_err)
         

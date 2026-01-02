@@ -27,6 +27,7 @@ from app.db import operations as op_store
 from app.db import preferences as preference_store
 from app.db import playlist_cache as playlist_cache_store
 from app.services.sort_service import get_sort_key_function
+from app.services.cache_warm_service import start_cache_warm_job
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,17 @@ def require_auth(session_mgr: SessionManager = Depends(get_session_manager)) -> 
             detail="Authentication required. Please login with Spotify."
         )
     return session_mgr
+
+
+def _queue_cache_refresh(session_mgr: SessionManager, playlist_id: str, source: str) -> None:
+    session_id = session_mgr.get_session_id()
+    user_id = session_mgr.get_user_id()
+    if not session_id or not user_id:
+        return
+    try:
+        start_cache_warm_job(user_id, session_id, [playlist_id], meta={"source": source})
+    except Exception as exc:
+        logger.warning("Failed to queue cache refresh for playlist %s: %s", playlist_id, exc)
 
 
 @router.get("/", response_model=List[PlaylistSimple])
@@ -589,6 +601,7 @@ async def add_tracks_to_playlist(
             else:
                 sp.playlist_add_items(playlist_id, batch)
         playlist_cache_store.mark_dirty(playlist_id)
+        _queue_cache_refresh(session_mgr, playlist_id, "tracks_add")
         return {"message": "Tracks added", "added": len(track_uris)}
     except Exception as e:
         logger.error("Failed to add tracks to playlist %s: %s", playlist_id, e)
@@ -737,6 +750,7 @@ async def remove_tracks_from_playlist(
             removed_count = len(uris)
 
         playlist_cache_store.mark_dirty(playlist_id)
+        _queue_cache_refresh(session_mgr, playlist_id, "tracks_remove")
         return {"message": "Tracks removed", "removed": removed_count}
     except Exception as e:
         logger.error("Failed to remove tracks from playlist %s: %s", playlist_id, e)
@@ -1064,6 +1078,7 @@ async def remove_duplicates(
             len(after_items),
         )
         playlist_cache_store.mark_dirty(playlist_id)
+        _queue_cache_refresh(session_mgr, playlist_id, "duplicates_remove")
         return {"message": "Duplicates removed", "removed": removed_count}
     except Exception as e:
         logger.error("Failed to remove duplicates for playlist %s: %s", playlist_id, e)
@@ -1124,6 +1139,7 @@ async def undo_last_operation(
                 len(removed_items),
             )
             playlist_cache_store.mark_dirty(playlist_id)
+            _queue_cache_refresh(session_mgr, playlist_id, "undo_duplicates")
             return {
                 "message": f"Restored {len(removed_items)} tracks",
                 "snapshot_id": new_snapshot,
@@ -1157,6 +1173,7 @@ async def undo_last_operation(
                     len(original_order),
                 )
                 playlist_cache_store.mark_dirty(playlist_id)
+                _queue_cache_refresh(session_mgr, playlist_id, "undo_sort")
                 return {
                     "message": f"Restored previous order ({len(original_order)} tracks)",
                     "snapshot_id": new_snapshot,

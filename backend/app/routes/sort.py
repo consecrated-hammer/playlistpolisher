@@ -13,8 +13,9 @@ from app.services.spotify_service import SpotifyService
 from app.services.sort_service import (
     calculate_moves_needed,
     estimate_sort_time,
-    get_sort_key_function
+    get_sort_key_function,
 )
+from app.db import operations as op_store
 from app.utils.session_manager import SessionManager, SESSION_COOKIE_NAME
 from app.services.spotify_service import get_spotify_service
 
@@ -122,11 +123,11 @@ async def analyze_sort(
         
         # Calculate moves needed
         key_func, reverse = get_sort_key_function(request.sort_by, request.direction)
-        sorted_tracks = sorted(tracks, key=key_func, reverse=reverse)
-        tracks_to_move = calculate_moves_needed(tracks, sorted_tracks)
+        tracks_to_move = calculate_moves_needed(tracks, key_func, reverse)
         
         # Estimate time
-        estimated_time = estimate_sort_time(len(tracks), tracks_to_move, request.method)
+        timing_stats = op_store.get_sort_timing_stats(playlist_id, user_id, request.method)
+        estimated_time = estimate_sort_time(len(tracks), tracks_to_move, request.method, timing=timing_stats)
         
         # Warning for fast method
         warning = None

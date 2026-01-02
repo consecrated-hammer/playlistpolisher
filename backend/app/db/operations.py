@@ -157,3 +157,39 @@ def get_all_history(user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
             data["payload"] = {}
         history.append(data)
     return history
+
+
+def get_sort_timing_stats(playlist_id: str, user_id: str, method: str, limit: int = 8) -> Dict[str, float]:
+    """Return historical timing stats for sort operations for this playlist/user."""
+    history = get_history(playlist_id, user_id, limit=limit)
+    if not history:
+        return {}
+
+    per_unit = []
+    for entry in history:
+        if entry.get("op_type") != "sort_reorder":
+            continue
+        payload = entry.get("payload") or {}
+        if payload.get("method") != method:
+            continue
+        duration = payload.get("duration_seconds")
+        if not duration or duration <= 0:
+            continue
+        if method == "fast":
+            tracks_total = payload.get("tracks_total") or payload.get("tracks_moved")
+            if not tracks_total:
+                continue
+            per_unit.append(duration / max(tracks_total, 1))
+        else:
+            tracks_moved = payload.get("tracks_moved")
+            if not tracks_moved:
+                continue
+            per_unit.append(duration / max(tracks_moved, 1))
+
+    if not per_unit:
+        return {}
+
+    avg = sum(per_unit) / len(per_unit)
+    if method == "fast":
+        return {"seconds_per_track": avg, "samples": len(per_unit)}
+    return {"seconds_per_move": avg, "samples": len(per_unit)}
