@@ -151,6 +151,37 @@ const BackupDetailPage = ({ user, onLogout }) => {
             </div>
           </div>
 
+          {!loading && !error && backupMeta && (
+            <div className="bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-2xl p-4 shadow-2xl">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Restore options</p>
+                  <p className="text-sm text-spotify-gray-light mt-1">
+                    Overwrite the playlist or create a new one from this backup.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRestoreModal({ mode: 'overwrite' })}
+                    disabled={restoreLoading}
+                    className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Restore
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRestoreModal({ mode: 'clone' })}
+                    disabled={restoreLoading}
+                    className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Restore as new
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {loading && (
             <div className="flex justify-center items-center py-20">
               <LoadingSpinner />
@@ -203,41 +234,6 @@ const BackupDetailPage = ({ user, onLogout }) => {
           {restoreError && <p className="text-sm text-red-400">{restoreError}</p>}
           {restoreMessage && <p className="text-sm text-spotify-green">{restoreMessage}</p>}
         </div>
-
-        {!loading && !error && backupMeta && (
-          <div className="sticky bottom-4 z-40">
-            <div className="max-w-7xl mx-auto px-4">
-              <div className="bg-spotify-gray-dark/90 border border-spotify-gray-mid/60 rounded-2xl p-4 shadow-2xl backdrop-blur-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-white">Restore this backup</p>
-                    <p className="text-xs text-spotify-gray-light">
-                      Overwrite the playlist or create a new one.
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRestoreModal({ mode: 'overwrite' })}
-                      disabled={restoreLoading}
-                      className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Restore
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRestoreModal({ mode: 'clone' })}
-                      disabled={restoreLoading}
-                      className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Restore as new
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {restoreModal && backupMeta && (
