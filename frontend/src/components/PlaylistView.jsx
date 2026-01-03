@@ -2671,7 +2671,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {/* Playlist Info */}
       <div className="flex flex-col justify-end min-w-0 w-full overflow-hidden">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full min-w-0 md:whitespace-normal md:overflow-visible md:break-words">
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full min-w-0 w-full md:whitespace-normal md:overflow-visible md:break-words">
               {currentPlaylist.name}
             </h1>
             {playlistDescription && (
@@ -3459,7 +3459,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   data-track-linked-id={track.linked_from?.id}
                   data-track-linked-uri={track.linked_from?.uri}
                 >
-                  <div className="flex items-start gap-3 min-w-0 w-full">
+                  <div className="flex items-start gap-3 min-w-0 w-full max-w-full">
                     {track.album?.images?.length > 0 && (
                       <img
                         src={getBestImage(track.album.images)}
@@ -3469,19 +3469,19 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     )}
                     <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-white font-medium truncate min-w-0 flex-1" title={track.name || ''}>
+                        <p className="text-white font-medium truncate min-w-0 flex-1 block" title={track.name || ''}>
                           {track.name}
-                        </span>
+                        </p>
                         {track.explicit && (
                           <span className="text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded flex-shrink-0">E</span>
                         )}
                       </div>
-                      <div
-                        className="text-spotify-gray-light text-xs truncate max-w-full min-w-0"
+                      <p
+                        className="text-spotify-gray-light text-xs truncate max-w-full min-w-0 block"
                         title={(track.artists || []).map((artist) => artist.name).join(', ')}
                       >
                         {(track.artists || []).map((artist) => artist.name).join(', ')}
-                      </div>
+                      </p>
                       {isExpanded && (
                         <div className="text-[11px] text-spotify-gray-light mt-1 truncate max-w-full">
                           Added {formatDateTime(track.added_at)}
