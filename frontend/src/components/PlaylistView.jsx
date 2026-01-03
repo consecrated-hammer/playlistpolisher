@@ -2632,8 +2632,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </button>
 
       {/* Playlist Header */}
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full overflow-hidden">
-        <div className="flex flex-col md:flex-row gap-6 min-w-0">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-hidden">
+        <div className="flex flex-col md:flex-row gap-6 min-w-0 max-w-full">
           {/* Cover Image */}
           <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group mx-auto md:mx-0">
             <div className="absolute inset-0 rounded-lg overflow-hidden bg-spotify-gray-mid">
@@ -3142,7 +3142,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </div>
 
       {/* Tracks Table */}
-      <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden border border-spotify-gray-mid/60">
+      <div className="bg-spotify-gray-dark/40 rounded-lg overflow-hidden border border-spotify-gray-mid/60 max-w-full min-w-0">
         <div className="hidden md:block">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 px-4 py-3 text-sm text-spotify-gray-light border-b border-spotify-gray-mid font-semibold">
@@ -3468,15 +3468,20 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       />
                     )}
                     <div className="min-w-0 flex-1 overflow-hidden">
-                      <p className="block text-white font-medium truncate max-w-full" title={track.name || ''}>
-                        {track.name}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-white font-medium truncate min-w-0 flex-1" title={track.name || ''}>
+                          {track.name}
+                        </span>
                         {track.explicit && (
-                          <span className="ml-2 text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
+                          <span className="text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded flex-shrink-0">E</span>
                         )}
-                      </p>
-                      <p className="text-spotify-gray-light text-xs truncate max-w-full">
+                      </div>
+                      <div
+                        className="text-spotify-gray-light text-xs truncate max-w-full min-w-0"
+                        title={(track.artists || []).map((artist) => artist.name).join(', ')}
+                      >
                         {(track.artists || []).map((artist) => artist.name).join(', ')}
-                      </p>
+                      </div>
                       {isExpanded && (
                         <div className="text-[11px] text-spotify-gray-light mt-1 truncate max-w-full">
                           Added {formatDateTime(track.added_at)}
