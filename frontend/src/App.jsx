@@ -993,7 +993,7 @@ function App() {
 
     const pollJobStatus = async () => {
       try {
-        const status = await sortAPI.getJobStatus(globalJob.job_id);
+        const status = await sortAPI.status(globalJob.playlist_id, globalJob.job_id);
         setGlobalJobStatus({ 
           ...status, 
           playlist_id: globalJob.playlist_id,
