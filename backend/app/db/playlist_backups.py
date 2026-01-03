@@ -17,6 +17,7 @@ def create_backup_from_cache(
     description: Optional[str] = None,
     source: Optional[str] = None,
     schedule_id: Optional[int] = None,
+    playlist_name: Optional[str] = None,
 ) -> Optional[Dict]:
     if not playlist_id or not user_id:
         return None
@@ -53,8 +54,8 @@ def create_backup_from_cache(
         cur.execute(
             """
             INSERT INTO playlist_backups
-            (playlist_id, user_id, name, description, track_count, snapshot_id, source, schedule_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (playlist_id, user_id, name, description, track_count, snapshot_id, source, schedule_id, created_at, playlist_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 playlist_id,
@@ -66,6 +67,7 @@ def create_backup_from_cache(
                 source,
                 schedule_id,
                 created_at,
+                playlist_name,
             ),
         )
         backup_id = cur.lastrowid
@@ -98,6 +100,7 @@ def create_backup_from_cache(
         "source": source,
         "schedule_id": schedule_id,
         "created_at": created_at,
+        "playlist_name": playlist_name,
     }
 
 
@@ -106,7 +109,7 @@ def list_backups(playlist_id: str, user_id: str, limit: Optional[int] = None) ->
         return []
     query = """
         SELECT id, playlist_id, user_id, name, description, track_count,
-               snapshot_id, source, schedule_id, created_at
+               snapshot_id, source, schedule_id, created_at, playlist_name
         FROM playlist_backups
         WHERE playlist_id = ? AND user_id = ?
         ORDER BY created_at DESC
@@ -126,7 +129,7 @@ def list_all_backups(user_id: str, limit: Optional[int] = None) -> List[Dict]:
         return []
     query = """
         SELECT id, playlist_id, user_id, name, description, track_count,
-               snapshot_id, source, schedule_id, created_at
+               snapshot_id, source, schedule_id, created_at, playlist_name
         FROM playlist_backups
         WHERE user_id = ?
         ORDER BY created_at DESC
@@ -147,7 +150,7 @@ def get_backup(backup_id: int, playlist_id: str, user_id: str) -> Optional[Dict]
         cur.execute(
             """
             SELECT id, playlist_id, user_id, name, description, track_count,
-                   snapshot_id, source, schedule_id, created_at
+                   snapshot_id, source, schedule_id, created_at, playlist_name
             FROM playlist_backups
             WHERE id = ? AND playlist_id = ? AND user_id = ?
             """,

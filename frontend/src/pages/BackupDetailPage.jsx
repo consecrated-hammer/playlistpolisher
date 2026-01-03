@@ -60,11 +60,13 @@ const BackupDetailPage = ({ user, onLogout }) => {
       const detail = await playlistAPI.getBackupDetail(resolvedPlaylistId, backupId);
       const playlistMeta = playlistMap.get(resolvedPlaylistId);
       const playlistDeleted = !playlistMeta;
-      const playlistName = playlistMeta?.name || 'Deleted playlist';
+      const snapshotName = detail.playlist_name || 'Deleted playlist';
+      const playlistName = playlistMeta?.name || snapshotName;
       setBackupMeta({
         backupId: detail.backup_id,
         playlistId: resolvedPlaylistId,
         playlistName,
+        snapshotName,
         playlistDeleted,
         name: detail.name,
         createdAt: detail.created_at,
@@ -73,8 +75,8 @@ const BackupDetailPage = ({ user, onLogout }) => {
       setTracks(detail.tracks || []);
 
       const dateStamp = detail.created_at ? new Date(detail.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
-      const cloneBaseName = playlistMeta?.name || 'Restored playlist';
-      setRestoreCloneName(`${cloneBaseName} (backup ${dateStamp})`);
+      const cloneBaseName = playlistMeta?.name || snapshotName || 'Restored playlist';
+      setRestoreCloneName(`${cloneBaseName} (Restored ${dateStamp})`);
     } catch (err) {
       setError(err.message || 'Failed to load backup.');
     } finally {
@@ -134,6 +136,19 @@ const BackupDetailPage = ({ user, onLogout }) => {
                 {backupMeta?.playlistName && <span>•</span>}
                 <span>{backupMeta?.trackCount ?? 0} tracks</span>
               </div>
+              {backupMeta?.playlistDeleted && (
+                <p className="text-xs text-spotify-gray-light mt-1">
+                  Playlist no longer exists in Spotify.
+                </p>
+              )}
+              {!backupMeta?.playlistDeleted
+                && backupMeta?.snapshotName
+                && backupMeta?.playlistName
+                && backupMeta.snapshotName !== backupMeta.playlistName && (
+                  <p className="text-xs text-spotify-gray-light mt-1">
+                    Name at backup: {backupMeta.snapshotName}
+                  </p>
+              )}
               {backupMeta?.createdAt && (
                 <p className="text-sm text-spotify-gray-light mt-1">
                   Created {formatTimestamp(backupMeta.createdAt)}
@@ -168,7 +183,7 @@ const BackupDetailPage = ({ user, onLogout }) => {
                   </p>
                   {backupMeta?.playlistDeleted && (
                     <p className="text-sm text-amber-300 mt-2">
-                      Original playlist deleted. Restore as new to recreate it.
+                      Playlist no longer exists in Spotify.
                     </p>
                   )}
                 </div>

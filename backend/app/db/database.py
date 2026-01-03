@@ -289,7 +289,8 @@ def init_db():
             snapshot_id TEXT,
             source TEXT,
             schedule_id INTEGER,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            playlist_name TEXT
         )
     """)
     cursor.execute("""
@@ -301,6 +302,11 @@ def init_db():
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_playlist_backups_created ON playlist_backups(created_at DESC)
     """)
+
+    cursor.execute("PRAGMA table_info(playlist_backups)")
+    playlist_backup_columns = {row[1] for row in cursor.fetchall()}
+    if "playlist_name" not in playlist_backup_columns:
+        cursor.execute("ALTER TABLE playlist_backups ADD COLUMN playlist_name TEXT")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS playlist_backup_items (

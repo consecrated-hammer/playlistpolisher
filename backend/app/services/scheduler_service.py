@@ -189,6 +189,7 @@ class SchedulerService:
                 backup_name or f"Scheduled backup {timestamp}",
                 source="scheduled",
                 schedule_id=schedule_id,
+                playlist_name=name,
             )
             if backup:
                 created += 1

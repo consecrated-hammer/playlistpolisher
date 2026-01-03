@@ -475,6 +475,7 @@ class PlaylistBackupSummary(BaseModel):
     name: str
     track_count: int
     created_at: str
+    playlist_name: Optional[str] = None
     snapshot_id: Optional[str] = None
     source: Optional[str] = None
 
@@ -509,6 +510,7 @@ class PlaylistBackupDetailResponse(BaseModel):
     track_count: int
     created_at: str
     name: str
+    playlist_name: Optional[str] = None
     tracks: List[PlaylistBackupTrack]
 
 
@@ -887,23 +889,31 @@ async def create_playlist_backup(
     name = (body.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Backup name is required")
+    playlist_name = None
     if body.cache_first:
         sp = spotify.get_spotify_client(session_mgr.get_user_id())
         if not sp:
             raise HTTPException(status_code=401, detail="Spotify authentication expired")
         try:
-            _refresh_playlist_cache_snapshot(spotify, session_mgr, playlist_id)
+            _, playlist_name = _refresh_playlist_cache_snapshot(spotify, session_mgr, playlist_id)
         except HTTPException:
             raise
         except Exception as exc:
             logger.error("Failed to refresh cache before backup for playlist %s: %s", playlist_id, exc)
             raise HTTPException(status_code=502, detail="Failed to refresh cache before backup")
+    else:
+        try:
+            playlist_detail = spotify.get_playlist_details(playlist_id, should_warm_cache=False)
+            playlist_name = getattr(playlist_detail, "name", None)
+        except Exception as exc:
+            logger.warning("Failed to load playlist %s name for backup: %s", playlist_id, exc)
     backup = playlist_backup_store.create_backup_from_cache(
         playlist_id,
         session_mgr.get_user_id(),
         name,
         description=body.description,
         source="manual",
+        playlist_name=playlist_name,
     )
     if not backup:
         raise HTTPException(
@@ -916,6 +926,7 @@ async def create_playlist_backup(
         name=backup["name"],
         track_count=backup["track_count"],
         created_at=backup["created_at"],
+        playlist_name=backup.get("playlist_name"),
         snapshot_id=backup.get("snapshot_id"),
         source=backup.get("source"),
     )
@@ -933,6 +944,7 @@ async def list_all_backups(
             name=backup["name"],
             track_count=backup["track_count"],
             created_at=backup["created_at"],
+            playlist_name=backup.get("playlist_name"),
             snapshot_id=backup.get("snapshot_id"),
             source=backup.get("source"),
         )
@@ -954,6 +966,7 @@ async def list_playlist_backups(
             name=backup["name"],
             track_count=backup["track_count"],
             created_at=backup["created_at"],
+            playlist_name=backup.get("playlist_name"),
             snapshot_id=backup.get("snapshot_id"),
             source=backup.get("source"),
         )
@@ -998,6 +1011,7 @@ async def get_playlist_backup_detail(
         track_count=backup.get("track_count") or 0,
         created_at=backup.get("created_at") or "",
         name=backup.get("name") or "",
+        playlist_name=backup.get("playlist_name"),
         tracks=tracks,
     )
 
@@ -1040,7 +1054,7 @@ def _refresh_playlist_cache_snapshot(
     spotify: SpotifyService,
     session_mgr: SessionManager,
     playlist_id: str,
-) -> int:
+) -> tuple[int, Optional[str]]:
     playlist_detail = spotify.get_playlist_details(playlist_id, should_warm_cache=True)
     items = []
     for idx, track in enumerate(playlist_detail.tracks or []):
@@ -1053,7 +1067,7 @@ def _refresh_playlist_cache_snapshot(
         items=items,
         snapshot_id=getattr(playlist_detail, "snapshot_id", None),
     )
-    return len(items)
+    return len(items), getattr(playlist_detail, "name", None)
 
 
 def _restore_playlist_from_track_ids(

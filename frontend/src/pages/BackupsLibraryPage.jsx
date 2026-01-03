@@ -80,7 +80,13 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
 
   const filteredPlaylist = playlistId ? playlistMap[playlistId] : null;
   const filteredPlaylistDeleted = Boolean(playlistId && !filteredPlaylist);
-  const filteredPlaylistName = filteredPlaylist?.name || (playlistId ? 'Deleted playlist' : 'Playlist');
+  const filteredSnapshotName = useMemo(() => {
+    if (!playlistId) return null;
+    return backups.find((backup) => backup.playlistSnapshotName)?.playlistSnapshotName || null;
+  }, [backups, playlistId]);
+  const filteredPlaylistName = filteredPlaylist?.name
+    || filteredSnapshotName
+    || (playlistId ? 'Deleted playlist' : 'Playlist');
 
   const playlistNameMatches = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -104,6 +110,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
     if (query) {
       result = result.filter((backup) => (
         playlistNameMatches.has(backup.playlistId)
+        || (backup.playlistSnapshotName || '').toLowerCase().includes(query)
         || (backup.name || '').toLowerCase().includes(query)
       ));
     }
@@ -156,7 +163,10 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
     const results = [];
     groups.forEach((group) => {
       const playlistMatches = playlistNameMatches.has(group.playlistId);
-      const items = (query && !playlistMatches)
+      const groupSnapshotName = group.items.find((item) => item.playlistSnapshotName)?.playlistSnapshotName
+        || group.playlistName;
+      const snapshotMatches = (groupSnapshotName || '').toLowerCase().includes(query);
+      const items = (query && !playlistMatches && !snapshotMatches)
         ? group.items.filter((backup) => (backup.name || '').toLowerCase().includes(query))
         : group.items;
       if (items.length === 0) return;
@@ -166,11 +176,19 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
         return bTime - aTime;
       });
       const latestBackup = sortedItems[0] || null;
+      const snapshotName = sortedItems[0]?.playlistSnapshotName || groupSnapshotName;
       results.push({
         ...group,
         items: sortedItems,
         backupCount: sortedItems.length,
         latestBackup,
+        snapshotName,
+        hasNameMismatch: Boolean(
+          !group.isDeleted
+          && snapshotName
+          && group.playlistName
+          && snapshotName !== group.playlistName,
+        ),
       });
     });
 
@@ -227,7 +245,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
     });
   };
 
-  const loadBackupStatus = useCallback(async (id, playlistName) => {
+  const loadBackupStatus = useCallback(async (id, playlistName, snapshotName) => {
     setBackupStatusLoading(true);
     setBackupStatusError(null);
     try {
@@ -238,9 +256,10 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
       setBackupStatus(status);
       const template = prefs?.backup_name_template || '{playlist} backup {date}';
       setBackupCacheFirstSetting(prefs?.backup_cache_first ?? true);
-      setBackupCreateName(formatBackupName(template, playlistName));
+      setBackupCreateName(formatBackupName(template, playlistName || snapshotName));
       const dateStamp = new Date().toISOString().slice(0, 10);
-      setRestoreCloneName(`${playlistName || 'Playlist'} (backup ${dateStamp})`);
+      const baseName = playlistName || snapshotName || 'Restored playlist';
+      setRestoreCloneName(`${baseName} (Restored ${dateStamp})`);
     } catch (err) {
       setBackupStatusError(err.message || 'Failed to load backup status.');
     } finally {
@@ -261,29 +280,39 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
       setPlaylists(playlistList || []);
 
       if (playlistId) {
-        const playlistName = playlistLookup.get(playlistId)?.name || 'Deleted playlist';
-        const playlistDeleted = !playlistLookup.get(playlistId);
+        const playlistMeta = playlistLookup.get(playlistId);
+        const playlistName = playlistMeta?.name || null;
+        const playlistDeleted = !playlistMeta;
         const list = await playlistAPI.listBackups(playlistId);
-        const normalized = (list || []).map((backup) => ({
-          id: backup.id,
-          playlistId: backup.playlist_id || playlistId,
-          playlistName,
-          playlistDeleted,
-          name: backup.name,
-          createdAt: backup.created_at,
-          trackCount: backup.track_count ?? 0,
-        }));
+        const normalized = (list || []).map((backup) => {
+          const snapshotName = backup.playlist_name || playlistName || 'Playlist';
+          return {
+            id: backup.id,
+            playlistId: backup.playlist_id || playlistId,
+            playlistName: playlistName || snapshotName || 'Deleted playlist',
+            playlistSnapshotName: snapshotName,
+            playlistDeleted,
+            name: backup.name,
+            createdAt: backup.created_at,
+            trackCount: backup.track_count ?? 0,
+          };
+        });
         setBackups(normalized);
-        await loadBackupStatus(playlistId, playlistName);
+        const snapshotName = normalized.find((backup) => backup.playlistSnapshotName)?.playlistSnapshotName
+          || playlistName
+          || 'Playlist';
+        await loadBackupStatus(playlistId, playlistName, snapshotName);
       } else {
         const list = await playlistAPI.listAllBackups();
         const normalized = (list || []).map((backup) => {
           const playlistIdFromBackup = backup.playlist_id || backup.playlistId;
           const playlistMeta = playlistLookup.get(playlistIdFromBackup);
+          const snapshotName = backup.playlist_name || playlistMeta?.name || 'Playlist';
           return {
             id: backup.id,
             playlistId: playlistIdFromBackup,
-            playlistName: playlistMeta?.name || 'Deleted playlist',
+            playlistName: playlistMeta?.name || snapshotName || 'Deleted playlist',
+            playlistSnapshotName: snapshotName,
             playlistDeleted: !playlistMeta,
             name: backup.name,
             createdAt: backup.created_at,
@@ -345,7 +374,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
       if (restoreModal.mode === 'clone' && result.new_playlist_id) {
         navigate(`/playlist/${result.new_playlist_id}`);
       } else {
-        await loadBackupStatus(playlistId, filteredPlaylist?.name || 'Playlist');
+        await loadBackupStatus(playlistId, filteredPlaylist?.name, filteredSnapshotName);
       }
       setRestoreModal(null);
     } catch (err) {
@@ -402,6 +431,11 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
               <p className="text-xs text-spotify-gray-light">
                 Showing backups for one playlist. Remove the filter to view your full backup library.
               </p>
+              {filteredPlaylistDeleted && (
+                <p className="text-xs text-spotify-gray-light">
+                  Playlist no longer exists in Spotify.
+                </p>
+              )}
             </div>
           )}
 
@@ -415,7 +449,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                   </p>
                   {filteredPlaylistDeleted && (
                     <p className="text-sm text-amber-300 mt-2">
-                      Original playlist deleted. Restore as new to recreate it.
+                      Playlist no longer exists in Spotify.
                     </p>
                   )}
                 </div>
@@ -597,6 +631,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
               <div className="space-y-4">
                 {groupedBackups.map((group) => {
                   const isExpanded = expandedGroups[group.playlistId] ?? false;
+                  const displayName = group.isDeleted ? group.snapshotName : group.playlistName;
                   return (
                     <div
                       key={group.playlistId}
@@ -609,13 +644,23 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                       >
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-lg font-semibold text-white">{group.playlistName}</p>
+                            <p className="text-lg font-semibold text-white">{displayName}</p>
                             {group.isDeleted && (
                               <span className="text-[10px] uppercase tracking-wide text-amber-300 border border-amber-400/60 px-2 py-0.5 rounded-full">
                                 Deleted
                               </span>
                             )}
                           </div>
+                          {group.isDeleted && (
+                            <p className="text-xs text-spotify-gray-light">
+                              Playlist no longer exists in Spotify.
+                            </p>
+                          )}
+                          {!group.isDeleted && group.hasNameMismatch && (
+                            <p className="text-xs text-spotify-gray-light">
+                              Name at backup: {group.snapshotName}
+                            </p>
+                          )}
                           <p className="text-sm text-spotify-gray-light">
                             {group.backupCount} {group.backupCount === 1 ? 'backup' : 'backups'} •{' '}
                             {formatTimestamp(group.latestBackup?.createdAt)}
