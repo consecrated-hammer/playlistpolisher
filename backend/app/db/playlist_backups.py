@@ -290,3 +290,31 @@ def delete_backups_older_than(user_id: str, cutoff_iso: str) -> Tuple[int, int]:
         backups_deleted = cur.rowcount if cur.rowcount is not None else 0
         conn.commit()
     return backups_deleted, items_deleted
+
+
+def delete_backup(backup_id: int, playlist_id: str, user_id: str) -> bool:
+    if not backup_id or not playlist_id or not user_id:
+        return False
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id
+            FROM playlist_backups
+            WHERE id = ? AND playlist_id = ? AND user_id = ?
+            """,
+            (backup_id, playlist_id, user_id),
+        )
+        row = cur.fetchone()
+        if not row:
+            return False
+        cur.execute(
+            "DELETE FROM playlist_backup_items WHERE backup_id = ?",
+            (backup_id,),
+        )
+        cur.execute(
+            "DELETE FROM playlist_backups WHERE id = ?",
+            (backup_id,),
+        )
+        conn.commit()
+    return True

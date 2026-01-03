@@ -1039,6 +1039,18 @@ async def restore_playlist_from_named_backup(
     return _restore_playlist_from_track_ids(sp, session_mgr, playlist_id, track_ids, body)
 
 
+@router.delete("/{playlist_id}/backups/{backup_id}")
+async def delete_playlist_backup(
+    playlist_id: str,
+    backup_id: int = Path(..., ge=1),
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    deleted = playlist_backup_store.delete_backup(backup_id, playlist_id, session_mgr.get_user_id())
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    return {"message": "Backup deleted"}
+
+
 def _replace_playlist_tracks(sp: Any, playlist_id: str, track_uris: List[str]) -> None:
     if not track_uris:
         sp.playlist_replace_items(playlist_id, [])

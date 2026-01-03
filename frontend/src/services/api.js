@@ -374,6 +374,14 @@ export const playlistAPI = {
   },
 
   /**
+   * Delete a saved backup
+   */
+  deleteBackup: async (playlistId, backupId) => {
+    const response = await api.delete(`/playlists/${playlistId}/backups/${backupId}`);
+    return response.data;
+  },
+
+  /**
    * Restore a playlist from cached backup
    */
   restoreFromBackup: async (playlistId, payload) => {

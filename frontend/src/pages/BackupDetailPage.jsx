@@ -31,6 +31,9 @@ const BackupDetailPage = ({ user, onLogout }) => {
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [restoreError, setRestoreError] = useState(null);
   const [restoreMessage, setRestoreMessage] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const playlistIdFromState = location.state?.playlistId || null;
 
@@ -112,6 +115,20 @@ const BackupDetailPage = ({ user, onLogout }) => {
     }
   };
 
+  const handleDeleteBackup = async () => {
+    if (!backupMeta || deleteLoading) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await playlistAPI.deleteBackup(backupMeta.playlistId, backupMeta.backupId);
+      navigate(`/backups${backupMeta.playlistId ? `?playlistId=${backupMeta.playlistId}` : ''}`);
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete backup.');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const sortedTracks = useMemo(() => {
     return [...(tracks || [])].sort((a, b) => {
       if (a.position == null || b.position == null) return 0;
@@ -174,7 +191,7 @@ const BackupDetailPage = ({ user, onLogout }) => {
           </div>
 
           {!loading && !error && backupMeta && (
-            <div className="bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-2xl p-4 shadow-2xl">
+            <div className="bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-2xl p-4 shadow-2xl space-y-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Restore options</p>
@@ -203,6 +220,26 @@ const BackupDetailPage = ({ user, onLogout }) => {
                     className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Restore as new
+                  </button>
+                </div>
+              </div>
+              <div className="pt-4 border-t border-spotify-gray-mid/60">
+                <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Delete backup</p>
+                <p className="text-sm text-spotify-gray-light mt-1">
+                  Remove this backup from your library. This cannot be undone.
+                </p>
+                {deleteError && <p className="text-sm text-red-400 mt-2">{deleteError}</p>}
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteError(null);
+                      setDeleteModalOpen(true);
+                    }}
+                    disabled={deleteLoading}
+                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Delete backup
                   </button>
                 </div>
               </div>
@@ -308,6 +345,52 @@ const BackupDetailPage = ({ user, onLogout }) => {
                 className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {restoreLoading ? 'Restoring…' : restoreModal.mode === 'clone' ? 'Restore as new' : 'Restore'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteModalOpen && backupMeta && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="bg-spotify-gray-dark rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-spotify-gray-mid/60">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Confirm delete</p>
+              <h3 className="text-xl font-semibold text-white">Delete this backup?</h3>
+            </div>
+            <div className="bg-spotify-gray-mid/40 border border-spotify-gray-mid/60 rounded-lg p-3 text-sm text-white space-y-1">
+              <p>
+                <span className="text-spotify-gray-light">Backup:</span>{' '}
+                {backupMeta.name || 'Backup'}
+              </p>
+              <p>
+                <span className="text-spotify-gray-light">Tracks:</span>{' '}
+                {backupMeta.trackCount ?? 0}
+              </p>
+            </div>
+            <p className="text-sm text-spotify-gray-light">
+              This action cannot be undone.
+            </p>
+            {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleteModalOpen(false);
+                }}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteBackup}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete backup'}
               </button>
             </div>
           </div>
