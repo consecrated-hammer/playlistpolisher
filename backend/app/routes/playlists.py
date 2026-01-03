@@ -20,6 +20,7 @@ import json
 
 from app.services.spotify_service import SpotifyService, get_spotify_service
 from app.config import settings
+from app.db import app_settings
 from app.models.schemas import PlaylistSimple, PlaylistContextMeta, PlaylistDetail, ErrorResponse, PaginatedTracks
 from app.utils.session_manager import SessionManager, SESSION_COOKIE_NAME
 from pydantic import BaseModel, Field
@@ -1787,7 +1788,8 @@ def _get_cached_match(
 
     similar_map: Dict[str, List[int]] = {}
     if requested_keys:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=settings.track_cache_ttl_days)).isoformat()
+        ttl_days, _ = app_settings.get_track_cache_ttl_days()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=ttl_days)).isoformat()
         cached_rows = playlist_cache_store.get_cached_playlist_tracks(playlist_id, cutoff)
         for row in cached_rows:
             try:

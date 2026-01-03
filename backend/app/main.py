@@ -28,7 +28,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response, FileResponse
 
 from app.config import settings
-from app.routes import auth, playlists, sort, schedule, ignore, player
+from app.routes import auth, playlists, sort, schedule, ignore, player, app_settings
 from app.services.scheduler_service import scheduler
 from app.middleware.rate_limit import RateLimitMiddleware
 
@@ -142,6 +142,7 @@ app.include_router(schedule.router)
 app.include_router(schedule.router_user)
 app.include_router(ignore.router)
 app.include_router(player.router)
+app.include_router(app_settings.router)
 
 # Import and include cache router
 from app.routes import cache

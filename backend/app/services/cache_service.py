@@ -15,7 +15,7 @@ from typing import List, Dict, Optional, Set, Tuple
 from contextlib import contextmanager
 
 from app.db.database import get_db_connection
-from app.config import settings
+from app.db import app_settings
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class CacheService:
     @staticmethod
     def _get_ttl_cutoff() -> str:
         """Calculate the cutoff datetime for cache expiry based on TTL setting."""
-        ttl_days = settings.track_cache_ttl_days
+        ttl_days, _ = app_settings.get_track_cache_ttl_days()
         cutoff = datetime.now(timezone.utc) - timedelta(days=ttl_days)
         return cutoff.isoformat()
     
@@ -294,7 +294,7 @@ class CacheService:
                 'expired': expired_count,
                 'total_in_db': total_in_db,
                 'user_tracks': user_track_count,
-                'ttl_days': settings.track_cache_ttl_days,
+                'ttl_days': app_settings.get_track_cache_ttl_days()[0],
                 'cutoff_date': cutoff
             }
     

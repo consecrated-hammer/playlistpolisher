@@ -322,6 +322,15 @@ def init_db():
             last_run_at_utc TEXT
         )
     """)
+
+    # Application-wide settings (single source of truth for runtime-configurable values)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
     
     conn.commit()
     conn.close()

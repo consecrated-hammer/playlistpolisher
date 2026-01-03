@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { cacheAPI, playlistAPI, preferencesAPI } from '../services/api';
+import { playlistAPI, preferencesAPI, settingsAPI } from '../services/api';
 
 const hourOptions = Array.from({ length: 24 }).map((_, i) => ({ value: i, label: `${i}:00` }));
 const dayOptions = [
@@ -73,7 +73,11 @@ const SettingsPage = ({ user, onLogout }) => {
     cache: false,
   });
 
-  const [cacheStats, setCacheStats] = useState(null);
+  const [cacheTtlDays, setCacheTtlDays] = useState(30);
+  const [cacheTtlSource, setCacheTtlSource] = useState('env');
+  const [cacheSaving, setCacheSaving] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState(null);
+  const [cacheError, setCacheError] = useState(null);
   const [cleanupSchedule, setCleanupSchedule] = useState(null);
 
   const [backupNameTemplate, setBackupNameTemplate] = useState('{playlist} backup {date}');
@@ -164,12 +168,11 @@ const SettingsPage = ({ user, onLogout }) => {
     setLoading(true);
     setError(null);
     try {
-      const [prefs, stats, schedules] = await Promise.all([
+      const [prefs, schedules, appSettings] = await Promise.all([
         preferencesAPI.getPreferences(),
-        cacheAPI.getStats(),
         playlistAPI.listSchedules().catch(() => []),
+        settingsAPI.getSettings().catch(() => null),
       ]);
-      setCacheStats(stats || null);
       const cleanup = (schedules || []).find((sched) => sched.action_type === 'backup_cleanup');
       setCleanupSchedule(cleanup || null);
 
@@ -189,6 +192,8 @@ const SettingsPage = ({ user, onLogout }) => {
       setPlaylistAlbumOpen(prefs?.playlist_album_details_open ?? false);
       setPlaylistActionsOpen(prefs?.playlist_action_details_open ?? false);
       setNowPlayingOpen(prefs?.now_playing_details_open ?? false);
+      setCacheTtlDays(appSettings?.track_cache_ttl_days ?? 30);
+      setCacheTtlSource(appSettings?.track_cache_ttl_source || 'env');
     } catch (err) {
       setError(err.message || 'Failed to load settings');
     } finally {
@@ -282,6 +287,23 @@ const SettingsPage = ({ user, onLogout }) => {
       setPlayerError(err.message || 'Failed to save player settings');
     } finally {
       setPlayerSaving(false);
+    }
+  };
+
+  const handleSaveCacheSettings = async () => {
+    setCacheSaving(true);
+    setCacheError(null);
+    setCacheMessage(null);
+    try {
+      const ttlValue = Number(cacheTtlDays) || 30;
+      const updated = await settingsAPI.updateSettings({ track_cache_ttl_days: ttlValue });
+      setCacheTtlDays(updated?.track_cache_ttl_days ?? ttlValue);
+      setCacheTtlSource(updated?.track_cache_ttl_source || 'stored');
+      setCacheMessage('Cache settings saved.');
+    } catch (err) {
+      setCacheError(err.message || 'Failed to save cache settings');
+    } finally {
+      setCacheSaving(false);
     }
   };
 
@@ -538,12 +560,35 @@ const SettingsPage = ({ user, onLogout }) => {
                 <div className="bg-spotify-gray-mid/30 rounded-lg border border-spotify-gray-mid/60 p-4 space-y-2">
                   <p className="text-sm text-white">Track cache TTL</p>
                   <p className="text-xs text-spotify-gray-light">
-                    Cached track metadata expires after {cacheStats?.ttl_days ?? '—'} days.
+                    Cached track metadata expires after the configured TTL.
                   </p>
-                  <p className="text-xs text-spotify-gray-light">
-                    Change via `TRACK_CACHE_TTL_DAYS` in your backend environment.
-                  </p>
+                  {cacheTtlSource === 'env' && (
+                    <p className="text-xs text-spotify-gray-light">
+                      Inherited from `.env` on first load. Saving here overrides it.
+                    </p>
+                  )}
                 </div>
+                <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
+                  TTL (days)
+                  <input
+                    type="number"
+                    min="1"
+                    max="3650"
+                    value={cacheTtlDays}
+                    onChange={(event) => setCacheTtlDays(event.target.value)}
+                    className="w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                  />
+                </label>
+                {cacheError && <p className="text-sm text-red-400">{cacheError}</p>}
+                {cacheMessage && <p className="text-sm text-spotify-green">{cacheMessage}</p>}
+                <button
+                  type="button"
+                  onClick={handleSaveCacheSettings}
+                  disabled={cacheSaving}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {cacheSaving ? 'Saving...' : 'Save cache settings'}
+                </button>
                 <button
                   type="button"
                   onClick={() => navigate('/cache')}

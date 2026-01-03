@@ -179,6 +179,20 @@ export const preferencesAPI = {
 };
 
 /**
+ * App Settings API
+ */
+export const settingsAPI = {
+  getSettings: async () => {
+    const response = await api.get('/app-settings');
+    return response.data;
+  },
+  updateSettings: async (payload) => {
+    const response = await api.patch('/app-settings', payload);
+    return response.data;
+  },
+};
+
+/**
  * Playlist API
  */
 export const playlistAPI = {
