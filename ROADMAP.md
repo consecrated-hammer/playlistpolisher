@@ -7,6 +7,9 @@
   - **Restore to new playlist** (clone-style restore)
 - **Scheduling:** enable scheduled backups of selected or all playlists.
 
+## Known issues
+- **Web Playback SDK (Edge/Win11):** `requestMediaKeySystemAccess` robustness warning persists; investigate later.
+
 ## Artist following (playlist-scoped)
 - Add an **Artist Following** action that opens a modal listing **all artists in the playlist**.
 - **Bulk actions:**
