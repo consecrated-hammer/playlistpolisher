@@ -341,7 +341,7 @@ const SettingsPage = ({ user, onLogout }) => {
                 open={sectionsOpen.backups}
                 onToggle={() => toggleSection('backups')}
               >
-                <div className="space-y-3">
+                <div className="md:max-w-md space-y-2">
                   <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
                     Backup name template
                     <input
@@ -360,7 +360,7 @@ const SettingsPage = ({ user, onLogout }) => {
                   </p>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="md:max-w-md">
                   <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
                     Retention (days)
                     <input
@@ -391,60 +391,69 @@ const SettingsPage = ({ user, onLogout }) => {
                   />
                 </div>
 
-                <div className={`grid gap-3 md:grid-cols-4 ${backupCleanupEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
-                  <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
-                    Cadence
-                    <select
-                      value={cleanupScheduleType}
-                      onChange={(event) => setCleanupScheduleType(event.target.value)}
-                      className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                    >
-                      <option value="daily">Daily</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                    </select>
-                  </label>
-                  <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
-                    Time
-                    <select
-                      value={cleanupHour}
-                      onChange={(event) => setCleanupHour(event.target.value)}
-                      className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                    >
-                      {hourOptions.map((hour) => (
-                        <option key={hour.value} value={hour.value}>{hour.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  {cleanupScheduleType === 'weekly' && (
-                    <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
-                      Day
-                      <select
-                        value={cleanupDayOfWeek}
-                        onChange={(event) => setCleanupDayOfWeek(event.target.value)}
-                        className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                      >
-                        {dayOptions.map((day) => (
-                          <option key={day.value} value={day.value}>{day.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  {cleanupScheduleType === 'monthly' && (
-                    <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
-                      Day
-                      <select
-                        value={cleanupDayOfMonth}
-                        onChange={(event) => setCleanupDayOfMonth(event.target.value)}
-                        className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                      >
-                        {Array.from({ length: 28 }).map((_, idx) => (
-                          <option key={idx + 1} value={idx + 1}>{idx + 1}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  {cleanupScheduleType === 'daily' && <div className="hidden md:block" />}
+                <div className={backupCleanupEnabled ? '' : 'opacity-50 pointer-events-none'}>
+                  <div className="md:max-w-md space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
+                        Cadence
+                        <select
+                          value={cleanupScheduleType}
+                          onChange={(event) => setCleanupScheduleType(event.target.value)}
+                          className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                        >
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                      </label>
+                      <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
+                        Time
+                        <select
+                          value={cleanupHour}
+                          onChange={(event) => setCleanupHour(event.target.value)}
+                          className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                        >
+                          {hourOptions.map((hour) => (
+                            <option key={hour.value} value={hour.value}>{hour.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {cleanupScheduleType === 'weekly' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
+                          Day
+                          <select
+                            value={cleanupDayOfWeek}
+                            onChange={(event) => setCleanupDayOfWeek(event.target.value)}
+                            className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                          >
+                            {dayOptions.map((day) => (
+                              <option key={day.value} value={day.value}>{day.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <div />
+                      </div>
+                    )}
+                    {cleanupScheduleType === 'monthly' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
+                          Day
+                          <select
+                            value={cleanupDayOfMonth}
+                            onChange={(event) => setCleanupDayOfMonth(event.target.value)}
+                            className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                          >
+                            {Array.from({ length: 28 }).map((_, idx) => (
+                              <option key={idx + 1} value={idx + 1}>{idx + 1}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <div />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {cleanupNextRun && (
@@ -544,12 +553,14 @@ const SettingsPage = ({ user, onLogout }) => {
                 open={sectionsOpen.player}
                 onToggle={() => toggleSection('player')}
               >
-                <ToggleField
-                  label="Show now playing details"
-                  description="Keep the now-playing panel expanded."
-                  checked={nowPlayingOpen}
-                  onChange={setNowPlayingOpen}
-                />
+                <div className="md:max-w-md">
+                  <ToggleField
+                    label="Show now playing details"
+                    description="Keep the now-playing panel expanded."
+                    checked={nowPlayingOpen}
+                    onChange={setNowPlayingOpen}
+                  />
+                </div>
 
                 {playerError && <p className="text-sm text-red-400">{playerError}</p>}
                 {playerMessage && <p className="text-sm text-spotify-green">{playerMessage}</p>}
@@ -569,28 +580,27 @@ const SettingsPage = ({ user, onLogout }) => {
                 open={sectionsOpen.cache}
                 onToggle={() => toggleSection('cache')}
               >
-                <div className="bg-spotify-gray-mid/30 rounded-lg border border-spotify-gray-mid/60 p-4 space-y-2">
-                  <p className="text-sm text-white">Track cache TTL</p>
+                <p className="text-xs text-spotify-gray-light">
+                  Cached track metadata expires after the configured TTL.
+                </p>
+                {cacheTtlSource === 'env' && (
                   <p className="text-xs text-spotify-gray-light">
-                    Cached track metadata expires after the configured TTL.
+                    Inherited from `.env` on first load. Saving here overrides it.
                   </p>
-                  {cacheTtlSource === 'env' && (
-                    <p className="text-xs text-spotify-gray-light">
-                      Inherited from `.env` on first load. Saving here overrides it.
-                    </p>
-                  )}
+                )}
+                <div className="md:max-w-md">
+                  <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
+                    TTL (days)
+                    <input
+                      type="number"
+                      min="1"
+                      max="3650"
+                      value={cacheTtlDays}
+                      onChange={(event) => setCacheTtlDays(event.target.value)}
+                      className="w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                    />
+                  </label>
                 </div>
-                <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
-                  TTL (days)
-                  <input
-                    type="number"
-                    min="1"
-                    max="3650"
-                    value={cacheTtlDays}
-                    onChange={(event) => setCacheTtlDays(event.target.value)}
-                    className="w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                  />
-                </label>
                 {cacheError && <p className="text-sm text-red-400">{cacheError}</p>}
                 {cacheMessage && <p className="text-sm text-spotify-green">{cacheMessage}</p>}
                 <div className="flex flex-col sm:flex-row gap-3">
