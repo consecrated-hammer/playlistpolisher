@@ -1,13 +1,11 @@
 # Playlist Polisher feature list
 
-## Persistent config:
-- Ensure user views, sorting, etc, are persisted across sessions.
-
 ## Backup and restore
 - **Backup:** reuse the existing cache as the backup source.
 - **Restore options:**
   - **Overwrite existing playlist** (in-place restore)
   - **Restore to new playlist** (clone-style restore)
+- **Scheduling:** enable scheduled backups of selected or all playlists.
 
 ## Artist following (playlist-scoped)
 - Add an **Artist Following** action that opens a modal listing **all artists in the playlist**.
@@ -87,3 +85,6 @@
 - **Schedules:** enable mobile-friendly schedules view.
 - **Ignored tracks:** enable mobile-friendly ignored tracks view.
 - **Cache:** enable mobile-friendly track cache view.
+
+## Persistent config:
+- Ensure user views, sorting, etc, are persisted across sessions.
