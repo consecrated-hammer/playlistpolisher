@@ -22,6 +22,9 @@ import SchedulesPage from './pages/SchedulesPage';
 import HistoryPage from './pages/HistoryPage';
 import IgnoredTracksPage from './pages/IgnoredTracksPage';
 import CachePage from './pages/CachePage';
+import SettingsPage from './pages/SettingsPage';
+import BackupsLibraryPage from './pages/BackupsLibraryPage';
+import BackupDetailPage from './pages/BackupDetailPage';
 import RoadmapPage from './pages/RoadmapPage';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
@@ -993,7 +996,7 @@ function App() {
 
     const pollJobStatus = async () => {
       try {
-        const status = await sortAPI.getJobStatus(globalJob.job_id);
+        const status = await sortAPI.status(globalJob.playlist_id, globalJob.job_id);
         setGlobalJobStatus({ 
           ...status, 
           playlist_id: globalJob.playlist_id,
@@ -1117,6 +1120,21 @@ function App() {
         } />
         <Route path="/cache" element={
           <CachePage user={user} onLogout={handleLogout} />
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+            <SettingsPage user={user} onLogout={handleLogout} />
+          </ProtectedRoute>
+        } />
+        <Route path="/backups" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+            <BackupsLibraryPage user={user} onLogout={handleLogout} />
+          </ProtectedRoute>
+        } />
+        <Route path="/backups/:backupId" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+            <BackupDetailPage user={user} onLogout={handleLogout} />
+          </ProtectedRoute>
         } />
         <Route path="/roadmap" element={
           <Layout user={user} onLogout={handleLogout}>

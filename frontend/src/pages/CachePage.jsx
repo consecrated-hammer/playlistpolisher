@@ -410,16 +410,11 @@ const CachePage = ({ user, onLogout }) => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="text-spotify-gray-light">TTL (Time to Live):</span>
-            <span className="text-white ml-2 font-medium">{stats?.ttl_days || 30} days</span>
-          </div>
-          
-          <div>
             <span className="text-spotify-gray-light">Total in Database:</span>
             <span className="text-white ml-2 font-medium">{stats?.total_in_db?.toLocaleString() || 0} tracks</span>
           </div>
           
-          <div className="md:col-span-2">
+          <div>
             <span className="text-spotify-gray-light">Expiration Cutoff:</span>
             <span className="text-white ml-2 font-medium">{formatDate(stats?.cutoff_date)}</span>
           </div>
@@ -429,7 +424,7 @@ const CachePage = ({ user, onLogout }) => {
                 <p className="text-xs text-spotify-gray-light leading-relaxed">
                   <strong className="text-white">How it works:</strong> When you load playlists or view track details, 
                   metadata is cached locally. Cached tracks are shared across all users for efficiency. 
-                  After {stats?.ttl_days || 30} days, entries expire and can be cleaned up.
+                  Expired entries can be cleaned up from the cache when needed.
                 </p>
               </div>
             </div>

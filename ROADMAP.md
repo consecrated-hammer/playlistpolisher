@@ -1,13 +1,16 @@
 # Playlist Polisher feature list
 
-## Persistent config:
-- Ensure user views, sorting, etc, are persisted across sessions.
-
 ## Backup and restore
 - **Backup:** reuse the existing cache as the backup source.
 - **Restore options:**
   - **Overwrite existing playlist** (in-place restore)
   - **Restore to new playlist** (clone-style restore)
+- **Scheduling:** enable scheduled backups of selected or all playlists.
+
+## Known issues
+- **Web Playback SDK (Edge/Win11):** `requestMediaKeySystemAccess` robustness warning persists; investigate later.
+- In /playlist view, "Reorder in Spotify" hover text is rendering behind the playlist album art.
+- Newly-created playlist track counts show as 0 in /playlists if cache hasn't run yet.
 
 ## Artist following (playlist-scoped)
 - Add an **Artist Following** action that opens a modal listing **all artists in the playlist**.
@@ -87,3 +90,11 @@
 - **Schedules:** enable mobile-friendly schedules view.
 - **Ignored tracks:** enable mobile-friendly ignored tracks view.
 - **Cache:** enable mobile-friendly track cache view.
+
+## Persistent config:
+- Ensure user views, sorting, etc, are persisted across sessions.
+
+## UI Cosmetics
+- Create a dashboard page should playlist/system stats, e.g. # of playlists, backups, schedules, etc.
+- In /playlists table view, add total playlist time, private/public/etc.
+- In /playlists view, add action buttons on right-click of playlist, e.g. reorder, backup, dedupe, etc.

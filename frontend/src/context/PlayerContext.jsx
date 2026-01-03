@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PlayerContext from './playerContextBase';
 import PlayerProgressContext from './playerProgressContextBase';
 import { authAPI, playerAPI, playlistAPI } from '../services/api';
+import { patchMediaKeySystemAccess } from '../utils/mediaKeys';
 
 const SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
 const REQUIRED_SCOPES = ['streaming', 'user-modify-playback-state'];
 const DEFAULT_VOLUME = 0.75;
 const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000;
-
 // Helper to log to backend instead of console
 const logToBackend = (level, message, data) => {
   if (level === 'debug') return;
@@ -873,6 +873,7 @@ const PlayerProvider = ({ user, children }) => {
     }
 
     let cancelled = false;
+    patchMediaKeySystemAccess();
 
     const initialize = async () => {
       if (cancelled || playerRef.current || !window.Spotify) return;

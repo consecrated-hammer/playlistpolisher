@@ -1,17 +1,27 @@
 # Changelog
 
+## v1.3.0 - 2026-01-04
+**Backups**
+- Backups: add a global backups library with grouped view, filtering, sorting, and detail restore flow.
+- Backups: show deleted playlist indicators and snapshot names when playlists are removed.
+- Backups: support rename/delete actions and cache-based snapshot restores.
+- Settings: introduce a new settings page for backup cadence, retention, template, and cache TTL controls.
+
 ## v1.2.1 - 2026-01-03
+**Mobile-friendly polish**
 - Cache: refresh playlist cache after mutations (sort, dedupe, add/remove, undo).
 - Sorting: improve move analysis and estimate timing using prior sort history.
 
 ## v1.2.0 - 2026-01-03
-- Mobile: fix playlist detail overflow, center controls/artwork, and refine action button layout.
+**Mobile-friendly**
+- Mobile: fix playlist detail overflow, centre controls/artwork, and refine action button layout.
 - Mobile: reorder modal uses text buttons; track "Added" shows date + time.
 - Playlists: tighten table view columns on mobile, round row edges, align Tracks header icon, remove cache icon from table rows.
 - UX: remove infinite scroll debug logging.
 - Docs: add ROADMAP.md.
 
 ## v1.1.0 - 2026-01-02
+**Cache enhancements**
 - Cache: add playlist freshness checks via snapshot IDs to avoid unnecessary refreshes.
 - Cache: support user-wide and per-playlist refresh actions with improved progress feedback.
 - Scheduling: expand cache refresh actions and clarify options with tooltips.
@@ -19,10 +29,39 @@
 - CI: fetch tags for versioned builds.
 
 ## v1.0.2 - 2025-12-25
+**Security hardening**
 - Security: harden selector escaping when locating tracks in the UI.
 - Security: guard static file routing against path traversal.
 - Security: restrict GitHub Actions token permissions in workflows.
 
 ## v1.0.1 - 2025-12-25
+**Security patching**
 - Security: update backend dependencies to patched versions (spotipy, python-jose, python-multipart, black).
 - Security: bump frontend tooling to pull patched esbuild in dev dependencies.
+
+## v1.0.0 - 2025-12-25
+**First public release**
+First public release of Playlist Polisher, a modern Spotify playlist management tool.
+
+### Highlights
+- **Smart playlist sorting:** multiple criteria including date added, release date, duration, and name.
+- **Track caching system:** 30-day TTL cache for improved performance.
+- **Scheduled operations:** automate playlist management tasks.
+- **Duplicate detection:** find and manage duplicate tracks.
+- **Web player integration:** control playback directly from the interface.
+- **Modern UI:** React frontend with a Spotify-inspired design (Tailwind CSS).
+- **Fast backend:** Python FastAPI with SQLite database.
+
+### Tech stack
+- Frontend: React 18, Vite 5, Tailwind CSS 3.4
+- Backend: Python 3.12, FastAPI, Spotipy
+- Database: SQLite
+- Deployment: Docker with GitHub Actions CI/CD
+
+### Getting started
+See README.md for setup instructions.
+
+### Self-hosting
+Docker images available at `ghcr.io/consecrated-hammer/playlistpolisher:latest`
+
+> Note: This application runs in Spotify Development Mode (limited to 25 users).

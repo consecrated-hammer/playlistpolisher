@@ -179,6 +179,20 @@ export const preferencesAPI = {
 };
 
 /**
+ * App Settings API
+ */
+export const settingsAPI = {
+  getSettings: async () => {
+    const response = await api.get('/app-settings');
+    return response.data;
+  },
+  updateSettings: async (payload) => {
+    const response = await api.patch('/app-settings', payload);
+    return response.data;
+  },
+};
+
+/**
  * Playlist API
  */
 export const playlistAPI = {
@@ -302,6 +316,88 @@ export const playlistAPI = {
   },
 
   /**
+   * Get backup/cache status for a playlist
+   */
+  getBackupStatus: async (playlistId) => {
+    const response = await api.get(`/playlists/${playlistId}/backup/status`);
+    return response.data;
+  },
+
+  /**
+   * Create a named backup from cache
+   */
+  createBackup: async (playlistId, payload) => {
+    const response = await api.post(`/playlists/${playlistId}/backup/create`, payload);
+    return response.data;
+  },
+
+  /**
+   * List saved backups for a playlist
+   */
+  listBackups: async (playlistId) => {
+    const response = await api.get(`/playlists/${playlistId}/backups`);
+    const data = response.data;
+    return Array.isArray(data?.backups) ? data.backups : Array.isArray(data) ? data : [];
+  },
+
+  /**
+   * List all saved backups for the user
+   */
+  listAllBackups: async () => {
+    const response = await api.get('/playlists/backups/all');
+    const data = response.data;
+    return Array.isArray(data?.backups) ? data.backups : Array.isArray(data) ? data : [];
+  },
+
+  /**
+   * Preview backup contents
+   */
+  getBackupPreview: async (playlistId, backupId, limit = 50) => {
+    const response = await api.get(`/playlists/${playlistId}/backups/${backupId}/preview`, { params: { limit } });
+    return response.data;
+  },
+
+  /**
+   * Get full backup details with tracks
+   */
+  getBackupDetail: async (playlistId, backupId) => {
+    const response = await api.get(`/playlists/${playlistId}/backups/${backupId}`);
+    return response.data;
+  },
+
+  /**
+   * Restore a playlist from a saved backup
+   */
+  restoreFromNamedBackup: async (playlistId, backupId, payload) => {
+    const response = await api.post(`/playlists/${playlistId}/backups/${backupId}/restore`, payload);
+    return response.data;
+  },
+
+  /**
+   * Delete a saved backup
+   */
+  deleteBackup: async (playlistId, backupId) => {
+    const response = await api.delete(`/playlists/${playlistId}/backups/${backupId}`);
+    return response.data;
+  },
+
+  /**
+   * Rename a saved backup
+   */
+  renameBackup: async (playlistId, backupId, payload) => {
+    const response = await api.patch(`/playlists/${playlistId}/backups/${backupId}`, payload);
+    return response.data;
+  },
+
+  /**
+   * Restore a playlist from cached backup
+   */
+  restoreFromBackup: async (playlistId, payload) => {
+    const response = await api.post(`/playlists/${playlistId}/backup/restore`, payload);
+    return response.data;
+  },
+
+  /**
    * Remove selected duplicate occurrences
    */
   removeDuplicates: async (playlistId, items, snapshotId) => {
@@ -337,18 +433,46 @@ export const playlistAPI = {
     const response = await api.post('/schedules/cache', payload);
     return response.data;
   },
+  createBackupSchedule: async (payload) => {
+    const response = await api.post('/schedules/backup', payload);
+    return response.data;
+  },
+  createBackupCleanupSchedule: async (payload) => {
+    const response = await api.post('/schedules/backup-cleanup', payload);
+    return response.data;
+  },
   updateCacheSchedule: async (scheduleId, payload) => {
     const response = await api.patch(`/schedules/cache/${scheduleId}`, payload);
+    return response.data;
+  },
+  updateBackupSchedule: async (scheduleId, payload) => {
+    const response = await api.patch(`/schedules/backup/${scheduleId}`, payload);
+    return response.data;
+  },
+  updateBackupCleanupSchedule: async (scheduleId, payload) => {
+    const response = await api.patch(`/schedules/backup-cleanup/${scheduleId}`, payload);
     return response.data;
   },
   deleteCacheSchedule: async (scheduleId) => {
     const response = await api.delete(`/schedules/cache/${scheduleId}`);
     return response.data;
   },
+  deleteBackupSchedule: async (scheduleId) => {
+    const response = await api.delete(`/schedules/backup/${scheduleId}`);
+    return response.data;
+  },
+  deleteBackupCleanupSchedule: async (scheduleId) => {
+    const response = await api.delete(`/schedules/backup-cleanup/${scheduleId}`);
+    return response.data;
+  },
   listPlaylistSchedules: async (playlistId) => {
     const response = await api.get(`/playlists/${playlistId}/schedules`);
     const data = response.data;
     return Array.isArray(data?.schedules) ? data.schedules : Array.isArray(data) ? data : [];
+  },
+  createBackupScheduleForPlaylist: async (playlistId, payload) => {
+    const response = await api.post(`/playlists/${playlistId}/schedules/backup`, payload);
+    return response.data;
   },
   createSchedule: async (playlistId, payload) => {
     const response = await api.post(`/playlists/${playlistId}/schedules`, payload);

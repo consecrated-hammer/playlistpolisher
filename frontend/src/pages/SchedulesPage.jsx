@@ -8,6 +8,8 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 // Action type configurations for extensibility
 const cacheActionTypes = ['cache_clear', 'cache_refresh', 'cache_refresh_full'];
+const BACKUP_GLOBAL_PLAYLIST_ID = '__backup_global__';
+const BACKUP_CLEANUP_GLOBAL_PLAYLIST_ID = '__backup_cleanup__';
 
 const actionConfigs = {
   sort: {
@@ -39,6 +41,18 @@ const actionConfigs = {
     fields: [],
     description: 'Clear and rebuild cache for all playlists.',
     summary: () => 'Clear and rebuild cache for all playlists'
+  },
+  backup: {
+    label: 'Backup',
+    fields: [],
+    description: 'Create a named backup snapshot from the cached playlist.',
+    summary: () => 'Create backup snapshot'
+  },
+  backup_cleanup: {
+    label: 'Backup cleanup',
+    fields: [],
+    description: 'Remove backups older than the retention window.',
+    summary: () => 'Delete old backups'
   },
   // Future: dedupe, reorder, etc.
 };
@@ -197,14 +211,17 @@ const SchedulesPage = ({ user, onLogout }) => {
 
   const handleSaveEdit = async () => {
     const isCache = cacheActionTypes.includes(editForm.action_type);
+    const isBackup = editForm.action_type === 'backup';
+    const isBackupGlobal = isBackup && editForm.playlistId === BACKUP_GLOBAL_PLAYLIST_ID;
+    const isBackupCleanup = editForm.action_type === 'backup_cleanup';
     if (!isCache && !editForm.playlistId) {
       showToast('Please select a playlist', 'error');
       return;
     }
     
     // Check for duplicate when creating new (one per playlist/action)
-    if (creatingNew && !isCache) {
-      const existing = schedules.find((s) => s.playlist_id === editForm.playlistId && s.action_type === 'sort');
+    if (creatingNew && !isCache && !isBackupCleanup) {
+      const existing = schedules.find((s) => s.playlist_id === editForm.playlistId);
       if (existing) {
         showToast('This playlist already has a schedule', 'error');
         return;
@@ -215,6 +232,13 @@ const SchedulesPage = ({ user, onLogout }) => {
       if (existingCache) {
         const label = actionConfigs[editForm.action_type]?.label || 'Cache refresh';
         showToast(`${label} schedule already exists`, 'error');
+        return;
+      }
+    }
+    if (creatingNew && isBackupCleanup) {
+      const existingCleanup = schedules.find((s) => s.action_type === 'backup_cleanup');
+      if (existingCleanup) {
+        showToast('Backup cleanup schedule already exists', 'error');
         return;
       }
     }
@@ -243,6 +267,10 @@ const SchedulesPage = ({ user, onLogout }) => {
       if (editingRowId) {
         if (isCache) {
           await playlistAPI.updateCacheSchedule(editingRowId, payload);
+        } else if (isBackupGlobal) {
+          await playlistAPI.updateBackupSchedule(editingRowId, payload);
+        } else if (isBackupCleanup) {
+          await playlistAPI.updateBackupCleanupSchedule(editingRowId, payload);
         } else {
           await playlistAPI.updateSchedule(editForm.playlistId, editingRowId, payload);
         }
@@ -250,6 +278,14 @@ const SchedulesPage = ({ user, onLogout }) => {
       } else {
         if (isCache) {
           await playlistAPI.createCacheSchedule(payload);
+        } else if (isBackup) {
+          if (isBackupGlobal) {
+            await playlistAPI.createBackupSchedule(payload);
+          } else {
+            await playlistAPI.createBackupScheduleForPlaylist(editForm.playlistId, payload);
+          }
+        } else if (isBackupCleanup) {
+          await playlistAPI.createBackupCleanupSchedule(payload);
         } else {
           await playlistAPI.createSchedule(editForm.playlistId, payload);
         }
@@ -270,6 +306,10 @@ const SchedulesPage = ({ user, onLogout }) => {
     try {
       if (cacheActionTypes.includes(sched.action_type)) {
         await playlistAPI.updateCacheSchedule(sched.id, { enabled: !sched.enabled });
+      } else if (sched.action_type === 'backup' && sched.playlist_id === BACKUP_GLOBAL_PLAYLIST_ID) {
+        await playlistAPI.updateBackupSchedule(sched.id, { enabled: !sched.enabled });
+      } else if (sched.action_type === 'backup_cleanup') {
+        await playlistAPI.updateBackupCleanupSchedule(sched.id, { enabled: !sched.enabled });
       } else {
         await playlistAPI.updateSchedule(sched.playlist_id, sched.id, {
           enabled: !sched.enabled,
@@ -289,6 +329,10 @@ const SchedulesPage = ({ user, onLogout }) => {
     try {
       if (cacheActionTypes.includes(sched.action_type)) {
         await playlistAPI.deleteCacheSchedule(sched.id);
+      } else if (sched.action_type === 'backup' && sched.playlist_id === BACKUP_GLOBAL_PLAYLIST_ID) {
+        await playlistAPI.deleteBackupSchedule(sched.id);
+      } else if (sched.action_type === 'backup_cleanup') {
+        await playlistAPI.deleteBackupCleanupSchedule(sched.id);
       } else {
         await playlistAPI.deleteSchedule(sched.playlist_id, sched.id);
       }
@@ -317,7 +361,10 @@ const SchedulesPage = ({ user, onLogout }) => {
   const renderEditRow = () => {
     const inputClass = "bg-spotify-gray-mid text-white text-sm rounded px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-1 focus:ring-spotify-green";
     const iconBtn = "w-8 h-8 rounded-full border flex items-center justify-center transition-colors";
-    const canSave = cacheActionTypes.includes(editForm.action_type) || !!editForm.playlistId;
+    const isCacheAction = cacheActionTypes.includes(editForm.action_type);
+    const isBackupAction = editForm.action_type === 'backup';
+    const isBackupCleanupAction = editForm.action_type === 'backup_cleanup';
+    const canSave = isCacheAction || !!editForm.playlistId;
     const selectedAction = actionConfigs[editForm.action_type] || actionConfigs.sort;
     
     return (
@@ -327,7 +374,19 @@ const SchedulesPage = ({ user, onLogout }) => {
           <Tooltip.Provider delayDuration={120}>
             <Select.Root
               value={editForm.action_type}
-              onValueChange={(value) => setEditForm({ ...editForm, action_type: value })}
+              onValueChange={(value) => {
+                const next = { ...editForm, action_type: value };
+                if (cacheActionTypes.includes(value)) {
+                  next.playlistId = '';
+                }
+                if (value === 'backup' && !editForm.playlistId) {
+                  next.playlistId = BACKUP_GLOBAL_PLAYLIST_ID;
+                }
+                if (value === 'backup_cleanup') {
+                  next.playlistId = BACKUP_CLEANUP_GLOBAL_PLAYLIST_ID;
+                }
+                setEditForm(next);
+              }}
             >
               <Select.Trigger className={`${inputClass} w-full flex items-center justify-between gap-2`}>
                 <Select.Value aria-label={selectedAction.label} />
@@ -378,9 +437,9 @@ const SchedulesPage = ({ user, onLogout }) => {
 
         {/* Playlist */}
         <div className="col-span-2 pr-2">
-          {cacheActionTypes.includes(editForm.action_type) ? (
+          {isCacheAction || isBackupCleanupAction ? (
             <input
-              value="Global cache"
+              value={isBackupCleanupAction ? 'Backup cleanup' : 'Global cache'}
               disabled
               className={`${inputClass} bg-spotify-gray-dark/40 text-spotify-gray-light`}
             />
@@ -392,6 +451,9 @@ const SchedulesPage = ({ user, onLogout }) => {
               disabled={editingRowId} // Can't change playlist when editing
             >
               <option value="">Select playlist</option>
+              {isBackupAction && (
+                <option value={BACKUP_GLOBAL_PLAYLIST_ID}>All playlists</option>
+              )}
               {availablePlaylists.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -589,6 +651,8 @@ const SchedulesPage = ({ user, onLogout }) => {
                   const config = actionConfigs[actionType];
                   const actionSummary = config ? config.summary(params) : 'Unknown';
                   const isCache = cacheActionTypes.includes(actionType);
+                  const isBackupGlobal = actionType === 'backup' && s.playlist_id === BACKUP_GLOBAL_PLAYLIST_ID;
+                  const isBackupCleanup = actionType === 'backup_cleanup';
 
                   return (
                     <div 
@@ -606,6 +670,10 @@ const SchedulesPage = ({ user, onLogout }) => {
                       <div className="col-span-2 truncate text-white">
                         {isCache ? (
                           <span>Global cache</span>
+                        ) : isBackupGlobal ? (
+                          <span>All playlists</span>
+                        ) : isBackupCleanup ? (
+                          <span>Backup cleanup</span>
                         ) : (
                           <a href={`/playlist/${s.playlist_id}`} className="text-white hover:underline">
                             {playlist.name || s.playlist_id}
