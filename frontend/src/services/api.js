@@ -382,6 +382,14 @@ export const playlistAPI = {
   },
 
   /**
+   * Rename a saved backup
+   */
+  renameBackup: async (playlistId, backupId, payload) => {
+    const response = await api.patch(`/playlists/${playlistId}/backups/${backupId}`, payload);
+    return response.data;
+  },
+
+  /**
    * Restore a playlist from cached backup
    */
   restoreFromBackup: async (playlistId, payload) => {

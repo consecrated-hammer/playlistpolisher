@@ -478,7 +478,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                 {backupStatusError && <p className="text-sm text-red-400">{backupStatusError}</p>}
                 {restoreMessage && <p className="text-sm text-spotify-green">{restoreMessage}</p>}
                 {restoreError && <p className="text-sm text-red-400">{restoreError}</p>}
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setRestoreModal({ mode: 'overwrite', source: 'snapshot' })}
@@ -488,7 +488,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                       || !backupStatus?.cached
                       || (backupStatus?.track_count || 0) === 0
                     }
-                    className="w-full px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Restore
                   </button>
@@ -496,7 +496,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                     type="button"
                     onClick={() => setRestoreModal({ mode: 'clone', source: 'snapshot' })}
                     disabled={restoreLoading || !backupStatus?.cached || (backupStatus?.track_count || 0) === 0}
-                    className="w-full px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Restore as new
                   </button>
@@ -510,19 +510,19 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                     Save a named snapshot from the cached playlist.
                   </p>
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <input
                     type="text"
                     value={backupCreateName}
                     onChange={(event) => setBackupCreateName(event.target.value)}
-                    className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                    className="w-full sm:flex-1 bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
                     placeholder="Backup name"
                   />
                   <button
                     type="button"
                     onClick={handleCreateBackup}
                     disabled={backupCreateLoading}
-                    className="w-full px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {backupCreateLoading ? 'Creating…' : 'Create backup'}
                   </button>

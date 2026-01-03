@@ -31,6 +31,10 @@ const BackupDetailPage = ({ user, onLogout }) => {
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [restoreError, setRestoreError] = useState(null);
   const [restoreMessage, setRestoreMessage] = useState(null);
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [renameName, setRenameName] = useState('');
+  const [renameLoading, setRenameLoading] = useState(false);
+  const [renameError, setRenameError] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -76,6 +80,7 @@ const BackupDetailPage = ({ user, onLogout }) => {
         trackCount: detail.track_count ?? 0,
       });
       setTracks(detail.tracks || []);
+      setRenameName(detail.name || '');
 
       const dateStamp = detail.created_at ? new Date(detail.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
       const cloneBaseName = playlistMeta?.name || snapshotName || 'Restored playlist';
@@ -112,6 +117,26 @@ const BackupDetailPage = ({ user, onLogout }) => {
       setRestoreError(err.message || 'Failed to restore playlist.');
     } finally {
       setRestoreLoading(false);
+    }
+  };
+
+  const handleRenameBackup = async () => {
+    if (!backupMeta || renameLoading) return;
+    const trimmedName = renameName.trim();
+    if (!trimmedName) {
+      setRenameError('Please enter a backup name.');
+      return;
+    }
+    setRenameLoading(true);
+    setRenameError(null);
+    try {
+      await playlistAPI.renameBackup(backupMeta.playlistId, backupMeta.backupId, { name: trimmedName });
+      setBackupMeta((prev) => (prev ? { ...prev, name: trimmedName } : prev));
+      setRenameModalOpen(false);
+    } catch (err) {
+      setRenameError(err.message || 'Failed to rename backup.');
+    } finally {
+      setRenameLoading(false);
     }
   };
 
@@ -234,12 +259,24 @@ const BackupDetailPage = ({ user, onLogout }) => {
                 </div>
               </div>
               <div className="pt-4 border-t border-spotify-gray-mid/60">
-                <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Delete backup</p>
+                <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Backup actions</p>
                 <p className="text-sm text-spotify-gray-light mt-1">
-                  Remove this backup from your library. This cannot be undone.
+                  Rename or remove this backup from your library.
                 </p>
                 {deleteError && <p className="text-sm text-red-400 mt-2">{deleteError}</p>}
-                <div className="mt-3">
+                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenameError(null);
+                      setRenameName(backupMeta.name || '');
+                      setRenameModalOpen(true);
+                    }}
+                    disabled={renameLoading}
+                    className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Rename backup
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -401,6 +438,48 @@ const BackupDetailPage = ({ user, onLogout }) => {
                 className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {deleteLoading ? 'Deleting…' : 'Delete backup'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renameModalOpen && backupMeta && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="bg-spotify-gray-dark rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-spotify-gray-mid/60">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Rename backup</p>
+              <h3 className="text-xl font-semibold text-white">Update backup name</h3>
+            </div>
+            <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
+              Backup name
+              <input
+                type="text"
+                value={renameName}
+                onChange={(event) => setRenameName(event.target.value)}
+                className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+              />
+            </label>
+            {renameError && <p className="text-sm text-red-400">{renameError}</p>}
+            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setRenameError(null);
+                  setRenameModalOpen(false);
+                }}
+                disabled={renameLoading}
+                className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRenameBackup}
+                disabled={renameLoading}
+                className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {renameLoading ? 'Saving…' : 'Save name'}
               </button>
             </div>
           </div>

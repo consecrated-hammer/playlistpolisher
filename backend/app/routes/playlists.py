@@ -469,6 +469,10 @@ class PlaylistBackupCreateRequest(BaseModel):
     cache_first: bool = True
 
 
+class PlaylistBackupRenameRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+
+
 class PlaylistBackupSummary(BaseModel):
     id: int
     playlist_id: str
@@ -1037,6 +1041,35 @@ async def restore_playlist_from_named_backup(
         raise HTTPException(status_code=409, detail="Backup is empty")
 
     return _restore_playlist_from_track_ids(sp, session_mgr, playlist_id, track_ids, body)
+
+
+@router.patch("/{playlist_id}/backups/{backup_id}", response_model=PlaylistBackupSummary)
+async def rename_playlist_backup(
+    playlist_id: str,
+    backup_id: int = Path(..., ge=1),
+    body: PlaylistBackupRenameRequest = Body(...),
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Backup name is required")
+    backup = playlist_backup_store.get_backup(backup_id, playlist_id, session_mgr.get_user_id())
+    if not backup:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    updated = playlist_backup_store.rename_backup(backup_id, playlist_id, session_mgr.get_user_id(), name)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to rename backup")
+    backup["name"] = name
+    return PlaylistBackupSummary(
+        id=backup["id"],
+        playlist_id=backup["playlist_id"],
+        name=backup["name"],
+        track_count=backup["track_count"],
+        created_at=backup["created_at"],
+        playlist_name=backup.get("playlist_name"),
+        snapshot_id=backup.get("snapshot_id"),
+        source=backup.get("source"),
+    )
 
 
 @router.delete("/{playlist_id}/backups/{backup_id}")

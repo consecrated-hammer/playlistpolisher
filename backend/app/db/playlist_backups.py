@@ -318,3 +318,21 @@ def delete_backup(backup_id: int, playlist_id: str, user_id: str) -> bool:
         )
         conn.commit()
     return True
+
+
+def rename_backup(backup_id: int, playlist_id: str, user_id: str, name: str) -> bool:
+    if not backup_id or not playlist_id or not user_id or not name:
+        return False
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE playlist_backups
+            SET name = ?
+            WHERE id = ? AND playlist_id = ? AND user_id = ?
+            """,
+            (name, backup_id, playlist_id, user_id),
+        )
+        updated = cur.rowcount if cur.rowcount is not None else 0
+        conn.commit()
+    return updated > 0
