@@ -471,51 +471,59 @@ const SettingsPage = ({ user, onLogout }) => {
                 open={sectionsOpen.playlists}
                 onToggle={() => toggleSection('playlists')}
               >
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
-                    Default view
-                    <select
-                      value={playlistView}
-                      onChange={(event) => setPlaylistView(event.target.value)}
-                      className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                    >
-                      <option value="grid">Grid</option>
-                      <option value="list">List</option>
-                      <option value="table">Table</option>
-                    </select>
-                  </label>
-                  <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
-                    Default sort
-                    <select
-                      value={playlistSort}
-                      onChange={(event) => setPlaylistSort(event.target.value)}
-                      className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                    >
-                      <option value="default">Default</option>
-                      <option value="recently-updated-estimated">Recently updated</option>
-                      <option value="name-asc">Name (A-Z)</option>
-                      <option value="name-desc">Name (Z-A)</option>
-                      <option value="tracks-asc">Tracks (asc)</option>
-                      <option value="tracks-desc">Tracks (desc)</option>
-                      <option value="owner-asc">Owner (A-Z)</option>
-                      <option value="owner-desc">Owner (Z-A)</option>
-                    </select>
-                  </label>
+                <div className="space-y-4">
+                  <div className="md:max-w-md">
+                    <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
+                      Default view
+                      <select
+                        value={playlistView}
+                        onChange={(event) => setPlaylistView(event.target.value)}
+                        className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                      >
+                        <option value="grid">Grid</option>
+                        <option value="list">List</option>
+                        <option value="table">Table</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="md:max-w-md">
+                    <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
+                      Default sort
+                      <select
+                        value={playlistSort}
+                        onChange={(event) => setPlaylistSort(event.target.value)}
+                        className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                      >
+                        <option value="default">Default</option>
+                        <option value="recently-updated-estimated">Recently updated</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                        <option value="tracks-asc">Tracks (asc)</option>
+                        <option value="tracks-desc">Tracks (desc)</option>
+                        <option value="owner-asc">Owner (A-Z)</option>
+                        <option value="owner-desc">Owner (Z-A)</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <ToggleField
-                    label="Show album details panel"
-                    description="Keep album info expanded by default."
-                    checked={playlistAlbumOpen}
-                    onChange={setPlaylistAlbumOpen}
-                  />
-                  <ToggleField
-                    label="Show action details panel"
-                    description="Keep playlist action details expanded."
-                    checked={playlistActionsOpen}
-                    onChange={setPlaylistActionsOpen}
-                  />
+                <div className="space-y-3">
+                  <div className="md:max-w-md">
+                    <ToggleField
+                      label="Show album details panel"
+                      description="Keep album info expanded by default."
+                      checked={playlistAlbumOpen}
+                      onChange={setPlaylistAlbumOpen}
+                    />
+                  </div>
+                  <div className="md:max-w-md">
+                    <ToggleField
+                      label="Show action details panel"
+                      description="Keep playlist action details expanded."
+                      checked={playlistActionsOpen}
+                      onChange={setPlaylistActionsOpen}
+                    />
+                  </div>
                 </div>
 
                 {playlistError && <p className="text-sm text-red-400">{playlistError}</p>}
@@ -585,22 +593,24 @@ const SettingsPage = ({ user, onLogout }) => {
                 </label>
                 {cacheError && <p className="text-sm text-red-400">{cacheError}</p>}
                 {cacheMessage && <p className="text-sm text-spotify-green">{cacheMessage}</p>}
-                <button
-                  type="button"
-                  onClick={handleSaveCacheSettings}
-                  disabled={cacheSaving}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {cacheSaving ? 'Saving...' : 'Save cache settings'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('/cache')}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-spotify-gray-light bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 text-white transition-colors"
-                >
-                  <span className="icon text-base">storage</span>
-                  Manage cache settings
-                </button>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSaveCacheSettings}
+                    disabled={cacheSaving}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {cacheSaving ? 'Saving...' : 'Save cache settings'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/cache')}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-spotify-gray-light bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 text-white transition-colors"
+                  >
+                    <span className="icon text-base">storage</span>
+                    Manage cache settings
+                  </button>
+                </div>
               </SettingsSection>
             </>
           )}
