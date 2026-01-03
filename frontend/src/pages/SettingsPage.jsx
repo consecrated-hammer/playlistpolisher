@@ -372,6 +372,8 @@ const SettingsPage = ({ user, onLogout }) => {
                       className="w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
                     />
                   </label>
+                </div>
+                <div className="md:max-w-md">
                   <ToggleField
                     label="Cache before backup"
                     description="Refresh the playlist cache before creating backups."
