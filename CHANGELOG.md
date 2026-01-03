@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.0 - 2026-01-04
+- Backups: add a global backups library with grouped view, filtering, sorting, and detail restore flow.
+- Backups: show deleted playlist indicators and snapshot names when playlists are removed.
+- Backups: support rename/delete actions and cache-based snapshot restores.
+- Settings: introduce a new settings page for backup cadence, retention, template, and cache TTL controls.
+
 ## v1.2.1 - 2026-01-03
 - Cache: refresh playlist cache after mutations (sort, dedupe, add/remove, undo).
 - Sorting: improve move analysis and estimate timing using prior sort history.
