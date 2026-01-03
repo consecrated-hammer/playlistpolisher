@@ -382,12 +382,14 @@ const SettingsPage = ({ user, onLogout }) => {
                   />
                 </div>
 
-                <ToggleField
-                  label="Cleanup old backups"
-                  description="Delete backups older than your retention window."
-                  checked={backupCleanupEnabled}
-                  onChange={setBackupCleanupEnabled}
-                />
+                <div className="md:max-w-md">
+                  <ToggleField
+                    label="Cleanup old backups"
+                    description="Delete backups older than your retention window."
+                    checked={backupCleanupEnabled}
+                    onChange={setBackupCleanupEnabled}
+                  />
+                </div>
 
                 <div className={`grid gap-3 md:grid-cols-4 ${backupCleanupEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
                   <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
