@@ -2671,7 +2671,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {/* Playlist Info */}
       <div className="flex flex-col justify-end min-w-0 w-full overflow-hidden">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full md:whitespace-normal md:overflow-visible md:break-words">
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full min-w-0 md:whitespace-normal md:overflow-visible md:break-words">
               {currentPlaylist.name}
             </h1>
             {playlistDescription && (

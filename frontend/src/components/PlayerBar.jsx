@@ -338,14 +338,16 @@ const PlayerBar = () => {
               <span className="icon text-3xl text-spotify-gray-light">music_note</span>
             )}
           </button>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <button
               type="button"
               onClick={handleJumpToTrack}
-              className="flex items-center gap-2 text-sm text-white truncate text-left w-full"
+              className="flex items-center gap-2 text-sm text-white text-left w-full min-w-0 max-w-full"
               aria-label="Jump to current track in playlist"
             >
-              <span className="truncate" title={currentTrack?.name || ''}>{currentTrack?.name || 'Nothing playing'}</span>
+              <span className="truncate min-w-0 flex-1" title={currentTrack?.name || ''}>
+                {currentTrack?.name || 'Nothing playing'}
+              </span>
               {currentTrack?.explicit && (
                 <div className="relative group flex-shrink-0">
                   <span className="text-[10px] font-semibold border border-spotify-gray-mid/60 text-spotify-gray-light w-5 h-5 rounded-full flex items-center justify-center">
@@ -355,7 +357,7 @@ const PlayerBar = () => {
                 </div>
               )}
             </button>
-            <div className="text-xs text-spotify-gray-light truncate">
+            <div className="text-xs text-spotify-gray-light truncate max-w-full min-w-0">
               {artistItems.length > 0 ? (
                 artistItems.map((artist, index) => (
                   <span key={`${artist.name}-${index}`}>
@@ -381,7 +383,7 @@ const PlayerBar = () => {
               )}
             </div>
             {currentTrack?.albumName && (
-              <div className="text-[11px] text-spotify-gray-light truncate">
+              <div className="text-[11px] text-spotify-gray-light truncate max-w-full min-w-0">
                 {albumUrl ? (
                   <a
                     href={albumUrl}
@@ -412,7 +414,7 @@ const PlayerBar = () => {
                   }
                   navigate(targetPath);
                 }}
-                className="text-[11px] text-spotify-gray-light hover:text-white hover:underline text-left truncate"
+                className="text-[11px] text-spotify-gray-light hover:text-white hover:underline text-left truncate max-w-full min-w-0"
                 title={currentContextPlaylist.name}
               >
                 {isContextNavigating ? 'Opening playlist…' : `From: ${currentContextPlaylist.name}`}
