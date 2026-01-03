@@ -2,47 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PlayerContext from './playerContextBase';
 import PlayerProgressContext from './playerProgressContextBase';
 import { authAPI, playerAPI, playlistAPI } from '../services/api';
+import { patchMediaKeySystemAccess } from '../utils/mediaKeys';
 
 const SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
 const REQUIRED_SCOPES = ['streaming', 'user-modify-playback-state'];
 const DEFAULT_VOLUME = 0.75;
 const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000;
-const ROBUSTNESS_FALLBACK = 'SW_SECURE_DECODE';
-
-const patchMediaKeySystemAccess = () => {
-  if (typeof navigator === 'undefined' || typeof navigator.requestMediaKeySystemAccess !== 'function') {
-    return;
-  }
-  if (navigator.__ppMediaKeySystemAccessPatched) return;
-  const original = navigator.requestMediaKeySystemAccess.bind(navigator);
-  navigator.requestMediaKeySystemAccess = async (keySystem, configs = []) => {
-    const addRobustness = (caps) => {
-      if (!Array.isArray(caps)) return caps;
-      return caps.map((cap) => {
-        if (!cap) return cap;
-        if (cap.robustness) return cap;
-        return { ...cap, robustness: ROBUSTNESS_FALLBACK };
-      });
-    };
-    const patchedConfigs = Array.isArray(configs)
-      ? configs.map((config) => {
-        if (!config) return config;
-        return {
-          ...config,
-          audioCapabilities: addRobustness(config.audioCapabilities),
-          videoCapabilities: addRobustness(config.videoCapabilities),
-        };
-      })
-      : configs;
-    try {
-      return await original(keySystem, patchedConfigs);
-    } catch (err) {
-      return original(keySystem, configs);
-    }
-  };
-  navigator.__ppMediaKeySystemAccessPatched = true;
-};
-
 // Helper to log to backend instead of console
 const logToBackend = (level, message, data) => {
   if (level === 'debug') return;
