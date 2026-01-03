@@ -69,16 +69,16 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
       {isDevBuild && (
         <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 border-b border-amber-400/50 sticky top-0 z-50">
           <div className="container mx-auto px-4 py-2">
-            <div className="flex items-center justify-center gap-3 text-amber-950">
+            <div className="flex flex-wrap items-center justify-center gap-3 text-amber-950">
               <span className="icon text-xl animate-pulse">code_blocks</span>
-              <div className="flex items-center gap-2 font-semibold">
+              <div className="flex flex-wrap items-center justify-center gap-2 font-semibold text-center max-w-full">
                 <span className="text-sm uppercase tracking-wide">Development Build</span>
                 <span className="text-xs opacity-75">•</span>
-                <span className="text-xs font-mono">Branch: {imageTag || 'local'}</span>
+                <span className="text-xs font-mono truncate max-w-[200px] sm:max-w-none">Branch: {imageTag || 'local'}</span>
                 {shortCommit && (
                   <>
                     <span className="text-xs opacity-75">•</span>
-                    <span className="text-xs font-mono">Commit: {shortCommit}</span>
+                    <span className="text-xs font-mono truncate max-w-[140px] sm:max-w-none">Commit: {shortCommit}</span>
                   </>
                 )}
               </div>

@@ -2671,13 +2671,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {/* Playlist Info */}
       <div className="flex flex-col justify-end min-w-0 w-full overflow-hidden">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate md:whitespace-normal md:overflow-visible md:break-words">
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full md:whitespace-normal md:overflow-visible md:break-words">
               {currentPlaylist.name}
             </h1>
             {playlistDescription && (
-              <p className="text-spotify-gray-light mb-4 max-w-2xl break-words">{playlistDescription}</p>
+              <p className="text-spotify-gray-light mb-4 max-w-full md:max-w-2xl break-words">{playlistDescription}</p>
             )}
-            <div className="flex flex-wrap items-center gap-2 text-sm text-spotify-gray-light">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-spotify-gray-light max-w-full">
               {(currentPlaylist.owner?.display_name || currentPlaylist.owner?.id) && (
                 <>
                   <span className="font-semibold text-white break-all">{currentPlaylist.owner.display_name || currentPlaylist.owner.id}</span>
