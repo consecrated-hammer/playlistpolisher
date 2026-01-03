@@ -8,8 +8,10 @@ import { playlistAPI, preferencesAPI } from '../services/api';
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },
-  { value: 'largest', label: 'Largest' },
-  { value: 'smallest', label: 'Smallest' },
+  { value: 'backup-asc', label: 'Backup name (A-Z)' },
+  { value: 'backup-desc', label: 'Backup name (Z-A)' },
+  { value: 'playlist-asc', label: 'Playlist name (A-Z)' },
+  { value: 'playlist-desc', label: 'Playlist name (Z-A)' },
 ];
 
 const formatTimestamp = (value) => {
@@ -49,6 +51,9 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
   const [backups, setBackups] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('newest');
+  const [viewMode, setViewMode] = useState('grouped');
+  const [playlistFilter, setPlaylistFilter] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [backupStatus, setBackupStatus] = useState(null);
   const [backupStatusLoading, setBackupStatusLoading] = useState(false);
   const [backupStatusError, setBackupStatusError] = useState(null);
@@ -75,33 +80,146 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
 
   const filteredPlaylist = playlistId ? playlistMap[playlistId] : null;
 
-  const filteredBackups = useMemo(() => {
+  const playlistNameMatches = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return new Set();
+    const matches = new Set();
+    (playlists || []).forEach((playlist) => {
+      const name = playlist?.name || '';
+      if (name.toLowerCase().includes(query)) {
+        matches.add(playlist.id);
+      }
+    });
+    return matches;
+  }, [playlists, searchQuery]);
+
+  const sortedFlatBackups = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     let result = [...backups];
+    if (!playlistId && playlistFilter) {
+      result = result.filter((backup) => backup.playlistId === playlistFilter);
+    }
     if (query) {
-      result = result.filter((backup) => {
-        const playlistName = backup.playlistName || '';
-        const backupName = backup.name || '';
-        const searchable = `${playlistName} ${backupName}`.toLowerCase();
-        return searchable.includes(query);
-      });
+      result = result.filter((backup) => (
+        playlistNameMatches.has(backup.playlistId)
+        || (backup.name || '').toLowerCase().includes(query)
+      ));
     }
     result.sort((a, b) => {
-      if (sortOption === 'oldest' || sortOption === 'newest') {
-        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return sortOption === 'oldest' ? aTime - bTime : bTime - aTime;
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aName = (a.name || '').toLowerCase();
+      const bName = (b.name || '').toLowerCase();
+      const aPlaylist = (a.playlistName || '').toLowerCase();
+      const bPlaylist = (b.playlistName || '').toLowerCase();
+
+      switch (sortOption) {
+        case 'oldest':
+          return aTime - bTime;
+        case 'backup-asc':
+          return aName.localeCompare(bName);
+        case 'backup-desc':
+          return bName.localeCompare(aName);
+        case 'playlist-asc':
+          return aPlaylist.localeCompare(bPlaylist);
+        case 'playlist-desc':
+          return bPlaylist.localeCompare(aPlaylist);
+        case 'newest':
+        default:
+          return bTime - aTime;
       }
-      if (sortOption === 'smallest') {
-        return (a.trackCount || 0) - (b.trackCount || 0);
-      }
-      if (sortOption === 'largest') {
-        return (b.trackCount || 0) - (a.trackCount || 0);
-      }
-      return 0;
     });
     return result;
-  }, [backups, searchQuery, sortOption]);
+  }, [backups, playlistFilter, playlistId, playlistNameMatches, searchQuery, sortOption]);
+
+  const groupedBackups = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const groups = new Map();
+    backups.forEach((backup) => {
+      if (!playlistId && playlistFilter && backup.playlistId !== playlistFilter) return;
+      if (!groups.has(backup.playlistId)) {
+        groups.set(backup.playlistId, {
+          playlistId: backup.playlistId,
+          playlistName: backup.playlistName || playlistMap[backup.playlistId]?.name || 'Playlist',
+          items: [],
+        });
+      }
+      groups.get(backup.playlistId).items.push(backup);
+    });
+
+    const results = [];
+    groups.forEach((group) => {
+      const playlistMatches = playlistNameMatches.has(group.playlistId);
+      const items = (query && !playlistMatches)
+        ? group.items.filter((backup) => (backup.name || '').toLowerCase().includes(query))
+        : group.items;
+      if (items.length === 0) return;
+      const sortedItems = [...items].sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      });
+      const latestBackup = sortedItems[0] || null;
+      results.push({
+        ...group,
+        items: sortedItems,
+        backupCount: sortedItems.length,
+        latestBackup,
+      });
+    });
+
+    results.sort((a, b) => {
+      const aTime = a.latestBackup?.createdAt ? new Date(a.latestBackup.createdAt).getTime() : 0;
+      const bTime = b.latestBackup?.createdAt ? new Date(b.latestBackup.createdAt).getTime() : 0;
+      const aPlaylist = (a.playlistName || '').toLowerCase();
+      const bPlaylist = (b.playlistName || '').toLowerCase();
+      const aBackupName = (a.latestBackup?.name || '').toLowerCase();
+      const bBackupName = (b.latestBackup?.name || '').toLowerCase();
+
+      switch (sortOption) {
+        case 'oldest':
+          return aTime - bTime;
+        case 'backup-asc':
+          return aBackupName.localeCompare(bBackupName);
+        case 'backup-desc':
+          return bBackupName.localeCompare(aBackupName);
+        case 'playlist-asc':
+          return aPlaylist.localeCompare(bPlaylist);
+        case 'playlist-desc':
+          return bPlaylist.localeCompare(aPlaylist);
+        case 'newest':
+        default:
+          return bTime - aTime;
+      }
+    });
+
+    return results;
+  }, [backups, playlistFilter, playlistId, playlistMap, playlistNameMatches, searchQuery, sortOption]);
+
+  const showGroupedView = !playlistId && viewMode === 'grouped';
+
+  const playlistFilterOptions = useMemo(() => {
+    const seen = new Map();
+    backups.forEach((backup) => {
+      if (!backup.playlistId) return;
+      if (!seen.has(backup.playlistId)) {
+        seen.set(
+          backup.playlistId,
+          backup.playlistName || playlistMap[backup.playlistId]?.name || 'Playlist',
+        );
+      }
+    });
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [backups, playlistMap]);
+
+  const handleToggleGroup = (groupId) => {
+    setExpandedGroups((prev) => {
+      const current = prev[groupId];
+      return { ...prev, [groupId]: current === undefined ? false : !current };
+    });
+  };
 
   const loadBackupStatus = useCallback(async (id, playlistName) => {
     setBackupStatusLoading(true);
@@ -185,6 +303,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
 
   const handleRemoveFilter = () => {
     setSearchParams({});
+    setPlaylistFilter('');
   };
 
   const handleCreateBackup = async () => {
@@ -234,6 +353,10 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
     }
   };
 
+  const hasGroupedResults = groupedBackups.length > 0;
+  const hasFlatResults = sortedFlatBackups.length > 0;
+  const showEmptyState = showGroupedView ? !hasGroupedResults : !hasFlatResults;
+
   return (
     <Layout user={user} onLogout={onLogout}>
       <div className="bg-gradient-to-b from-spotify-gray-dark to-spotify-black text-white">
@@ -276,7 +399,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
           )}
 
           {playlistId && (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-4">
               <div className="bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-2xl p-4 space-y-4">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Cached snapshot</p>
@@ -360,8 +483,8 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
           )}
 
           <div className="bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-2xl p-4 space-y-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div className="flex-1">
+            <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end md:gap-4">
+              <div className="flex-1 min-w-[220px]">
                 <label className="text-xs uppercase tracking-wide text-spotify-gray-light">Search backups</label>
                 <input
                   type="text"
@@ -371,7 +494,22 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                   className="mt-2 w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
                 />
               </div>
-              <div className="flex flex-col gap-2 md:w-56">
+              {!playlistId && (
+                <div className="flex flex-col gap-2 md:w-64">
+                  <label className="text-xs uppercase tracking-wide text-spotify-gray-light">Playlist filter</label>
+                  <select
+                    value={playlistFilter}
+                    onChange={(event) => setPlaylistFilter(event.target.value)}
+                    className="bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                  >
+                    <option value="">All playlists</option>
+                    {playlistFilterOptions.map((option) => (
+                      <option key={option.id} value={option.id}>{option.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="flex flex-col gap-2 md:w-48">
                 <label className="text-xs uppercase tracking-wide text-spotify-gray-light">Sort</label>
                 <select
                   value={sortOption}
@@ -383,6 +521,35 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                   ))}
                 </select>
               </div>
+              {!playlistId && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs uppercase tracking-wide text-spotify-gray-light">View mode</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('grouped')}
+                      className={`px-3 py-2 rounded-lg text-sm border ${
+                        viewMode === 'grouped'
+                          ? 'bg-spotify-green text-black border-spotify-green'
+                          : 'bg-spotify-gray-dark/60 text-white border-spotify-gray-mid/60 hover:bg-spotify-gray-mid/60'
+                      }`}
+                    >
+                      Grouped
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('flat')}
+                      className={`px-3 py-2 rounded-lg text-sm border ${
+                        viewMode === 'flat'
+                          ? 'bg-spotify-green text-black border-spotify-green'
+                          : 'bg-spotify-gray-dark/60 text-white border-spotify-gray-mid/60 hover:bg-spotify-gray-mid/60'
+                      }`}
+                    >
+                      Flat list
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {loading && (
@@ -395,7 +562,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
               <ErrorMessage message={error} />
             )}
 
-            {!loading && !error && filteredBackups.length === 0 && (
+            {!loading && !error && showEmptyState && (
               <div className="bg-spotify-gray-dark/40 rounded-lg p-8 text-center border border-spotify-gray-mid/60">
                 <span className="icon text-6xl text-spotify-gray-light mb-4 block">inventory_2</span>
                 <h2 className="text-xl font-semibold text-white mb-2">
@@ -409,9 +576,66 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
               </div>
             )}
 
-            {!loading && !error && filteredBackups.length > 0 && (
+            {!loading && !error && !showEmptyState && showGroupedView && (
+              <div className="space-y-4">
+                {groupedBackups.map((group) => {
+                  const isExpanded = expandedGroups[group.playlistId] ?? true;
+                  return (
+                    <div
+                      key={group.playlistId}
+                      className="bg-spotify-gray-dark/60 border border-spotify-gray-mid/60 rounded-2xl overflow-hidden"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleToggleGroup(group.playlistId)}
+                        className="w-full text-left px-4 py-3 flex items-center justify-between gap-4 hover:bg-spotify-gray-mid/40 transition-colors"
+                      >
+                        <div className="space-y-1">
+                          <p className="text-lg font-semibold text-white">{group.playlistName}</p>
+                          <p className="text-sm text-spotify-gray-light">
+                            {group.backupCount} {group.backupCount === 1 ? 'backup' : 'backups'} •{' '}
+                            {formatTimestamp(group.latestBackup?.createdAt)}
+                          </p>
+                        </div>
+                        <span
+                          className={`icon text-spotify-gray-light text-xl transition-transform ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`}
+                        >
+                          expand_more
+                        </span>
+                      </button>
+                      {isExpanded && (
+                        <div className="border-t border-spotify-gray-mid/60">
+                          <div className="space-y-2 p-3">
+                            {group.items.map((backup) => (
+                              <button
+                                key={`${group.playlistId}-${backup.id}`}
+                                type="button"
+                                onClick={() => navigate(`/backups/${backup.id}`, { state: { playlistId: backup.playlistId } })}
+                                className="w-full text-left bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-xl p-3 hover:bg-spotify-gray-mid/40 transition-colors flex items-center justify-between gap-4"
+                              >
+                                <div className="space-y-1">
+                                  <p className="text-base font-semibold text-white">{backup.name || 'Backup'}</p>
+                                  <p className="text-sm text-spotify-gray-light">
+                                    {formatTimestamp(backup.createdAt)} • {backup.trackCount ?? 0} tracks
+                                  </p>
+                                </div>
+                                <span className="icon text-spotify-gray-light text-xl">chevron_right</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {!loading && !error && !showEmptyState && !showGroupedView && (
               <div className="space-y-3">
-                {filteredBackups.map((backup) => (
+                {sortedFlatBackups.map((backup) => (
                   <button
                     key={`${backup.playlistId}-${backup.id}`}
                     type="button"
