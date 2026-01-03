@@ -217,7 +217,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
   const handleToggleGroup = (groupId) => {
     setExpandedGroups((prev) => {
       const current = prev[groupId];
-      return { ...prev, [groupId]: current === undefined ? false : !current };
+      return { ...prev, [groupId]: current === undefined ? true : !current };
     });
   };
 
@@ -579,16 +579,16 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
             {!loading && !error && !showEmptyState && showGroupedView && (
               <div className="space-y-4">
                 {groupedBackups.map((group) => {
-                  const isExpanded = expandedGroups[group.playlistId] ?? true;
+                  const isExpanded = expandedGroups[group.playlistId] ?? false;
                   return (
                     <div
                       key={group.playlistId}
-                      className="bg-spotify-gray-dark/60 border border-spotify-gray-mid/60 rounded-2xl overflow-hidden"
+                      className="border border-spotify-gray-mid/60 rounded-2xl overflow-hidden bg-spotify-gray-dark/40"
                     >
                       <button
                         type="button"
                         onClick={() => handleToggleGroup(group.playlistId)}
-                        className="w-full text-left px-4 py-3 flex items-center justify-between gap-4 hover:bg-spotify-gray-mid/40 transition-colors"
+                        className="w-full text-left px-4 py-3 flex items-center justify-between gap-4 bg-spotify-gray-mid/40 hover:bg-spotify-gray-mid/50 transition-colors"
                       >
                         <div className="space-y-1">
                           <p className="text-lg font-semibold text-white">{group.playlistName}</p>
