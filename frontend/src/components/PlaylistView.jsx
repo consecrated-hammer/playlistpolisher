@@ -2671,7 +2671,9 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {/* Playlist Info */}
       <div className="flex flex-col justify-end min-w-0 w-full overflow-hidden">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 break-words">{currentPlaylist.name}</h1>
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate md:whitespace-normal md:overflow-visible md:break-words">
+              {currentPlaylist.name}
+            </h1>
             {playlistDescription && (
               <p className="text-spotify-gray-light mb-4 max-w-2xl break-words">{playlistDescription}</p>
             )}
@@ -3439,7 +3441,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           )}
         </div>
         </div>
-        <div className="md:hidden overflow-x-hidden">
+        <div className="md:hidden overflow-x-hidden max-w-full">
           <div className="divide-y divide-spotify-gray-mid/30">
             {sortedTracks.map((track, index) => {
               const isCurrentTrack = isSamePlaylistEntry(track);
@@ -3449,7 +3451,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <div
                   key={track.selectionKey}
                   onClick={(event) => openContextMenu(event, track, index)}
-                  className={`px-4 py-3 text-sm transition-colors cursor-pointer ${
+                  className={`px-4 py-3 text-sm transition-colors cursor-pointer overflow-hidden max-w-full ${
                     isCurrentTrack ? 'bg-spotify-green/10 border-l-2 border-spotify-green/80' : 'hover:bg-spotify-gray-mid/30'
                   }`}
                   data-track-id={track.id}
@@ -3457,7 +3459,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   data-track-linked-id={track.linked_from?.id}
                   data-track-linked-uri={track.linked_from?.uri}
                 >
-                  <div className="flex items-start gap-3 min-w-0">
+                  <div className="flex items-start gap-3 min-w-0 w-full">
                     {track.album?.images?.length > 0 && (
                       <img
                         src={getBestImage(track.album.images)}
@@ -3465,18 +3467,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                         className="w-12 h-12 rounded flex-shrink-0"
                       />
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="block text-white font-medium truncate" title={track.name || ''}>
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      <p className="block text-white font-medium truncate max-w-full" title={track.name || ''}>
                         {track.name}
                         {track.explicit && (
                           <span className="ml-2 text-xs bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
                         )}
                       </p>
-                      <p className="text-spotify-gray-light text-xs truncate">
+                      <p className="text-spotify-gray-light text-xs truncate max-w-full">
                         {(track.artists || []).map((artist) => artist.name).join(', ')}
                       </p>
                       {isExpanded && (
-                        <div className="text-[11px] text-spotify-gray-light mt-1">
+                        <div className="text-[11px] text-spotify-gray-light mt-1 truncate max-w-full">
                           Added {formatDateTime(track.added_at)}
                         </div>
                       )}
