@@ -121,6 +121,26 @@ def list_backups(playlist_id: str, user_id: str, limit: Optional[int] = None) ->
         return [dict(row) for row in cur.fetchall()]
 
 
+def list_all_backups(user_id: str, limit: Optional[int] = None) -> List[Dict]:
+    if not user_id:
+        return []
+    query = """
+        SELECT id, playlist_id, user_id, name, description, track_count,
+               snapshot_id, source, schedule_id, created_at
+        FROM playlist_backups
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+    """
+    params: List = [user_id]
+    if limit is not None:
+        query = f"{query} LIMIT ?"
+        params.append(limit)
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(query, tuple(params))
+        return [dict(row) for row in cur.fetchall()]
+
+
 def get_backup(backup_id: int, playlist_id: str, user_id: str) -> Optional[Dict]:
     with get_db_connection() as conn:
         cur = conn.cursor()

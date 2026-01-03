@@ -34,20 +34,15 @@ const BackupDetailPage = ({ user, onLogout }) => {
 
   const playlistIdFromState = location.state?.playlistId || null;
 
-  const resolvePlaylistId = useCallback(async (playlists, targetBackupId) => {
+  const resolvePlaylistId = useCallback(async (targetBackupId) => {
     if (playlistIdFromState) return playlistIdFromState;
-    for (const playlist of playlists) {
-      try {
-        const list = await playlistAPI.listBackups(playlist.id);
-        const match = (list || []).find((backup) => String(backup.id) === String(targetBackupId));
-        if (match) {
-          return playlist.id;
-        }
-      } catch (err) {
-        // keep searching
-      }
+    try {
+      const list = await playlistAPI.listAllBackups();
+      const match = (list || []).find((backup) => String(backup.id) === String(targetBackupId));
+      return match?.playlist_id || match?.playlistId || null;
+    } catch (err) {
+      return null;
     }
-    return null;
   }, [playlistIdFromState]);
 
   const loadBackupDetail = useCallback(async () => {
@@ -56,18 +51,21 @@ const BackupDetailPage = ({ user, onLogout }) => {
     try {
       const playlists = await playlistAPI.getPlaylists();
       const playlistMap = new Map((playlists || []).map((pl) => [pl.id, pl]));
-      const resolvedPlaylistId = await resolvePlaylistId(playlists || [], backupId);
+      const resolvedPlaylistId = await resolvePlaylistId(backupId);
       if (!resolvedPlaylistId) {
         setError('Unable to locate this backup.');
         return;
       }
 
       const detail = await playlistAPI.getBackupDetail(resolvedPlaylistId, backupId);
-      const playlistName = playlistMap.get(resolvedPlaylistId)?.name || 'Playlist';
+      const playlistMeta = playlistMap.get(resolvedPlaylistId);
+      const playlistDeleted = !playlistMeta;
+      const playlistName = playlistMeta?.name || 'Deleted playlist';
       setBackupMeta({
         backupId: detail.backup_id,
         playlistId: resolvedPlaylistId,
         playlistName,
+        playlistDeleted,
         name: detail.name,
         createdAt: detail.created_at,
         trackCount: detail.track_count ?? 0,
@@ -75,7 +73,8 @@ const BackupDetailPage = ({ user, onLogout }) => {
       setTracks(detail.tracks || []);
 
       const dateStamp = detail.created_at ? new Date(detail.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
-      setRestoreCloneName(`${playlistName} (backup ${dateStamp})`);
+      const cloneBaseName = playlistMeta?.name || 'Restored playlist';
+      setRestoreCloneName(`${cloneBaseName} (backup ${dateStamp})`);
     } catch (err) {
       setError(err.message || 'Failed to load backup.');
     } finally {
@@ -89,6 +88,7 @@ const BackupDetailPage = ({ user, onLogout }) => {
 
   const handleRestore = async () => {
     if (!backupMeta || restoreLoading) return;
+    if (backupMeta.playlistDeleted && restoreModal?.mode === 'overwrite') return;
     setRestoreLoading(true);
     setRestoreError(null);
     setRestoreMessage(null);
@@ -124,9 +124,16 @@ const BackupDetailPage = ({ user, onLogout }) => {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-white">{backupMeta?.name || 'Backup details'}</h1>
-              <p className="text-spotify-gray-light mt-1">
-                {backupMeta?.playlistName ? `${backupMeta.playlistName} • ` : ''}{backupMeta?.trackCount ?? 0} tracks
-              </p>
+              <div className="flex flex-wrap items-center gap-2 text-spotify-gray-light mt-1">
+                {backupMeta?.playlistName && <span>{backupMeta.playlistName}</span>}
+                {backupMeta?.playlistDeleted && (
+                  <span className="text-[10px] uppercase tracking-wide text-amber-300 border border-amber-400/60 px-2 py-0.5 rounded-full">
+                    Deleted
+                  </span>
+                )}
+                {backupMeta?.playlistName && <span>•</span>}
+                <span>{backupMeta?.trackCount ?? 0} tracks</span>
+              </div>
               {backupMeta?.createdAt && (
                 <p className="text-sm text-spotify-gray-light mt-1">
                   Created {formatTimestamp(backupMeta.createdAt)}
@@ -140,7 +147,7 @@ const BackupDetailPage = ({ user, onLogout }) => {
               >
                 ← Back to Backups
               </button>
-              {backupMeta?.playlistId && (
+              {backupMeta?.playlistId && !backupMeta?.playlistDeleted && (
                 <button
                   onClick={() => navigate(`/playlist/${backupMeta.playlistId}`)}
                   className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60"
@@ -159,12 +166,17 @@ const BackupDetailPage = ({ user, onLogout }) => {
                   <p className="text-sm text-spotify-gray-light mt-1">
                     Overwrite the playlist or create a new one from this backup.
                   </p>
+                  {backupMeta?.playlistDeleted && (
+                    <p className="text-sm text-amber-300 mt-2">
+                      Original playlist deleted. Restore as new to recreate it.
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
                     onClick={() => setRestoreModal({ mode: 'overwrite' })}
-                    disabled={restoreLoading}
+                    disabled={restoreLoading || backupMeta?.playlistDeleted}
                     className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Restore

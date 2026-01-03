@@ -341,6 +341,15 @@ export const playlistAPI = {
   },
 
   /**
+   * List all saved backups for the user
+   */
+  listAllBackups: async () => {
+    const response = await api.get('/playlists/backups/all');
+    const data = response.data;
+    return Array.isArray(data?.backups) ? data.backups : Array.isArray(data) ? data : [];
+  },
+
+  /**
    * Preview backup contents
    */
   getBackupPreview: async (playlistId, backupId, limit = 50) => {

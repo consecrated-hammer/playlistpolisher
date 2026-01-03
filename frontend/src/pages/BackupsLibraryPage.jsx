@@ -79,6 +79,8 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
   }, [playlists]);
 
   const filteredPlaylist = playlistId ? playlistMap[playlistId] : null;
+  const filteredPlaylistDeleted = Boolean(playlistId && !filteredPlaylist);
+  const filteredPlaylistName = filteredPlaylist?.name || (playlistId ? 'Deleted playlist' : 'Playlist');
 
   const playlistNameMatches = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -141,8 +143,12 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
         groups.set(backup.playlistId, {
           playlistId: backup.playlistId,
           playlistName: backup.playlistName || playlistMap[backup.playlistId]?.name || 'Playlist',
+          isDeleted: Boolean(backup.playlistDeleted),
           items: [],
         });
+      }
+      if (backup.playlistDeleted) {
+        groups.get(backup.playlistId).isDeleted = true;
       }
       groups.get(backup.playlistId).items.push(backup);
     });
@@ -251,15 +257,18 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
     setRestoreMessage(null);
     try {
       const playlistList = await playlistAPI.getPlaylists();
+      const playlistLookup = new Map((playlistList || []).map((playlist) => [playlist.id, playlist]));
       setPlaylists(playlistList || []);
 
       if (playlistId) {
-        const playlistName = playlistList?.find((pl) => pl.id === playlistId)?.name || 'Playlist';
+        const playlistName = playlistLookup.get(playlistId)?.name || 'Deleted playlist';
+        const playlistDeleted = !playlistLookup.get(playlistId);
         const list = await playlistAPI.listBackups(playlistId);
         const normalized = (list || []).map((backup) => ({
           id: backup.id,
           playlistId: backup.playlist_id || playlistId,
           playlistName,
+          playlistDeleted,
           name: backup.name,
           createdAt: backup.created_at,
           trackCount: backup.track_count ?? 0,
@@ -267,26 +276,19 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
         setBackups(normalized);
         await loadBackupStatus(playlistId, playlistName);
       } else {
-        const results = await Promise.allSettled(
-          (playlistList || []).map(async (playlist) => ({
-            playlist,
-            list: await playlistAPI.listBackups(playlist.id),
-          })),
-        );
-        const normalized = [];
-        results.forEach((result) => {
-          if (result.status !== 'fulfilled') return;
-          const { playlist, list } = result.value || {};
-          (list || []).forEach((backup) => {
-            normalized.push({
-              id: backup.id,
-              playlistId: backup.playlist_id || playlist?.id,
-              playlistName: playlist?.name || 'Playlist',
-              name: backup.name,
-              createdAt: backup.created_at,
-              trackCount: backup.track_count ?? 0,
-            });
-          });
+        const list = await playlistAPI.listAllBackups();
+        const normalized = (list || []).map((backup) => {
+          const playlistIdFromBackup = backup.playlist_id || backup.playlistId;
+          const playlistMeta = playlistLookup.get(playlistIdFromBackup);
+          return {
+            id: backup.id,
+            playlistId: playlistIdFromBackup,
+            playlistName: playlistMeta?.name || 'Deleted playlist',
+            playlistDeleted: !playlistMeta,
+            name: backup.name,
+            createdAt: backup.created_at,
+            trackCount: backup.track_count ?? 0,
+          };
         });
         setBackups(normalized);
       }
@@ -382,7 +384,12 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                 <span className="text-xs uppercase tracking-wide text-spotify-gray-light">Filtered playlist</span>
                 <div className="flex items-center gap-2 bg-spotify-gray-mid/60 text-white text-sm px-3 py-1.5 rounded-full">
                   <span className="icon text-sm">filter_alt</span>
-                  <span>{filteredPlaylist?.name || 'Playlist'}</span>
+                  <span>{filteredPlaylistName}</span>
+                  {filteredPlaylistDeleted && (
+                    <span className="text-[10px] uppercase tracking-wide text-amber-300 border border-amber-400/60 px-2 py-0.5 rounded-full">
+                      Deleted
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={handleRemoveFilter}
@@ -406,6 +413,11 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                   <p className="text-sm text-spotify-gray-light mt-1">
                     Restore from the latest cached snapshot of this playlist.
                   </p>
+                  {filteredPlaylistDeleted && (
+                    <p className="text-sm text-amber-300 mt-2">
+                      Original playlist deleted. Restore as new to recreate it.
+                    </p>
+                  )}
                 </div>
                 {backupStatusLoading ? (
                   <div className="flex items-center gap-2 text-spotify-gray-light text-sm">
@@ -436,7 +448,12 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                   <button
                     type="button"
                     onClick={() => setRestoreModal({ mode: 'overwrite', source: 'snapshot' })}
-                    disabled={restoreLoading || !backupStatus?.cached || (backupStatus?.track_count || 0) === 0}
+                    disabled={
+                      restoreLoading
+                      || filteredPlaylistDeleted
+                      || !backupStatus?.cached
+                      || (backupStatus?.track_count || 0) === 0
+                    }
                     className="w-full px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Restore
@@ -591,7 +608,14 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                         className="w-full text-left px-4 py-3 flex items-center justify-between gap-4 bg-spotify-gray-mid/40 hover:bg-spotify-gray-mid/50 transition-colors"
                       >
                         <div className="space-y-1">
-                          <p className="text-lg font-semibold text-white">{group.playlistName}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-lg font-semibold text-white">{group.playlistName}</p>
+                            {group.isDeleted && (
+                              <span className="text-[10px] uppercase tracking-wide text-amber-300 border border-amber-400/60 px-2 py-0.5 rounded-full">
+                                Deleted
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-spotify-gray-light">
                             {group.backupCount} {group.backupCount === 1 ? 'backup' : 'backups'} •{' '}
                             {formatTimestamp(group.latestBackup?.createdAt)}
@@ -643,7 +667,14 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                     className="w-full text-left bg-spotify-gray-dark/60 border border-spotify-gray-mid/60 rounded-2xl p-4 hover:bg-spotify-gray-mid/40 transition-colors flex items-center justify-between gap-4"
                   >
                     <div className="space-y-1">
-                      <p className="text-xs uppercase tracking-wide text-spotify-gray-light">{backup.playlistName}</p>
+                      <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-spotify-gray-light">
+                        <span>{backup.playlistName}</span>
+                        {backup.playlistDeleted && (
+                          <span className="text-[10px] uppercase tracking-wide text-amber-300 border border-amber-400/60 px-2 py-0.5 rounded-full">
+                            Deleted
+                          </span>
+                        )}
+                      </div>
                       <p className="text-lg font-semibold text-white">{backup.name || 'Backup'}</p>
                       <p className="text-sm text-spotify-gray-light">
                         {formatTimestamp(backup.createdAt)} • {backup.trackCount ?? 0} tracks

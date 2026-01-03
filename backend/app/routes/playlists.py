@@ -921,6 +921,26 @@ async def create_playlist_backup(
     )
 
 
+@router.get("/backups/all", response_model=PlaylistBackupListResponse)
+async def list_all_backups(
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    backups = playlist_backup_store.list_all_backups(session_mgr.get_user_id())
+    summaries = [
+        PlaylistBackupSummary(
+            id=backup["id"],
+            playlist_id=backup["playlist_id"],
+            name=backup["name"],
+            track_count=backup["track_count"],
+            created_at=backup["created_at"],
+            snapshot_id=backup.get("snapshot_id"),
+            source=backup.get("source"),
+        )
+        for backup in backups
+    ]
+    return PlaylistBackupListResponse(backups=summaries)
+
+
 @router.get("/{playlist_id}/backups", response_model=PlaylistBackupListResponse)
 async def list_playlist_backups(
     playlist_id: str,
@@ -1047,15 +1067,26 @@ def _restore_playlist_from_track_ids(
 
     target_playlist_id = playlist_id
     if body.mode == "clone":
-        meta = sp.playlist(playlist_id, fields="name,description,public,collaborative,owner(id)")
-        base_name = meta.get("name") or "Restored playlist"
+        meta = None
+        try:
+            meta = sp.playlist(playlist_id, fields="name,description,public,collaborative,owner(id)")
+        except SpotifyException as exc:
+            if exc.http_status == 404:
+                logger.warning("Playlist %s not found for clone restore; using fallback metadata.", playlist_id)
+            else:
+                raise
+        base_name = (meta.get("name") if meta else None) or "Restored playlist"
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         target_name = body.name or f"{base_name} (backup {timestamp})"
-        payload_public = body.public if body.public is not None else meta.get("public")
-        payload_collab = body.collaborative if body.collaborative is not None else meta.get("collaborative")
+        payload_public = body.public if body.public is not None else (meta.get("public") if meta else False)
+        payload_collab = body.collaborative if body.collaborative is not None else (
+            meta.get("collaborative") if meta else False
+        )
         if payload_public:
             payload_collab = False
-        target_description = body.description if body.description is not None else (meta.get("description") or "")
+        target_description = body.description if body.description is not None else (
+            meta.get("description") or "" if meta else ""
+        )
         new_playlist = sp.user_playlist_create(
             user=session_mgr.get_user_id(),
             name=target_name,
