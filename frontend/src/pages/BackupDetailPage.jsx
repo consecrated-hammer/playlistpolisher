@@ -121,7 +121,17 @@ const BackupDetailPage = ({ user, onLogout }) => {
     setDeleteError(null);
     try {
       await playlistAPI.deleteBackup(backupMeta.playlistId, backupMeta.backupId);
-      navigate(`/backups${backupMeta.playlistId ? `?playlistId=${backupMeta.playlistId}` : ''}`);
+      let remaining = null;
+      try {
+        remaining = await playlistAPI.listBackups(backupMeta.playlistId);
+      } catch (err) {
+        remaining = null;
+      }
+      if (!remaining || remaining.length === 0) {
+        navigate('/backups');
+      } else {
+        navigate(`/backups?playlistId=${backupMeta.playlistId}`);
+      }
     } catch (err) {
       setDeleteError(err.message || 'Failed to delete backup.');
     } finally {

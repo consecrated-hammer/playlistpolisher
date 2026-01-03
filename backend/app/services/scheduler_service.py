@@ -3,7 +3,9 @@ import time
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
+from app.config import settings
 from app.db import schedules as schedule_store
 from app.db import playlist_backups as backup_store
 from app.db import preferences as preference_store
@@ -159,8 +161,12 @@ class SchedulerService:
             logger.info("Scheduled backup found no playlists to update (user=%s)", user_id)
             return
 
-        now = datetime.now(timezone.utc)
-        timestamp = now.strftime("%Y-%m-%d %H:%M UTC")
+        try:
+            local_tz = ZoneInfo(settings.log_timezone)
+        except Exception:
+            local_tz = timezone.utc
+        now = datetime.now(local_tz)
+        timestamp = now.strftime("%Y-%m-%d %H:%M")
         created = 0
         skipped = 0
         for pid, name in playlist_items:
