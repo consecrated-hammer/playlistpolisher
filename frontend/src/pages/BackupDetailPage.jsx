@@ -259,35 +259,39 @@ const BackupDetailPage = ({ user, onLogout }) => {
                 </div>
               </div>
               <div className="pt-4 border-t border-spotify-gray-mid/60">
-                <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Backup actions</p>
-                <p className="text-sm text-spotify-gray-light mt-1">
-                  Rename or remove this backup from your library.
-                </p>
-                {deleteError && <p className="text-sm text-red-400 mt-2">{deleteError}</p>}
-                <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRenameError(null);
-                      setRenameName(backupMeta.name || '');
-                      setRenameModalOpen(true);
-                    }}
-                    disabled={renameLoading}
-                    className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Rename backup
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeleteError(null);
-                      setDeleteModalOpen(true);
-                    }}
-                    disabled={deleteLoading}
-                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Delete backup
-                  </button>
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Backup actions</p>
+                    <p className="text-sm text-spotify-gray-light mt-1">
+                      Rename or remove this backup from your library.
+                    </p>
+                    {deleteError && <p className="text-sm text-red-400 mt-2">{deleteError}</p>}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2 md:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRenameError(null);
+                        setRenameName(backupMeta.name || '');
+                        setRenameModalOpen(true);
+                      }}
+                      disabled={renameLoading}
+                      className="px-4 py-2 rounded-lg border border-spotify-gray-light text-white bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Rename backup
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleteModalOpen(true);
+                      }}
+                      disabled={deleteLoading}
+                      className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Delete backup
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
