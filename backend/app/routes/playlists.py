@@ -8,7 +8,7 @@ This module defines all playlist-related API endpoints including:
 All routes are prefixed with /playlists and require authentication.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Path, Request, Query
+from fastapi import APIRouter, HTTPException, Depends, Path, Request, Query, Body
 from fastapi.responses import StreamingResponse
 from typing import List, Optional, Dict, Any, Literal
 import logging
@@ -985,7 +985,7 @@ async def get_playlist_backup_detail(
 async def restore_playlist_from_named_backup(
     playlist_id: str,
     backup_id: int = Path(..., ge=1),
-    body: PlaylistRestoreRequest,
+    body: PlaylistRestoreRequest = Body(...),
     session_mgr: SessionManager = Depends(require_auth),
     spotify: SpotifyService = Depends(get_spotify_service),
 ):
