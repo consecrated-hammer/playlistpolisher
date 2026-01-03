@@ -42,6 +42,26 @@ const SettingsSection = ({ title, description, open, onToggle, children }) => (
   </div>
 );
 
+const ToggleField = ({ label, description, checked, onChange, disabled = false }) => (
+  <label className={`flex items-center justify-between gap-4 bg-spotify-gray-mid/30 rounded-lg border border-spotify-gray-mid/60 px-3 py-3 ${disabled ? 'opacity-50' : ''}`}>
+    <div>
+      <p className="text-sm text-white">{label}</p>
+      {description && <p className="text-xs text-spotify-gray-light">{description}</p>}
+    </div>
+    <span className="relative inline-flex items-center">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        disabled={disabled}
+        className="sr-only peer"
+      />
+      <span className="w-11 h-6 rounded-full bg-spotify-gray-mid peer-checked:bg-spotify-green transition-colors" />
+      <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+    </span>
+  </label>
+);
+
 const SettingsPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -92,6 +112,22 @@ const SettingsPage = ({ user, onLogout }) => {
       minute: '2-digit',
     });
   }, [cleanupSchedule]);
+
+  const backupTemplateExample = useMemo(() => {
+    const exampleName = 'Friday Mix';
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const datetime = `${date} ${time}`;
+    const safeTemplate = backupNameTemplate && backupNameTemplate.trim()
+      ? backupNameTemplate
+      : '{playlist} backup {date}';
+    return safeTemplate
+      .replace('{playlist}', exampleName)
+      .replace('{date}', date)
+      .replace('{time}', time)
+      .replace('{datetime}', datetime);
+  }, [backupNameTemplate]);
 
   const toggleSection = (key) => {
     setSectionsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -297,6 +333,9 @@ const SettingsPage = ({ user, onLogout }) => {
                   <p className="text-xs text-spotify-gray-light">
                     Template strings: {'{playlist}'}, {'{date}'}, {'{time}'}, {'{datetime}'}.
                   </p>
+                  <p className="text-xs text-spotify-gray-light">
+                    Example output: <span className="text-white">{backupTemplateExample}</span>
+                  </p>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -311,38 +350,20 @@ const SettingsPage = ({ user, onLogout }) => {
                       className="w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
                     />
                   </label>
-                  <div className="flex items-center justify-between gap-4 bg-spotify-gray-mid/30 rounded-lg border border-spotify-gray-mid/60 px-3 py-3">
-                    <div>
-                      <p className="text-sm text-white">Cache before backup</p>
-                      <p className="text-xs text-spotify-gray-light">Refresh the playlist cache before creating backups.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setBackupCacheFirst((prev) => !prev)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        backupCacheFirst ? 'bg-spotify-green text-black' : 'bg-spotify-gray-mid text-white'
-                      }`}
-                    >
-                      {backupCacheFirst ? 'On' : 'Off'}
-                    </button>
-                  </div>
+                  <ToggleField
+                    label="Cache before backup"
+                    description="Refresh the playlist cache before creating backups."
+                    checked={backupCacheFirst}
+                    onChange={setBackupCacheFirst}
+                  />
                 </div>
 
-                <div className="flex items-center justify-between gap-4 bg-spotify-gray-mid/30 rounded-lg border border-spotify-gray-mid/60 px-3 py-3">
-                  <div>
-                    <p className="text-sm text-white">Cleanup old backups</p>
-                    <p className="text-xs text-spotify-gray-light">Delete backups older than your retention window.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setBackupCleanupEnabled((prev) => !prev)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                      backupCleanupEnabled ? 'bg-spotify-green text-black' : 'bg-spotify-gray-mid text-white'
-                    }`}
-                  >
-                    {backupCleanupEnabled ? 'Enabled' : 'Disabled'}
-                  </button>
-                </div>
+                <ToggleField
+                  label="Cleanup old backups"
+                  description="Delete backups older than your retention window."
+                  checked={backupCleanupEnabled}
+                  onChange={setBackupCleanupEnabled}
+                />
 
                 <div className={`grid gap-3 md:grid-cols-4 ${backupCleanupEnabled ? '' : 'opacity-50 pointer-events-none'}`}>
                   <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
@@ -457,36 +478,18 @@ const SettingsPage = ({ user, onLogout }) => {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="flex items-center justify-between gap-4 bg-spotify-gray-mid/30 rounded-lg border border-spotify-gray-mid/60 px-3 py-3">
-                    <div>
-                      <p className="text-sm text-white">Show album details panel</p>
-                      <p className="text-xs text-spotify-gray-light">Keep album info expanded by default.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPlaylistAlbumOpen((prev) => !prev)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        playlistAlbumOpen ? 'bg-spotify-green text-black' : 'bg-spotify-gray-mid text-white'
-                      }`}
-                    >
-                      {playlistAlbumOpen ? 'On' : 'Off'}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between gap-4 bg-spotify-gray-mid/30 rounded-lg border border-spotify-gray-mid/60 px-3 py-3">
-                    <div>
-                      <p className="text-sm text-white">Show action details panel</p>
-                      <p className="text-xs text-spotify-gray-light">Keep playlist action details expanded.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPlaylistActionsOpen((prev) => !prev)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                        playlistActionsOpen ? 'bg-spotify-green text-black' : 'bg-spotify-gray-mid text-white'
-                      }`}
-                    >
-                      {playlistActionsOpen ? 'On' : 'Off'}
-                    </button>
-                  </div>
+                  <ToggleField
+                    label="Show album details panel"
+                    description="Keep album info expanded by default."
+                    checked={playlistAlbumOpen}
+                    onChange={setPlaylistAlbumOpen}
+                  />
+                  <ToggleField
+                    label="Show action details panel"
+                    description="Keep playlist action details expanded."
+                    checked={playlistActionsOpen}
+                    onChange={setPlaylistActionsOpen}
+                  />
                 </div>
 
                 {playlistError && <p className="text-sm text-red-400">{playlistError}</p>}
@@ -507,21 +510,12 @@ const SettingsPage = ({ user, onLogout }) => {
                 open={sectionsOpen.player}
                 onToggle={() => toggleSection('player')}
               >
-                <div className="flex items-center justify-between gap-4 bg-spotify-gray-mid/30 rounded-lg border border-spotify-gray-mid/60 px-3 py-3">
-                  <div>
-                    <p className="text-sm text-white">Show now playing details</p>
-                    <p className="text-xs text-spotify-gray-light">Keep the now-playing panel expanded.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setNowPlayingOpen((prev) => !prev)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                      nowPlayingOpen ? 'bg-spotify-green text-black' : 'bg-spotify-gray-mid text-white'
-                    }`}
-                  >
-                    {nowPlayingOpen ? 'On' : 'Off'}
-                  </button>
-                </div>
+                <ToggleField
+                  label="Show now playing details"
+                  description="Keep the now-playing panel expanded."
+                  checked={nowPlayingOpen}
+                  onChange={setNowPlayingOpen}
+                />
 
                 {playerError && <p className="text-sm text-red-400">{playerError}</p>}
                 {playerMessage && <p className="text-sm text-spotify-green">{playerMessage}</p>}
@@ -545,6 +539,9 @@ const SettingsPage = ({ user, onLogout }) => {
                   <p className="text-sm text-white">Track cache TTL</p>
                   <p className="text-xs text-spotify-gray-light">
                     Cached track metadata expires after {cacheStats?.ttl_days ?? '—'} days.
+                  </p>
+                  <p className="text-xs text-spotify-gray-light">
+                    Change via `TRACK_CACHE_TTL_DAYS` in your backend environment.
                   </p>
                 </div>
                 <button
