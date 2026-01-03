@@ -8,7 +8,7 @@ This module defines all playlist-related API endpoints including:
 All routes are prefixed with /playlists and require authentication.
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Path, Request
+from fastapi import APIRouter, HTTPException, Depends, Path, Request, Query
 from fastapi.responses import StreamingResponse
 from typing import List, Optional, Dict, Any, Literal
 import logging
@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from app.db import operations as op_store
 from app.db import preferences as preference_store
 from app.db import playlist_cache as playlist_cache_store
+from app.db import playlist_backups as playlist_backup_store
 from app.services.sort_service import get_sort_key_function
 from app.services.cache_warm_service import start_cache_warm_job
 
@@ -461,6 +462,40 @@ class PlaylistBackupStatusResponse(BaseModel):
     is_dirty: bool = False
 
 
+class PlaylistBackupCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = None
+
+
+class PlaylistBackupSummary(BaseModel):
+    id: int
+    playlist_id: str
+    name: str
+    track_count: int
+    created_at: str
+    snapshot_id: Optional[str] = None
+    source: Optional[str] = None
+
+
+class PlaylistBackupListResponse(BaseModel):
+    backups: List[PlaylistBackupSummary]
+
+
+class PlaylistBackupPreviewTrack(BaseModel):
+    track_id: str
+    title: Optional[str] = None
+    album: Optional[str] = None
+    artists: List[str] = Field(default_factory=list)
+
+
+class PlaylistBackupPreviewResponse(BaseModel):
+    backup_id: int
+    playlist_id: str
+    track_count: int
+    limit: int
+    tracks: List[PlaylistBackupPreviewTrack]
+
+
 class PlaylistRestoreRequest(BaseModel):
     mode: Literal["overwrite", "clone"] = "overwrite"
     name: Optional[str] = None
@@ -826,6 +861,102 @@ async def get_playlist_backup_status(
     )
 
 
+@router.post("/{playlist_id}/backup/create", response_model=PlaylistBackupSummary)
+async def create_playlist_backup(
+    playlist_id: str,
+    body: PlaylistBackupCreateRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Backup name is required")
+    backup = playlist_backup_store.create_backup_from_cache(
+        playlist_id,
+        session_mgr.get_user_id(),
+        name,
+        description=body.description,
+        source="manual",
+    )
+    if not backup:
+        raise HTTPException(
+            status_code=409,
+            detail="No cached backup available. Open the playlist once to warm the cache before creating a backup.",
+        )
+    return PlaylistBackupSummary(
+        id=backup["id"],
+        playlist_id=backup["playlist_id"],
+        name=backup["name"],
+        track_count=backup["track_count"],
+        created_at=backup["created_at"],
+        snapshot_id=backup.get("snapshot_id"),
+        source=backup.get("source"),
+    )
+
+
+@router.get("/{playlist_id}/backups", response_model=PlaylistBackupListResponse)
+async def list_playlist_backups(
+    playlist_id: str,
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    backups = playlist_backup_store.list_backups(playlist_id, session_mgr.get_user_id())
+    summaries = [
+        PlaylistBackupSummary(
+            id=backup["id"],
+            playlist_id=backup["playlist_id"],
+            name=backup["name"],
+            track_count=backup["track_count"],
+            created_at=backup["created_at"],
+            snapshot_id=backup.get("snapshot_id"),
+            source=backup.get("source"),
+        )
+        for backup in backups
+    ]
+    return PlaylistBackupListResponse(backups=summaries)
+
+
+@router.get("/{playlist_id}/backups/{backup_id}/preview", response_model=PlaylistBackupPreviewResponse)
+async def preview_playlist_backup(
+    playlist_id: str,
+    backup_id: int = Path(..., ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    backup = playlist_backup_store.get_backup(backup_id, playlist_id, session_mgr.get_user_id())
+    if not backup:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    tracks = playlist_backup_store.get_backup_preview(backup_id, limit)
+    return PlaylistBackupPreviewResponse(
+        backup_id=backup_id,
+        playlist_id=playlist_id,
+        track_count=backup.get("track_count") or 0,
+        limit=limit,
+        tracks=tracks,
+    )
+
+
+@router.post("/{playlist_id}/backups/{backup_id}/restore")
+async def restore_playlist_from_named_backup(
+    playlist_id: str,
+    backup_id: int = Path(..., ge=1),
+    body: PlaylistRestoreRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service),
+):
+    sp = spotify.get_spotify_client(session_mgr.get_user_id())
+    if not sp:
+        raise HTTPException(status_code=401, detail="Spotify authentication expired")
+
+    backup = playlist_backup_store.get_backup(backup_id, playlist_id, session_mgr.get_user_id())
+    if not backup:
+        raise HTTPException(status_code=404, detail="Backup not found")
+
+    track_ids = playlist_backup_store.get_backup_track_ids(backup_id)
+    if not track_ids:
+        raise HTTPException(status_code=409, detail="Backup is empty")
+
+    return _restore_playlist_from_track_ids(sp, session_mgr, playlist_id, track_ids, body)
+
+
 def _replace_playlist_tracks(sp: Any, playlist_id: str, track_uris: List[str]) -> None:
     if not track_uris:
         sp.playlist_replace_items(playlist_id, [])
@@ -837,24 +968,13 @@ def _replace_playlist_tracks(sp: Any, playlist_id: str, track_uris: List[str]) -
         sp.playlist_add_items(playlist_id, rest[i:i + 100])
 
 
-@router.post("/{playlist_id}/backup/restore")
-async def restore_playlist_from_backup(
+def _restore_playlist_from_track_ids(
+    sp: Any,
+    session_mgr: SessionManager,
     playlist_id: str,
+    track_ids: List[str],
     body: PlaylistRestoreRequest,
-    session_mgr: SessionManager = Depends(require_auth),
-    spotify: SpotifyService = Depends(get_spotify_service)
-):
-    sp = spotify.get_spotify_client(session_mgr.get_user_id())
-    if not sp:
-        raise HTTPException(status_code=401, detail="Spotify authentication expired")
-
-    cached_items = playlist_cache_store.get_cached_playlist_items(playlist_id)
-    track_ids = [item.get("track_id") for item in cached_items if item.get("track_id")]
-    if not track_ids:
-        raise HTTPException(
-            status_code=409,
-            detail="No cached backup available. Open the playlist once to warm the cache before restoring.",
-        )
+) -> Dict[str, Any]:
     track_uris = [f"spotify:track:{track_id}" for track_id in track_ids]
 
     target_playlist_id = playlist_id
@@ -894,6 +1014,27 @@ async def restore_playlist_from_backup(
         "message": "Playlist restored",
         "snapshot_id": snapshot_after,
     }
+
+
+@router.post("/{playlist_id}/backup/restore")
+async def restore_playlist_from_backup(
+    playlist_id: str,
+    body: PlaylistRestoreRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service)
+):
+    sp = spotify.get_spotify_client(session_mgr.get_user_id())
+    if not sp:
+        raise HTTPException(status_code=401, detail="Spotify authentication expired")
+
+    cached_items = playlist_cache_store.get_cached_playlist_items(playlist_id)
+    track_ids = [item.get("track_id") for item in cached_items if item.get("track_id")]
+    if not track_ids:
+        raise HTTPException(
+            status_code=409,
+            detail="No cached backup available. Open the playlist once to warm the cache before restoring.",
+        )
+    return _restore_playlist_from_track_ids(sp, session_mgr, playlist_id, track_ids, body)
 
 
 @router.post("/{playlist_id}/cache/matches", response_model=PlaylistCacheMatchResponse)

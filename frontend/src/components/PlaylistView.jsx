@@ -150,6 +150,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [backupRestoreMessage, setBackupRestoreMessage] = useState(null);
   const [backupRestoreError, setBackupRestoreError] = useState(null);
   const [backupCloneName, setBackupCloneName] = useState('');
+  const [backupList, setBackupList] = useState([]);
+  const [backupListLoading, setBackupListLoading] = useState(false);
+  const [backupListError, setBackupListError] = useState(null);
+  const [backupCreateName, setBackupCreateName] = useState('');
+  const [backupCreateLoading, setBackupCreateLoading] = useState(false);
+  const [backupCreateMessage, setBackupCreateMessage] = useState(null);
+  const [backupCreateError, setBackupCreateError] = useState(null);
+  const [backupPreviewId, setBackupPreviewId] = useState(null);
+  const [backupPreviewLoading, setBackupPreviewLoading] = useState(false);
+  const [backupPreviewError, setBackupPreviewError] = useState(null);
+  const [backupPreviewTracks, setBackupPreviewTracks] = useState([]);
+  const [backupPreviewMeta, setBackupPreviewMeta] = useState({ trackCount: 0, limit: 50 });
   const [deleting, setDeleting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
@@ -1052,6 +1064,19 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   };
 
+  const loadBackupList = async (playlistId) => {
+    setBackupListLoading(true);
+    setBackupListError(null);
+    try {
+      const list = await playlistAPI.listBackups(playlistId);
+      setBackupList(list);
+    } catch (err) {
+      setBackupListError(err.message || 'Failed to load backups.');
+    } finally {
+      setBackupListLoading(false);
+    }
+  };
+
   const openBackupModal = async () => {
     const playlistId = currentPlaylist?.id || playlist?.id;
     if (!playlistId) return;
@@ -1059,9 +1084,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     setBackupError(null);
     setBackupRestoreError(null);
     setBackupRestoreMessage(null);
+    setBackupCreateError(null);
+    setBackupCreateMessage(null);
+    setBackupPreviewError(null);
+    setBackupPreviewTracks([]);
+    setBackupPreviewId(null);
     setBackupLoading(true);
     const dateStamp = new Date().toISOString().slice(0, 10);
     setBackupCloneName(`${currentPlaylist?.name || 'Playlist'} (backup ${dateStamp})`);
+    setBackupCreateName(`${currentPlaylist?.name || 'Playlist'} backup ${dateStamp}`);
     try {
       const status = await playlistAPI.getBackupStatus(playlistId);
       setBackupStatus(status);
@@ -1069,6 +1100,29 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setBackupError(err.message || 'Failed to load backup status.');
     } finally {
       setBackupLoading(false);
+    }
+    await loadBackupList(playlistId);
+  };
+
+  const handleCreateBackup = async () => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    if (!playlistId || backupCreateLoading) return;
+    const trimmedName = backupCreateName.trim();
+    if (!trimmedName) {
+      setBackupCreateError('Please enter a backup name.');
+      return;
+    }
+    setBackupCreateLoading(true);
+    setBackupCreateError(null);
+    setBackupCreateMessage(null);
+    try {
+      await playlistAPI.createBackup(playlistId, { name: trimmedName });
+      setBackupCreateMessage('Backup created.');
+      await loadBackupList(playlistId);
+    } catch (err) {
+      setBackupCreateError(err.message || 'Failed to create backup.');
+    } finally {
+      setBackupCreateLoading(false);
     }
   };
 
@@ -1105,6 +1159,71 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setBackupRestoreError(err.message || 'Failed to restore playlist.');
     } finally {
       setBackupRestoreLoading(false);
+    }
+  };
+
+  const handleNamedBackupRestore = async (backupId, mode) => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    if (!playlistId || backupRestoreLoading) return;
+    setBackupRestoreError(null);
+    setBackupRestoreMessage(null);
+
+    if (mode === 'overwrite') {
+      const confirmed = window.confirm('Restore this playlist from the selected backup? This will replace the current order.');
+      if (!confirmed) return;
+    }
+
+    const payload = { mode };
+    const trimmedName = backupCloneName.trim();
+    if (mode === 'clone' && trimmedName) {
+      payload.name = trimmedName;
+    }
+
+    setBackupRestoreLoading(true);
+    try {
+      const result = await playlistAPI.restoreFromNamedBackup(playlistId, backupId, payload);
+      setBackupRestoreMessage(result.message || 'Restore completed.');
+      if (mode === 'clone' && result.new_playlist_id) {
+        navigate(`/playlist/${result.new_playlist_id}`);
+        setShowBackupModal(false);
+      } else {
+        await refreshPlaylistDetails({ resetSort: true });
+        const status = await playlistAPI.getBackupStatus(playlistId);
+        setBackupStatus(status);
+      }
+    } catch (err) {
+      setBackupRestoreError(err.message || 'Failed to restore playlist.');
+    } finally {
+      setBackupRestoreLoading(false);
+    }
+  };
+
+  const handleBackupPreview = async (backupId) => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    if (!playlistId || backupPreviewLoading) return;
+    if (backupPreviewId === backupId) {
+      setBackupPreviewId(null);
+      setBackupPreviewTracks([]);
+      setBackupPreviewMeta({ trackCount: 0, limit: 50 });
+      setBackupPreviewError(null);
+      return;
+    }
+    setBackupPreviewId(backupId);
+    setBackupPreviewLoading(true);
+    setBackupPreviewError(null);
+    try {
+      const preview = await playlistAPI.getBackupPreview(playlistId, backupId, 50);
+      setBackupPreviewTracks(preview.tracks || []);
+      setBackupPreviewMeta({
+        trackCount: preview.track_count || 0,
+        limit: preview.limit || 50,
+      });
+    } catch (err) {
+      setBackupPreviewError(err.message || 'Failed to load backup preview.');
+      setBackupPreviewTracks([]);
+      setBackupPreviewMeta({ trackCount: 0, limit: 50 });
+    } finally {
+      setBackupPreviewLoading(false);
     }
   };
 
@@ -4279,7 +4398,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Playlist actions</p>
                 <h3 className="text-2xl font-semibold text-white">Backup & restore</h3>
                 <p className="text-sm text-spotify-gray-light mt-1">
-                  Restores use the cached playlist snapshot. Open the playlist to refresh the cache if needed.
+                  Restores use saved backups or the cached playlist snapshot. Open the playlist to refresh the cache if needed.
                 </p>
               </div>
               <button
@@ -4314,6 +4433,34 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   )}
                 </div>
 
+                {backupError && <div className="text-red-400 text-sm">{backupError}</div>}
+
+                <div className="bg-spotify-gray-dark/60 rounded-lg border border-spotify-gray-mid/60 p-4 space-y-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Create backup</p>
+                    <p className="text-xs text-spotify-gray-light">Save a named snapshot from the cached playlist.</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={backupCreateName}
+                      onChange={(event) => setBackupCreateName(event.target.value)}
+                      className="flex-1 bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                      placeholder="Backup name"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateBackup}
+                      disabled={backupCreateLoading}
+                      className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {backupCreateLoading ? 'Creating…' : 'Create backup'}
+                    </button>
+                  </div>
+                  {backupCreateError && <div className="text-red-400 text-sm">{backupCreateError}</div>}
+                  {backupCreateMessage && <div className="text-spotify-green text-sm">{backupCreateMessage}</div>}
+                </div>
+
                 <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
                   Restore to new playlist name
                   <input
@@ -4325,7 +4472,6 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   />
                 </label>
 
-                {backupError && <div className="text-red-400 text-sm">{backupError}</div>}
                 {backupRestoreError && <div className="text-red-400 text-sm">{backupRestoreError}</div>}
                 {backupRestoreMessage && <div className="text-spotify-green text-sm">{backupRestoreMessage}</div>}
 
@@ -4346,6 +4492,124 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   >
                     Restore to new
                   </button>
+                </div>
+
+                <div className="bg-spotify-gray-dark/40 rounded-lg border border-spotify-gray-mid/60 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Saved backups</p>
+                      <p className="text-xs text-spotify-gray-light">Preview and restore previous snapshots.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const playlistId = currentPlaylist?.id || playlist?.id;
+                        if (playlistId) {
+                          loadBackupList(playlistId);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg border border-spotify-gray-light text-xs text-white hover:bg-spotify-gray-mid/60"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  {backupListLoading ? (
+                    <div className="flex items-center gap-2 text-spotify-gray-light text-sm">
+                      <div className="w-4 h-4 border-2 border-spotify-green border-t-transparent rounded-full animate-spin" />
+                      <span>Loading backups…</span>
+                    </div>
+                  ) : backupList.length === 0 ? (
+                    <p className="text-sm text-spotify-gray-light">No saved backups yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {backupList.map((backup) => {
+                        const createdAt = backup.created_at ? new Date(backup.created_at) : null;
+                        const createdLabel = createdAt
+                          ? createdAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                          : 'Unknown date';
+                        return (
+                          <div
+                            key={backup.id}
+                            className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-dark/60 p-3 space-y-2"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-white">{backup.name}</p>
+                                <p className="text-xs text-spotify-gray-light">
+                                  {createdLabel} • {backup.track_count ?? 0} tracks
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleBackupPreview(backup.id)}
+                                  className="px-3 py-1.5 rounded-lg border border-spotify-gray-light text-xs text-white hover:bg-spotify-gray-mid/60"
+                                >
+                                  {backupPreviewId === backup.id ? 'Hide preview' : 'Preview'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNamedBackupRestore(backup.id, 'overwrite')}
+                                  disabled={backupRestoreLoading}
+                                  className="px-3 py-1.5 rounded-lg border border-spotify-gray-light text-xs text-white hover:bg-spotify-gray-mid/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Restore here
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNamedBackupRestore(backup.id, 'clone')}
+                                  disabled={backupRestoreLoading}
+                                  className="px-3 py-1.5 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-xs text-black font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Restore to new
+                                </button>
+                              </div>
+                            </div>
+                            {backupPreviewId === backup.id && (
+                              <div className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 p-3 space-y-2 max-h-52 overflow-y-auto">
+                                {backupPreviewLoading ? (
+                                  <div className="flex items-center gap-2 text-spotify-gray-light text-xs">
+                                    <div className="w-4 h-4 border-2 border-spotify-green border-t-transparent rounded-full animate-spin" />
+                                    <span>Loading preview…</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {backupPreviewError && (
+                                      <div className="text-red-400 text-xs">{backupPreviewError}</div>
+                                    )}
+                                    {backupPreviewTracks.length === 0 && !backupPreviewError ? (
+                                      <p className="text-xs text-spotify-gray-light">No preview tracks available.</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {backupPreviewTracks.map((track, index) => {
+                                          const artistLabel = (track.artists || []).join(', ') || 'Unknown artist';
+                                          const albumLabel = track.album ? ` • ${track.album}` : '';
+                                          return (
+                                            <div key={`${backup.id}-${track.track_id}-${index}`} className="text-xs text-spotify-gray-light">
+                                              <p className="text-sm text-white">{track.title || 'Unknown title'}</p>
+                                              <p>{artistLabel}{albumLabel}</p>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                    {backupPreviewMeta.trackCount > backupPreviewMeta.limit && (
+                                      <p className="text-xs text-spotify-gray-light">
+                                        Showing first {backupPreviewMeta.limit} of {backupPreviewMeta.trackCount} tracks.
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {backupListError && <div className="text-red-400 text-sm">{backupListError}</div>}
                 </div>
               </div>
             )}

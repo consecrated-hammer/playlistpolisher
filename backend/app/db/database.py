@@ -277,6 +277,44 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_playlist_cache_facts_last_track ON playlist_cache_facts(last_track_added_at_utc DESC)
     """)
 
+    # Playlist backups (snapshots derived from cache)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS playlist_backups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            playlist_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            track_count INTEGER NOT NULL,
+            snapshot_id TEXT,
+            source TEXT,
+            schedule_id INTEGER,
+            created_at TEXT NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_playlist_backups_playlist ON playlist_backups(playlist_id)
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_playlist_backups_user ON playlist_backups(user_id)
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_playlist_backups_created ON playlist_backups(created_at DESC)
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS playlist_backup_items (
+            backup_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            track_id TEXT NOT NULL,
+            added_at TEXT,
+            PRIMARY KEY (backup_id, position)
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_playlist_backup_items_backup ON playlist_backup_items(backup_id)
+    """)
+
     # Daily reconciliation run tracking
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS cache_facts_runs (

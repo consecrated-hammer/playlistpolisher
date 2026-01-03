@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from app.db import schedules as schedule_store
+from app.db import playlist_backups as backup_store
 from app.services.spotify_service import SpotifyService
 from app.services.task_executor import start_sort_job
 from app.services.job_service import SortJobService
@@ -141,7 +142,7 @@ class SchedulerService:
         if playlist_id == BACKUP_GLOBAL_PLAYLIST_ID:
             playlists = spotify_service.get_user_playlists()
             if playlists:
-                playlist_ids = self._get_playlists_to_refresh(playlists)
+                playlist_ids = [p.id for p in playlists if getattr(p, "id", None)]
         else:
             playlist_ids = [playlist_id]
 
@@ -149,12 +150,32 @@ class SchedulerService:
             logger.info("Scheduled backup found no playlists to update (user=%s)", user_id)
             return
 
-        start_cache_warm_job(
-            user_id=user_id,
-            session_id=session_id or session_mgr.session_id,
-            playlist_ids=playlist_ids,
-            meta={"source": "scheduled_backup", "schedule_id": schedule_id, "mode": "backup"},
-        )
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        created = 0
+        skipped = 0
+        for pid in playlist_ids:
+            backup = backup_store.create_backup_from_cache(
+                pid,
+                user_id,
+                f"Scheduled backup {timestamp}",
+                source="scheduled",
+                schedule_id=schedule_id,
+            )
+            if backup:
+                created += 1
+            else:
+                skipped += 1
+
+        if created == 0:
+            raise Exception("No cached playlists available for backup; open playlists to warm the cache")
+
+        if skipped:
+            logger.info(
+                "Scheduled backup created %s backups and skipped %s playlists without cache (user=%s)",
+                created,
+                skipped,
+                user_id,
+            )
 
     def _get_playlists_to_refresh(self, playlists: list) -> list:
         playlist_ids = [p.id for p in playlists if getattr(p, "id", None)]
