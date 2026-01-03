@@ -195,6 +195,13 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
                     </button>
                     <button
                       className="w-full text-left px-4 py-3 text-sm text-white hover:bg-spotify-gray-mid transition-colors flex items-center gap-2"
+                      onClick={() => { navigate('/settings'); }}
+                    >
+                      <span className="icon text-base">tune</span>
+                      Settings
+                    </button>
+                    <button
+                      className="w-full text-left px-4 py-3 text-sm text-white hover:bg-spotify-gray-mid transition-colors flex items-center gap-2"
                       onClick={onLogout}
                     >
                       <span className="icon text-base">logout</span>

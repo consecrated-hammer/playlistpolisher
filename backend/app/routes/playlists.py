@@ -465,6 +465,7 @@ class PlaylistBackupStatusResponse(BaseModel):
 class PlaylistBackupCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     description: Optional[str] = None
+    cache_first: bool = True
 
 
 class PlaylistBackupSummary(BaseModel):
@@ -488,12 +489,26 @@ class PlaylistBackupPreviewTrack(BaseModel):
     artists: List[str] = Field(default_factory=list)
 
 
+class PlaylistBackupTrack(PlaylistBackupPreviewTrack):
+    position: Optional[int] = None
+    added_at: Optional[str] = None
+
+
 class PlaylistBackupPreviewResponse(BaseModel):
     backup_id: int
     playlist_id: str
     track_count: int
     limit: int
     tracks: List[PlaylistBackupPreviewTrack]
+
+
+class PlaylistBackupDetailResponse(BaseModel):
+    backup_id: int
+    playlist_id: str
+    track_count: int
+    created_at: str
+    name: str
+    tracks: List[PlaylistBackupTrack]
 
 
 class PlaylistRestoreRequest(BaseModel):
@@ -866,10 +881,22 @@ async def create_playlist_backup(
     playlist_id: str,
     body: PlaylistBackupCreateRequest,
     session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service),
 ):
     name = (body.name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Backup name is required")
+    if body.cache_first:
+        sp = spotify.get_spotify_client(session_mgr.get_user_id())
+        if not sp:
+            raise HTTPException(status_code=401, detail="Spotify authentication expired")
+        try:
+            _refresh_playlist_cache_snapshot(spotify, session_mgr, playlist_id)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("Failed to refresh cache before backup for playlist %s: %s", playlist_id, exc)
+            raise HTTPException(status_code=502, detail="Failed to refresh cache before backup")
     backup = playlist_backup_store.create_backup_from_cache(
         playlist_id,
         session_mgr.get_user_id(),
@@ -934,6 +961,26 @@ async def preview_playlist_backup(
     )
 
 
+@router.get("/{playlist_id}/backups/{backup_id}", response_model=PlaylistBackupDetailResponse)
+async def get_playlist_backup_detail(
+    playlist_id: str,
+    backup_id: int = Path(..., ge=1),
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    backup = playlist_backup_store.get_backup(backup_id, playlist_id, session_mgr.get_user_id())
+    if not backup:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    tracks = playlist_backup_store.get_backup_tracks(backup_id)
+    return PlaylistBackupDetailResponse(
+        backup_id=backup_id,
+        playlist_id=playlist_id,
+        track_count=backup.get("track_count") or 0,
+        created_at=backup.get("created_at") or "",
+        name=backup.get("name") or "",
+        tracks=tracks,
+    )
+
+
 @router.post("/{playlist_id}/backups/{backup_id}/restore")
 async def restore_playlist_from_named_backup(
     playlist_id: str,
@@ -966,6 +1013,26 @@ def _replace_playlist_tracks(sp: Any, playlist_id: str, track_uris: List[str]) -
     sp.playlist_replace_items(playlist_id, first_batch)
     for i in range(0, len(rest), 100):
         sp.playlist_add_items(playlist_id, rest[i:i + 100])
+
+
+def _refresh_playlist_cache_snapshot(
+    spotify: SpotifyService,
+    session_mgr: SessionManager,
+    playlist_id: str,
+) -> int:
+    playlist_detail = spotify.get_playlist_details(playlist_id, should_warm_cache=True)
+    items = []
+    for idx, track in enumerate(playlist_detail.tracks or []):
+        if not track or not getattr(track, "id", None):
+            continue
+        added_at = track.added_at.isoformat() if getattr(track, "added_at", None) else None
+        items.append({"position": idx, "track_id": track.id, "added_at": added_at})
+    playlist_cache_store.refresh_cached_playlist(
+        playlist_id=playlist_id,
+        items=items,
+        snapshot_id=getattr(playlist_detail, "snapshot_id", None),
+    )
+    return len(items)
 
 
 def _restore_playlist_from_track_ids(

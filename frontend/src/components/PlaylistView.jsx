@@ -157,11 +157,12 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [backupCreateLoading, setBackupCreateLoading] = useState(false);
   const [backupCreateMessage, setBackupCreateMessage] = useState(null);
   const [backupCreateError, setBackupCreateError] = useState(null);
-  const [backupPreviewId, setBackupPreviewId] = useState(null);
-  const [backupPreviewLoading, setBackupPreviewLoading] = useState(false);
-  const [backupPreviewError, setBackupPreviewError] = useState(null);
-  const [backupPreviewTracks, setBackupPreviewTracks] = useState([]);
-  const [backupPreviewMeta, setBackupPreviewMeta] = useState({ trackCount: 0, limit: 50 });
+  const [backupCacheFirstSetting, setBackupCacheFirstSetting] = useState(true);
+  const [backupSelectedId, setBackupSelectedId] = useState(null);
+  const [backupSelectedMeta, setBackupSelectedMeta] = useState(null);
+  const [backupTracksLoading, setBackupTracksLoading] = useState(false);
+  const [backupTracksError, setBackupTracksError] = useState(null);
+  const [backupTracks, setBackupTracks] = useState([]);
   const [deleting, setDeleting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
@@ -1064,12 +1065,33 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   };
 
+  const formatBackupName = (template, playlistName) => {
+    const name = playlistName || 'Playlist';
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const datetime = `${date} ${time}`;
+    const safeTemplate = template && template.trim() ? template : '{playlist} backup {date}';
+    return safeTemplate
+      .replace('{playlist}', name)
+      .replace('{date}', date)
+      .replace('{time}', time)
+      .replace('{datetime}', datetime);
+  };
+
   const loadBackupList = async (playlistId) => {
     setBackupListLoading(true);
     setBackupListError(null);
     try {
       const list = await playlistAPI.listBackups(playlistId);
       setBackupList(list);
+      if (list.length > 0) {
+        const selectedId = backupSelectedId && list.some((item) => item.id === backupSelectedId)
+          ? backupSelectedId
+          : list[0].id;
+        setBackupSelectedId(selectedId);
+        await fetchBackupDetail(playlistId, selectedId);
+      }
     } catch (err) {
       setBackupListError(err.message || 'Failed to load backups.');
     } finally {
@@ -1086,16 +1108,22 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     setBackupRestoreMessage(null);
     setBackupCreateError(null);
     setBackupCreateMessage(null);
-    setBackupPreviewError(null);
-    setBackupPreviewTracks([]);
-    setBackupPreviewId(null);
+    setBackupTracksError(null);
+    setBackupTracks([]);
+    setBackupSelectedId(null);
+    setBackupSelectedMeta(null);
     setBackupLoading(true);
     const dateStamp = new Date().toISOString().slice(0, 10);
     setBackupCloneName(`${currentPlaylist?.name || 'Playlist'} (backup ${dateStamp})`);
-    setBackupCreateName(`${currentPlaylist?.name || 'Playlist'} backup ${dateStamp}`);
     try {
-      const status = await playlistAPI.getBackupStatus(playlistId);
+      const [status, prefs] = await Promise.all([
+        playlistAPI.getBackupStatus(playlistId),
+        preferencesAPI.getPreferences().catch(() => null),
+      ]);
       setBackupStatus(status);
+      const template = prefs?.backup_name_template || '{playlist} backup {date}';
+      setBackupCacheFirstSetting(prefs?.backup_cache_first ?? true);
+      setBackupCreateName(formatBackupName(template, currentPlaylist?.name));
     } catch (err) {
       setBackupError(err.message || 'Failed to load backup status.');
     } finally {
@@ -1116,7 +1144,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     setBackupCreateError(null);
     setBackupCreateMessage(null);
     try {
-      await playlistAPI.createBackup(playlistId, { name: trimmedName });
+      await playlistAPI.createBackup(playlistId, { name: trimmedName, cache_first: backupCacheFirstSetting });
       setBackupCreateMessage('Backup created.');
       await loadBackupList(playlistId);
     } catch (err) {
@@ -1198,33 +1226,32 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   };
 
-  const handleBackupPreview = async (backupId) => {
-    const playlistId = currentPlaylist?.id || playlist?.id;
-    if (!playlistId || backupPreviewLoading) return;
-    if (backupPreviewId === backupId) {
-      setBackupPreviewId(null);
-      setBackupPreviewTracks([]);
-      setBackupPreviewMeta({ trackCount: 0, limit: 50 });
-      setBackupPreviewError(null);
-      return;
-    }
-    setBackupPreviewId(backupId);
-    setBackupPreviewLoading(true);
-    setBackupPreviewError(null);
+  const fetchBackupDetail = async (playlistId, backupId) => {
+    if (!playlistId) return;
+    setBackupTracksLoading(true);
+    setBackupTracksError(null);
     try {
-      const preview = await playlistAPI.getBackupPreview(playlistId, backupId, 50);
-      setBackupPreviewTracks(preview.tracks || []);
-      setBackupPreviewMeta({
-        trackCount: preview.track_count || 0,
-        limit: preview.limit || 50,
+      const detail = await playlistAPI.getBackupDetail(playlistId, backupId);
+      setBackupTracks(detail.tracks || []);
+      setBackupSelectedMeta({
+        name: detail.name,
+        created_at: detail.created_at,
+        track_count: detail.track_count || 0,
       });
     } catch (err) {
-      setBackupPreviewError(err.message || 'Failed to load backup preview.');
-      setBackupPreviewTracks([]);
-      setBackupPreviewMeta({ trackCount: 0, limit: 50 });
+      setBackupTracksError(err.message || 'Failed to load backup tracks.');
+      setBackupTracks([]);
+      setBackupSelectedMeta(null);
     } finally {
-      setBackupPreviewLoading(false);
+      setBackupTracksLoading(false);
     }
+  };
+
+  const handleBackupSelect = async (backupId) => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    if (!playlistId || backupTracksLoading) return;
+    setBackupSelectedId(backupId);
+    await fetchBackupDetail(playlistId, backupId);
   };
 
   const isInteractiveTarget = (event) => {
@@ -4319,7 +4346,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {/* Clone Playlist Modal */}
       {showCloneModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-          <div className="bg-spotify-gray-dark rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 border border-spotify-gray-mid/60">
+          <div className="bg-spotify-gray-dark rounded-2xl shadow-2xl max-w-5xl w-full p-6 space-y-5 border border-spotify-gray-mid/60">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Clone playlist</p>
@@ -4498,7 +4525,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Saved backups</p>
-                      <p className="text-xs text-spotify-gray-light">Preview and restore previous snapshots.</p>
+                      <p className="text-xs text-spotify-gray-light">Select a backup to view its full track list.</p>
                     </div>
                     <button
                       type="button"
@@ -4522,32 +4549,34 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   ) : backupList.length === 0 ? (
                     <p className="text-sm text-spotify-gray-light">No saved backups yet.</p>
                   ) : (
-                    <div className="space-y-3">
-                      {backupList.map((backup) => {
-                        const createdAt = backup.created_at ? new Date(backup.created_at) : null;
-                        const createdLabel = createdAt
-                          ? createdAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                          : 'Unknown date';
-                        return (
-                          <div
-                            key={backup.id}
-                            className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-dark/60 p-3 space-y-2"
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                              <div>
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+                      <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                        {backupList.map((backup) => {
+                          const createdAt = backup.created_at ? new Date(backup.created_at) : null;
+                          const createdLabel = createdAt
+                            ? createdAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                            : 'Unknown date';
+                          const isSelected = backupSelectedId === backup.id;
+                          return (
+                            <div
+                              key={backup.id}
+                              className={`rounded-lg border p-3 space-y-2 transition-colors ${
+                                isSelected
+                                  ? 'border-spotify-green/70 bg-spotify-gray-mid/40'
+                                  : 'border-spotify-gray-mid/60 bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/30'
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleBackupSelect(backup.id)}
+                                className="text-left w-full"
+                              >
                                 <p className="text-sm font-semibold text-white">{backup.name}</p>
                                 <p className="text-xs text-spotify-gray-light">
                                   {createdLabel} • {backup.track_count ?? 0} tracks
                                 </p>
-                              </div>
+                              </button>
                               <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleBackupPreview(backup.id)}
-                                  className="px-3 py-1.5 rounded-lg border border-spotify-gray-light text-xs text-white hover:bg-spotify-gray-mid/60"
-                                >
-                                  {backupPreviewId === backup.id ? 'Hide preview' : 'Preview'}
-                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleNamedBackupRestore(backup.id, 'overwrite')}
@@ -4566,46 +4595,46 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                                 </button>
                               </div>
                             </div>
-                            {backupPreviewId === backup.id && (
-                              <div className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 p-3 space-y-2 max-h-52 overflow-y-auto">
-                                {backupPreviewLoading ? (
-                                  <div className="flex items-center gap-2 text-spotify-gray-light text-xs">
-                                    <div className="w-4 h-4 border-2 border-spotify-green border-t-transparent rounded-full animate-spin" />
-                                    <span>Loading preview…</span>
-                                  </div>
-                                ) : (
-                                  <>
-                                    {backupPreviewError && (
-                                      <div className="text-red-400 text-xs">{backupPreviewError}</div>
-                                    )}
-                                    {backupPreviewTracks.length === 0 && !backupPreviewError ? (
-                                      <p className="text-xs text-spotify-gray-light">No preview tracks available.</p>
-                                    ) : (
-                                      <div className="space-y-2">
-                                        {backupPreviewTracks.map((track, index) => {
-                                          const artistLabel = (track.artists || []).join(', ') || 'Unknown artist';
-                                          const albumLabel = track.album ? ` • ${track.album}` : '';
-                                          return (
-                                            <div key={`${backup.id}-${track.track_id}-${index}`} className="text-xs text-spotify-gray-light">
-                                              <p className="text-sm text-white">{track.title || 'Unknown title'}</p>
-                                              <p>{artistLabel}{albumLabel}</p>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                    {backupPreviewMeta.trackCount > backupPreviewMeta.limit && (
-                                      <p className="text-xs text-spotify-gray-light">
-                                        Showing first {backupPreviewMeta.limit} of {backupPreviewMeta.trackCount} tracks.
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            )}
+                          );
+                        })}
+                      </div>
+                      <div className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/20 p-3 max-h-96 overflow-y-auto">
+                        {backupTracksLoading ? (
+                          <div className="flex items-center gap-2 text-spotify-gray-light text-sm">
+                            <div className="w-4 h-4 border-2 border-spotify-green border-t-transparent rounded-full animate-spin" />
+                            <span>Loading tracks…</span>
                           </div>
-                        );
-                      })}
+                        ) : backupTracksError ? (
+                          <p className="text-sm text-red-400">{backupTracksError}</p>
+                        ) : backupTracks.length === 0 ? (
+                          <p className="text-sm text-spotify-gray-light">
+                            {backupSelectedId ? 'No tracks recorded for this backup.' : 'Select a backup to view tracks.'}
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-sm font-semibold text-white">{backupSelectedMeta?.name}</p>
+                              {backupSelectedMeta?.created_at && (
+                                <p className="text-xs text-spotify-gray-light">
+                                  {new Date(backupSelectedMeta.created_at).toLocaleString()} • {backupSelectedMeta.track_count ?? 0} tracks
+                                </p>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              {backupTracks.map((track, index) => {
+                                const artistLabel = (track.artists || []).join(', ') || 'Unknown artist';
+                                const albumLabel = track.album ? ` • ${track.album}` : '';
+                                return (
+                                  <div key={`${track.track_id}-${index}`} className="text-xs text-spotify-gray-light">
+                                    <p className="text-sm text-white">{track.title || 'Unknown title'}</p>
+                                    <p>{artistLabel}{albumLabel}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 

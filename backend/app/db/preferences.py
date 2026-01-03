@@ -15,6 +15,10 @@ DEFAULT_PREFERENCES: Dict[str, Any] = {
     "playlist_action_details_open": False,
     "playlist_album_details_open": False,
     "queue_modal": {"x": 0, "y": -300, "height": 420},
+    "backup_retention_days": 60,
+    "backup_cleanup_enabled": True,
+    "backup_cache_first": True,
+    "backup_name_template": "{playlist} backup {date}",
 }
 
 
@@ -84,6 +88,18 @@ def get_user_preferences(user_id: str) -> Dict[str, Any]:
             "y": sanitized.get("y", DEFAULT_PREFERENCES["queue_modal"]["y"]),
             "height": sanitized.get("height", DEFAULT_PREFERENCES["queue_modal"]["height"]),
         }
+    retention = merged.get("backup_retention_days")
+    if not isinstance(retention, int) or retention < 1:
+        merged["backup_retention_days"] = DEFAULT_PREFERENCES["backup_retention_days"]
+    cleanup_enabled = merged.get("backup_cleanup_enabled")
+    if not isinstance(cleanup_enabled, bool):
+        merged["backup_cleanup_enabled"] = DEFAULT_PREFERENCES["backup_cleanup_enabled"]
+    cache_first = merged.get("backup_cache_first")
+    if not isinstance(cache_first, bool):
+        merged["backup_cache_first"] = DEFAULT_PREFERENCES["backup_cache_first"]
+    template = merged.get("backup_name_template")
+    if not isinstance(template, str) or not template.strip():
+        merged["backup_name_template"] = DEFAULT_PREFERENCES["backup_name_template"]
     return merged
 
 

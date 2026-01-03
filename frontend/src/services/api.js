@@ -335,6 +335,14 @@ export const playlistAPI = {
   },
 
   /**
+   * Get full backup details with tracks
+   */
+  getBackupDetail: async (playlistId, backupId) => {
+    const response = await api.get(`/playlists/${playlistId}/backups/${backupId}`);
+    return response.data;
+  },
+
+  /**
    * Restore a playlist from a saved backup
    */
   restoreFromNamedBackup: async (playlistId, backupId, payload) => {
@@ -390,6 +398,10 @@ export const playlistAPI = {
     const response = await api.post('/schedules/backup', payload);
     return response.data;
   },
+  createBackupCleanupSchedule: async (payload) => {
+    const response = await api.post('/schedules/backup-cleanup', payload);
+    return response.data;
+  },
   updateCacheSchedule: async (scheduleId, payload) => {
     const response = await api.patch(`/schedules/cache/${scheduleId}`, payload);
     return response.data;
@@ -398,12 +410,20 @@ export const playlistAPI = {
     const response = await api.patch(`/schedules/backup/${scheduleId}`, payload);
     return response.data;
   },
+  updateBackupCleanupSchedule: async (scheduleId, payload) => {
+    const response = await api.patch(`/schedules/backup-cleanup/${scheduleId}`, payload);
+    return response.data;
+  },
   deleteCacheSchedule: async (scheduleId) => {
     const response = await api.delete(`/schedules/cache/${scheduleId}`);
     return response.data;
   },
   deleteBackupSchedule: async (scheduleId) => {
     const response = await api.delete(`/schedules/backup/${scheduleId}`);
+    return response.data;
+  },
+  deleteBackupCleanupSchedule: async (scheduleId) => {
+    const response = await api.delete(`/schedules/backup-cleanup/${scheduleId}`);
     return response.data;
   },
   listPlaylistSchedules: async (playlistId) => {

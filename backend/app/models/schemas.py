@@ -419,6 +419,10 @@ class UserPreferences(BaseModel):
     playlist_action_details_open: bool = False
     playlist_album_details_open: bool = False
     queue_modal: Dict[str, float] = {}
+    backup_retention_days: int = 60
+    backup_cleanup_enabled: bool = True
+    backup_cache_first: bool = True
+    backup_name_template: str = "{playlist} backup {date}"
 
 
 class UserPreferencesUpdate(BaseModel):
@@ -443,5 +447,9 @@ class UserPreferencesUpdate(BaseModel):
     playlist_action_details_open: Optional[bool] = None
     playlist_album_details_open: Optional[bool] = None
     queue_modal: Optional[Dict[str, float]] = None
+    backup_retention_days: Optional[int] = Field(None, ge=1, le=3650)
+    backup_cleanup_enabled: Optional[bool] = None
+    backup_cache_first: Optional[bool] = None
+    backup_name_template: Optional[str] = Field(None, max_length=160)
 
     model_config = ConfigDict(extra="forbid")

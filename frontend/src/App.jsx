@@ -22,6 +22,7 @@ import SchedulesPage from './pages/SchedulesPage';
 import HistoryPage from './pages/HistoryPage';
 import IgnoredTracksPage from './pages/IgnoredTracksPage';
 import CachePage from './pages/CachePage';
+import SettingsPage from './pages/SettingsPage';
 import RoadmapPage from './pages/RoadmapPage';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
@@ -1117,6 +1118,11 @@ function App() {
         } />
         <Route path="/cache" element={
           <CachePage user={user} onLogout={handleLogout} />
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+            <SettingsPage user={user} onLogout={handleLogout} />
+          </ProtectedRoute>
         } />
         <Route path="/roadmap" element={
           <Layout user={user} onLogout={handleLogout}>

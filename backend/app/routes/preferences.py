@@ -8,6 +8,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.db import preferences as preference_store
+from app.db import schedules as schedule_store
+from app.routes.schedule import BACKUP_CLEANUP_GLOBAL_PLAYLIST_ID
 from app.models.schemas import UserPreferences, UserPreferencesUpdate
 from app.utils.session_manager import SessionManager, SESSION_COOKIE_NAME
 
@@ -62,6 +64,11 @@ async def update_preferences(
             raise HTTPException(status_code=401, detail="Authentication required. Please login with Spotify.")
         updates = body.model_dump(exclude_unset=True, exclude_none=True)
         prefs = preference_store.update_user_preferences(user_id, updates)
+        if updates.get("backup_cleanup_enabled") is False:
+            schedules = schedule_store.list_for_user(user_id)
+            for sched in schedules:
+                if sched.get("playlist_id") == BACKUP_CLEANUP_GLOBAL_PLAYLIST_ID:
+                    schedule_store.update_schedule(sched["id"], user_id, enabled=0)
         return prefs
     except HTTPException:
         raise
