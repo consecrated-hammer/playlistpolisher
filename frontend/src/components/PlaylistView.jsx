@@ -4088,7 +4088,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   {playlistArtists.length === 0 ? (
                     <div className="text-sm text-spotify-gray-light">No artists found in this playlist.</div>
                   ) : (
-                    playlistArtists.map((artist) => {
+                    playlistArtists.map((artist, index) => {
                       const trackCount = artist.track_count ?? 0;
                       const hasFollowStatus = typeof artist.isFollowing === 'boolean';
                       const isSelectable = Boolean(artist.id) && hasFollowStatus;
@@ -4102,6 +4102,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       const statusLabel = hasFollowStatus
                         ? artist.isFollowing ? 'Following' : 'Not following'
                         : 'Unavailable';
+                      const toggleId = `artist-follow-${artist.id || index}`;
+                      const toggleDisabled = !isSelectable || artistActionLoading;
                       return (
                         <div
                           key={artist.id || artist.name}
@@ -4138,17 +4140,27 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className={`relative inline-flex items-center ${!isSelectable || artistActionLoading ? 'opacity-50' : ''}`}>
+                            <label
+                              htmlFor={toggleId}
+                              className={`relative inline-flex items-center ${
+                                toggleDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                              }`}
+                            >
                               <input
+                                id={toggleId}
                                 type="checkbox"
                                 className="sr-only peer"
                                 checked={Boolean(artist.desiredFollowing)}
-                                onChange={() => toggleArtistDesiredFollowing(artist.id)}
-                                disabled={!isSelectable || artistActionLoading}
+                                onChange={() => {
+                                  if (isSelectable) {
+                                    toggleArtistDesiredFollowing(artist.id);
+                                  }
+                                }}
+                                disabled={toggleDisabled}
                               />
                               <span className="w-11 h-6 rounded-full bg-spotify-gray-mid peer-checked:bg-spotify-green transition-colors" />
                               <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
-                            </span>
+                            </label>
                             {artist.external_url && (
                               <a
                                 href={artist.external_url}
