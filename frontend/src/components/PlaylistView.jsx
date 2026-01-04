@@ -170,6 +170,28 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     () => pendingArtists.filter((artist) => !artist.desiredFollowing).length,
     [pendingArtists]
   );
+  const artistTotals = useMemo(() => {
+    let following = 0;
+    let notFollowing = 0;
+    let unavailable = 0;
+    playlistArtists.forEach((artist) => {
+      if (typeof artist.isFollowing === 'boolean') {
+        if (artist.isFollowing) {
+          following += 1;
+        } else {
+          notFollowing += 1;
+        }
+      } else {
+        unavailable += 1;
+      }
+    });
+    return {
+      total: playlistArtists.length,
+      following,
+      notFollowing,
+      unavailable,
+    };
+  }, [playlistArtists]);
   const sortedPlaylistArtists = useMemo(() => {
     const artists = [...playlistArtists];
     if (artistSortOption === 'status') {
@@ -4305,6 +4327,22 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   </button>
                 </div>
               </div>
+              {!playlistArtistsLoading && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-spotify-gray-light">
+                  <span className="px-2 py-0.5 rounded-full bg-spotify-gray-mid/60">
+                    Total {artistTotals.total}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-spotify-green/20 text-spotify-green">
+                    Following {artistTotals.following}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-spotify-gray-mid/60">
+                    Not following {artistTotals.notFollowing}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full border border-spotify-gray-mid/60">
+                    Unavailable {artistTotals.unavailable}
+                  </span>
+                </div>
+              )}
 
               {playlistArtistsLoading && (
                 <div className="flex items-center justify-center py-8">
