@@ -193,6 +193,22 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
     return artists;
   }, [playlistArtists, artistSortOption]);
+  const applyArtistFollowUpdates = useCallback((updates, options = {}) => {
+    const { forceDesired = false } = options;
+    if (!updates || Object.keys(updates).length === 0) return;
+    setArtistFollowStatus((prev) => ({ ...prev, ...updates }));
+    setPlaylistArtists((prev) => prev.map((artist) => {
+      if (!artist?.id) return artist;
+      if (updates[artist.id] === undefined) return artist;
+      const nextStatus = updates[artist.id];
+      const desired = forceDesired
+        ? nextStatus
+        : typeof artist.desiredFollowing === 'boolean'
+          ? artist.desiredFollowing
+          : nextStatus;
+      return { ...artist, isFollowing: nextStatus, desiredFollowing: desired };
+    }));
+  }, []);
   const [deleting, setDeleting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
@@ -442,23 +458,6 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     setLastSelectedIndex(null);
     setExpandedTrackKeys([]);
   }, [currentPlaylist?.id]);
-
-  const applyArtistFollowUpdates = useCallback((updates, options = {}) => {
-    const { forceDesired = false } = options;
-    if (!updates || Object.keys(updates).length === 0) return;
-    setArtistFollowStatus((prev) => ({ ...prev, ...updates }));
-    setPlaylistArtists((prev) => prev.map((artist) => {
-      if (!artist?.id) return artist;
-      if (updates[artist.id] === undefined) return artist;
-      const nextStatus = updates[artist.id];
-      const desired = forceDesired
-        ? nextStatus
-        : typeof artist.desiredFollowing === 'boolean'
-          ? artist.desiredFollowing
-          : nextStatus;
-      return { ...artist, isFollowing: nextStatus, desiredFollowing: desired };
-    }));
-  }, []);
 
   useEffect(() => {
     setArtistFollowStatus({});
