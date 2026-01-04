@@ -357,7 +357,7 @@ async def check_user_follows_artists(
         statuses: List[bool] = []
         for chunk in _chunk_list(artist_ids, 50):
             params = {"type": "artist", "ids": ",".join(chunk)}
-            result = sp._get("me/following/contains", params=params)
+            result = sp._get("me/following/contains", params)
             if not isinstance(result, list):
                 raise ValueError("Unexpected response from follow status check")
             statuses.extend([bool(item) for item in result])
