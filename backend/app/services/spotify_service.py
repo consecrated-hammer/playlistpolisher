@@ -66,6 +66,7 @@ class SpotifyService:
         "playlist-read-collaborative",
         "playlist-modify-public",
         "playlist-modify-private",
+        "user-follow-modify",
         "streaming",
         "user-read-playback-state",
         "user-modify-playback-state"
