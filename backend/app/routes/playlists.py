@@ -53,6 +53,10 @@ class PlaylistArtistActionRequest(BaseModel):
     artist_ids: List[str] = Field(default_factory=list)
 
 
+class PlaylistArtistFollowCheckResponse(BaseModel):
+    statuses: List[bool] = Field(default_factory=list)
+
+
 def get_session_manager(request: Request) -> SessionManager:
     """Extract session manager from the incoming request cookie."""
     session_id = request.cookies.get(SESSION_COOKIE_NAME)
@@ -334,6 +338,33 @@ async def get_playlist_tracks_paginated(
             status_code=500,
             detail=f"Failed to fetch playlist tracks: {str(e)}"
         )
+
+
+@router.post("/artists/following", response_model=PlaylistArtistFollowCheckResponse)
+async def check_user_follows_artists(
+    body: PlaylistArtistActionRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service)
+):
+    """Check follow status for the current user across artist IDs."""
+    sp = spotify.get_spotify_client(session_mgr.get_user_id())
+    if not sp:
+        raise HTTPException(status_code=401, detail="Spotify authentication expired")
+    artist_ids = [artist_id for artist_id in body.artist_ids if artist_id]
+    if not artist_ids:
+        return PlaylistArtistFollowCheckResponse(statuses=[])
+    try:
+        statuses: List[bool] = []
+        for chunk in _chunk_list(artist_ids, 50):
+            params = {"type": "artist", "ids": ",".join(chunk)}
+            result = sp._get("me/following/contains", params=params)
+            if not isinstance(result, list):
+                raise ValueError("Unexpected response from follow status check")
+            statuses.extend([bool(item) for item in result])
+        return PlaylistArtistFollowCheckResponse(statuses=statuses)
+    except Exception as e:
+        logger.error("Failed to check artist follow status: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to check follow status")
 
 
 @router.get("/{playlist_id}/artists", response_model=PlaylistArtistsResponse)

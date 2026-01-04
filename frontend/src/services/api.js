@@ -250,6 +250,17 @@ export const playlistAPI = {
   },
 
   /**
+   * Check if current user follows artists
+   * @param {string[]} artistIds - Spotify artist IDs
+   * @returns {Promise<boolean[]>} Follow status array
+   */
+  checkUserFollowsArtists: async (artistIds) => {
+    const response = await api.post('/playlists/artists/following', { artist_ids: artistIds });
+    const data = response.data;
+    return Array.isArray(data?.statuses) ? data.statuses : Array.isArray(data) ? data : [];
+  },
+
+  /**
    * Follow selected artists from a playlist
    */
   followArtists: async (playlistId, payload) => {

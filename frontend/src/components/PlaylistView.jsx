@@ -146,23 +146,25 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [playlistArtists, setPlaylistArtists] = useState([]);
   const [playlistArtistsLoading, setPlaylistArtistsLoading] = useState(false);
   const [playlistArtistsError, setPlaylistArtistsError] = useState(null);
-  const [artistSelections, setArtistSelections] = useState({});
   const [artistActionLoading, setArtistActionLoading] = useState(false);
-  const [artistActionMode, setArtistActionMode] = useState(null);
   const [artistActionError, setArtistActionError] = useState(null);
   const [artistActionMessage, setArtistActionMessage] = useState(null);
-  const selectableArtistIds = useMemo(
-    () => playlistArtists.map((artist) => artist.id).filter(Boolean),
+  const followableArtists = useMemo(
+    () => playlistArtists.filter((artist) => artist.id && typeof artist.isFollowing === 'boolean'),
     [playlistArtists]
   );
-  const selectedArtistIds = useMemo(
-    () => selectableArtistIds.filter((artistId) => artistSelections[artistId]),
-    [selectableArtistIds, artistSelections]
+  const pendingArtists = useMemo(
+    () => followableArtists.filter((artist) => artist.desiredFollowing !== artist.isFollowing),
+    [followableArtists]
   );
-  const allArtistsSelected = useMemo(() => {
-    if (!selectableArtistIds.length) return false;
-    return selectedArtistIds.length === selectableArtistIds.length;
-  }, [selectableArtistIds, selectedArtistIds]);
+  const followCount = useMemo(
+    () => pendingArtists.filter((artist) => artist.desiredFollowing).length,
+    [pendingArtists]
+  );
+  const unfollowCount = useMemo(
+    () => pendingArtists.filter((artist) => !artist.desiredFollowing).length,
+    [pendingArtists]
+  );
   const [deleting, setDeleting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
@@ -223,14 +225,27 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         const res = await playlistAPI.getPlaylistArtists(currentPlaylist.id);
         if (!active) return;
         const artists = Array.isArray(res?.artists) ? res.artists : Array.isArray(res) ? res : [];
-        setPlaylistArtists(artists);
-        const initialSelections = {};
-        artists.forEach((artist) => {
-          if (artist?.id) {
-            initialSelections[artist.id] = true;
+        const followableIds = artists.map((artist) => artist.id).filter(Boolean);
+        let enriched = artists.map((artist) => ({ ...artist, isFollowing: null, desiredFollowing: null }));
+        if (followableIds.length > 0) {
+          try {
+            const statuses = await playlistAPI.checkUserFollowsArtists(followableIds);
+            const statusMap = new Map();
+            followableIds.forEach((artistId, idx) => {
+              statusMap.set(artistId, Boolean(statuses[idx]));
+            });
+            enriched = artists.map((artist) => {
+              if (!artist?.id) {
+                return { ...artist, isFollowing: null, desiredFollowing: null };
+              }
+              const isFollowing = statusMap.has(artist.id) ? statusMap.get(artist.id) : false;
+              return { ...artist, isFollowing, desiredFollowing: isFollowing };
+            });
+          } catch (statusErr) {
+            setPlaylistArtistsError(statusErr.message || 'Failed to load artist follow status.');
           }
-        });
-        setArtistSelections(initialSelections);
+        }
+        setPlaylistArtists(enriched);
       } catch (err) {
         if (!active) return;
         setPlaylistArtistsError(err.message || 'Failed to load artists.');
@@ -1758,51 +1773,84 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     setShowArtistModal(false);
     setArtistActionError(null);
     setArtistActionMessage(null);
-    setArtistActionMode(null);
+    setPlaylistArtistsError(null);
+    setPlaylistArtists([]);
   };
 
-  const toggleArtistSelection = (artistId) => {
-    setArtistSelections((prev) => ({
-      ...prev,
-      [artistId]: !prev[artistId],
+  const toggleArtistDesiredFollowing = (artistId) => {
+    setPlaylistArtists((prev) => prev.map((artist) => {
+      if (artist.id !== artistId) return artist;
+      if (typeof artist.desiredFollowing !== 'boolean') return artist;
+      return { ...artist, desiredFollowing: !artist.desiredFollowing };
     }));
+    setArtistActionMessage(null);
   };
 
-  const handleArtistSelectAllToggle = () => {
-    if (!selectableArtistIds.length) return;
-    if (allArtistsSelected) {
-      setArtistSelections({});
-      return;
-    }
-    const nextSelections = {};
-    selectableArtistIds.forEach((artistId) => {
-      nextSelections[artistId] = true;
-    });
-    setArtistSelections(nextSelections);
+  const setAllArtistDesiredFollowing = (nextValue) => {
+    setPlaylistArtists((prev) => prev.map((artist) => (
+      artist.id && typeof artist.desiredFollowing === 'boolean'
+        ? { ...artist, desiredFollowing: nextValue }
+        : artist
+    )));
+    setArtistActionMessage(null);
   };
 
-  const handleArtistAction = async (mode, idsOverride = null) => {
+  const resetArtistChanges = () => {
+    setPlaylistArtists((prev) => prev.map((artist) => (
+      artist.id && typeof artist.isFollowing === 'boolean'
+        ? { ...artist, desiredFollowing: artist.isFollowing }
+        : artist
+    )));
+    setArtistActionError(null);
+    setArtistActionMessage(null);
+  };
+
+  const handleApplyArtistChanges = async () => {
     if (!currentPlaylist?.id) return;
-    const artistIds = Array.isArray(idsOverride) ? idsOverride : selectedArtistIds;
-    if (!artistIds.length) {
-      setArtistActionError('Select at least one artist.');
+    const followIds = [];
+    const unfollowIds = [];
+    playlistArtists.forEach((artist) => {
+      if (!artist.id || typeof artist.isFollowing !== 'boolean' || typeof artist.desiredFollowing !== 'boolean') {
+        return;
+      }
+      if (artist.desiredFollowing === artist.isFollowing) return;
+      if (artist.desiredFollowing) {
+        followIds.push(artist.id);
+      } else {
+        unfollowIds.push(artist.id);
+      }
+    });
+    if (!followIds.length && !unfollowIds.length) {
+      setArtistActionError('No changes to apply.');
       return;
     }
     setArtistActionLoading(true);
-    setArtistActionMode(mode);
     setArtistActionError(null);
     setArtistActionMessage(null);
     try {
-      if (mode === 'follow') {
-        await playlistAPI.followArtists(currentPlaylist.id, { artist_ids: artistIds });
-      } else {
-        await playlistAPI.unfollowArtists(currentPlaylist.id, { artist_ids: artistIds });
+      if (followIds.length > 0) {
+        await playlistAPI.followArtists(currentPlaylist.id, { artist_ids: followIds });
       }
-      const verb = mode === 'follow' ? 'Followed' : 'Unfollowed';
-      setArtistActionMessage(`${verb} ${artistIds.length} artist${artistIds.length === 1 ? '' : 's'}.`);
+      if (unfollowIds.length > 0) {
+        await playlistAPI.unfollowArtists(currentPlaylist.id, { artist_ids: unfollowIds });
+      }
+      const followSet = new Set(followIds);
+      const unfollowSet = new Set(unfollowIds);
+      setPlaylistArtists((prev) => prev.map((artist) => {
+        if (!artist.id || typeof artist.desiredFollowing !== 'boolean') return artist;
+        if (!followSet.has(artist.id) && !unfollowSet.has(artist.id)) return artist;
+        return { ...artist, isFollowing: artist.desiredFollowing, desiredFollowing: artist.desiredFollowing };
+      }));
+      const parts = [];
+      if (followIds.length > 0) {
+        parts.push(`Followed ${followIds.length}`);
+      }
+      if (unfollowIds.length > 0) {
+        parts.push(`Unfollowed ${unfollowIds.length}`);
+      }
+      setArtistActionMessage(parts.length ? `${parts.join(', ')}.` : 'Changes applied.');
     } catch (err) {
-      const verb = mode === 'follow' ? 'follow' : 'unfollow';
-      setArtistActionError(err.message || `Failed to ${verb} artists.`);
+      setArtistActionError(err.message || 'Failed to apply changes.');
     } finally {
       setArtistActionLoading(false);
     }
@@ -4001,32 +4049,26 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                 <div className="text-sm text-spotify-gray-light">
                   {playlistArtistsLoading ? 'Loading artists…' : `${playlistArtists.length} artist${playlistArtists.length === 1 ? '' : 's'}`}
-                  {selectedArtistIds.length > 0 && !playlistArtistsLoading ? ` · ${selectedArtistIds.length} selected` : ''}
+                  {!playlistArtistsLoading && (followCount > 0 || unfollowCount > 0) && (
+                    <span>{` · Follow ${followCount} · Unfollow ${unfollowCount}`}</span>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleArtistSelectAllToggle}
-                    disabled={!selectableArtistIds.length || playlistArtistsLoading}
-                    className="px-3 py-2 rounded-lg border border-spotify-gray-mid/60 text-spotify-gray-light text-sm hover:text-white hover:border-spotify-gray-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {allArtistsSelected ? 'Clear all' : 'Select all'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleArtistAction('follow', selectableArtistIds)}
-                    disabled={playlistArtistsLoading || artistActionLoading || !selectableArtistIds.length}
+                    onClick={() => setAllArtistDesiredFollowing(true)}
+                    disabled={playlistArtistsLoading || artistActionLoading || followableArtists.length === 0}
                     className="px-3 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {artistActionLoading && artistActionMode === 'follow' ? 'Following…' : 'Follow all'}
+                    Follow all
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleArtistAction('unfollow', selectableArtistIds)}
-                    disabled={playlistArtistsLoading || artistActionLoading || !selectableArtistIds.length}
+                    onClick={() => setAllArtistDesiredFollowing(false)}
+                    disabled={playlistArtistsLoading || artistActionLoading || followableArtists.length === 0}
                     className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {artistActionLoading && artistActionMode === 'unfollow' ? 'Unfollowing…' : 'Unfollow all'}
+                    Unfollow all
                   </button>
                 </div>
               </div>
@@ -4041,49 +4083,85 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <div className="text-red-400 text-sm">{playlistArtistsError}</div>
               )}
 
-              {!playlistArtistsLoading && !playlistArtistsError && (
+              {!playlistArtistsLoading && (
                 <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-1">
                   {playlistArtists.length === 0 ? (
                     <div className="text-sm text-spotify-gray-light">No artists found in this playlist.</div>
                   ) : (
                     playlistArtists.map((artist) => {
-                      const isSelectable = Boolean(artist.id);
                       const trackCount = artist.track_count ?? 0;
+                      const hasFollowStatus = typeof artist.isFollowing === 'boolean';
+                      const isSelectable = Boolean(artist.id) && hasFollowStatus;
+                      const isPending = isSelectable && artist.desiredFollowing !== artist.isFollowing;
+                      const willFollow = isPending && artist.desiredFollowing;
+                      const pendingClasses = isPending
+                        ? willFollow
+                          ? 'border-spotify-green/50 bg-spotify-green/10'
+                          : 'border-red-500/40 bg-red-500/10'
+                        : 'border-spotify-gray-mid/60 bg-spotify-gray-dark/50';
+                      const statusLabel = hasFollowStatus
+                        ? artist.isFollowing ? 'Following' : 'Not following'
+                        : 'Unavailable';
                       return (
-                        <label
+                        <div
                           key={artist.id || artist.name}
-                          className={`flex items-center gap-3 p-3 rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-dark/50 transition-colors ${
-                            isSelectable ? 'hover:bg-spotify-gray-mid/30' : 'opacity-70'
-                          }`}
+                          className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${pendingClasses}`}
                         >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-spotify-green"
-                            checked={isSelectable ? Boolean(artistSelections[artist.id]) : false}
-                            onChange={() => toggleArtistSelection(artist.id)}
-                            disabled={!isSelectable || artistActionLoading}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-white truncate">
-                              {artist.name}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-white truncate">{artist.name}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                hasFollowStatus
+                                  ? artist.isFollowing
+                                    ? 'bg-spotify-green/20 text-spotify-green'
+                                    : 'bg-spotify-gray-mid/60 text-spotify-gray-light'
+                                  : 'bg-spotify-gray-mid/60 text-spotify-gray-light'
+                              }`}>
+                                {statusLabel}
+                              </span>
+                              {isPending && (
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                                  willFollow ? 'border-spotify-green text-spotify-green' : 'border-red-400 text-red-400'
+                                }`}>
+                                  {willFollow ? 'Will follow' : 'Will unfollow'}
+                                </span>
+                              )}
+                              {!artist.id && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-semibold border border-spotify-gray-light text-spotify-gray-light">
+                                  No Spotify ID
+                                </span>
+                              )}
                             </div>
                             <div className="text-xs text-spotify-gray-light">
                               {trackCount} track{trackCount === 1 ? '' : 's'}
-                              {!isSelectable ? ' · Unavailable for follow' : ''}
+                              {!artist.id ? ' · Disabled' : ''}
                             </div>
                           </div>
-                          {artist.external_url && (
-                            <a
-                              href={artist.external_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-spotify-gray-light hover:text-white text-xs flex items-center gap-1"
-                            >
-                              <span className="icon text-sm">open_in_new</span>
-                              <span className="hidden sm:inline">Open</span>
-                            </a>
-                          )}
-                        </label>
+                          <div className="flex items-center gap-3">
+                            <span className={`relative inline-flex items-center ${!isSelectable || artistActionLoading ? 'opacity-50' : ''}`}>
+                              <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={Boolean(artist.desiredFollowing)}
+                                onChange={() => toggleArtistDesiredFollowing(artist.id)}
+                                disabled={!isSelectable || artistActionLoading}
+                              />
+                              <span className="w-11 h-6 rounded-full bg-spotify-gray-mid peer-checked:bg-spotify-green transition-colors" />
+                              <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+                            </span>
+                            {artist.external_url && (
+                              <a
+                                href={artist.external_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-spotify-gray-light hover:text-white text-xs flex items-center gap-1"
+                              >
+                                <span className="icon text-sm">open_in_new</span>
+                                <span className="hidden sm:inline">Open</span>
+                              </a>
+                            )}
+                          </div>
+                        </div>
                       );
                     })
                   )}
@@ -4100,6 +4178,14 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               <div className="flex flex-col sm:flex-row gap-3 justify-end">
                 <button
                   type="button"
+                  onClick={resetArtistChanges}
+                  disabled={artistActionLoading || pendingArtists.length === 0 || playlistArtistsLoading}
+                  className="px-4 py-2 rounded-lg border border-spotify-gray-mid/60 text-sm text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Reset changes
+                </button>
+                <button
+                  type="button"
                   onClick={closeArtistModal}
                   disabled={artistActionLoading}
                   className="px-4 py-2 rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 text-white text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -4108,19 +4194,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleArtistAction('follow')}
-                  disabled={artistActionLoading || !selectedArtistIds.length || playlistArtistsLoading}
+                  onClick={handleApplyArtistChanges}
+                  disabled={artistActionLoading || playlistArtistsLoading || (followCount === 0 && unfollowCount === 0)}
                   className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {artistActionLoading && artistActionMode === 'follow' ? 'Following…' : 'Follow selected'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleArtistAction('unfollow')}
-                  disabled={artistActionLoading || !selectedArtistIds.length || playlistArtistsLoading}
-                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {artistActionLoading && artistActionMode === 'unfollow' ? 'Unfollowing…' : 'Unfollow selected'}
+                  {artistActionLoading
+                    ? 'Applying…'
+                    : `Apply changes (Follow ${followCount}, Unfollow ${unfollowCount})`}
                 </button>
               </div>
             </div>
