@@ -36,6 +36,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/playlists", tags=["playlists"])
 
 
+class PlaylistArtistEntry(BaseModel):
+    id: Optional[str] = None
+    name: str
+    uri: Optional[str] = None
+    external_url: Optional[str] = None
+    track_count: int = 0
+
+
+class PlaylistArtistsResponse(BaseModel):
+    artists: List[PlaylistArtistEntry] = Field(default_factory=list)
+    total: int = 0
+
+
+class PlaylistArtistActionRequest(BaseModel):
+    artist_ids: List[str] = Field(default_factory=list)
+
+
 def get_session_manager(request: Request) -> SessionManager:
     """Extract session manager from the incoming request cookie."""
     session_id = request.cookies.get(SESSION_COOKIE_NAME)
@@ -513,23 +530,6 @@ class PlaylistTrackSelection(BaseModel):
 class PlaylistTrackRemoveRequest(BaseModel):
     items: List[PlaylistTrackSelection]
     snapshot_id: Optional[str] = None
-
-
-class PlaylistArtistEntry(BaseModel):
-    id: Optional[str] = None
-    name: str
-    uri: Optional[str] = None
-    external_url: Optional[str] = None
-    track_count: int = 0
-
-
-class PlaylistArtistsResponse(BaseModel):
-    artists: List[PlaylistArtistEntry] = Field(default_factory=list)
-    total: int = 0
-
-
-class PlaylistArtistActionRequest(BaseModel):
-    artist_ids: List[str] = Field(default_factory=list)
 
 
 class PlaylistCreateRequest(BaseModel):
