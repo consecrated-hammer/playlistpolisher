@@ -118,18 +118,6 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     });
     return total;
   }, [duplicatesSelection]);
-  const selectableArtistIds = useMemo(
-    () => playlistArtists.map((artist) => artist.id).filter(Boolean),
-    [playlistArtists]
-  );
-  const selectedArtistIds = useMemo(
-    () => selectableArtistIds.filter((artistId) => artistSelections[artistId]),
-    [selectableArtistIds, artistSelections]
-  );
-  const allArtistsSelected = useMemo(() => {
-    if (!selectableArtistIds.length) return false;
-    return selectedArtistIds.length === selectableArtistIds.length;
-  }, [selectableArtistIds, selectedArtistIds]);
   // Use global job state if it matches this playlist, otherwise use local
   const job = globalJob?.playlist_id === playlist.id ? globalJob : null;
   const setJob = (newJob) => {
@@ -163,6 +151,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [artistActionMode, setArtistActionMode] = useState(null);
   const [artistActionError, setArtistActionError] = useState(null);
   const [artistActionMessage, setArtistActionMessage] = useState(null);
+  const selectableArtistIds = useMemo(
+    () => playlistArtists.map((artist) => artist.id).filter(Boolean),
+    [playlistArtists]
+  );
+  const selectedArtistIds = useMemo(
+    () => selectableArtistIds.filter((artistId) => artistSelections[artistId]),
+    [selectableArtistIds, artistSelections]
+  );
+  const allArtistsSelected = useMemo(() => {
+    if (!selectableArtistIds.length) return false;
+    return selectedArtistIds.length === selectableArtistIds.length;
+  }, [selectableArtistIds, selectedArtistIds]);
   const [deleting, setDeleting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
