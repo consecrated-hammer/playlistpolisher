@@ -379,11 +379,14 @@ async def check_user_follows_artists(
         session_id = session_mgr.get_session_id()
         cached_statuses = {}
         if session_id:
-            cached_statuses = artist_follow_cache_store.get_cached_follow_statuses(
-                session_id,
-                artist_ids,
-                settings.artist_follow_cache_ttl_minutes,
-            )
+            try:
+                cached_statuses = artist_follow_cache_store.get_cached_follow_statuses(
+                    session_id,
+                    artist_ids,
+                    settings.artist_follow_cache_ttl_minutes,
+                )
+            except Exception as exc:
+                logger.warning("Artist follow cache lookup failed: %s", exc)
         missing_ids = [artist_id for artist_id in artist_ids if artist_id not in cached_statuses]
 
         fetched_statuses: Dict[str, bool] = {}
