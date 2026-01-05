@@ -859,27 +859,10 @@ const PlaylistDetailPage = ({ user, onLogout, globalJob, setGlobalJob, globalJob
     setError(null);
     
     try {
-      const cacheStatus = await cacheAPI.getPlaylistCacheStatus(playlistId);
-      if (cacheStatus?.needs_refresh) {
-        setLoadingMessage('Refreshing playlist cache...');
-        const warmResult = await cacheAPI.warmPlaylists([playlistId]);
-        if ((warmResult?.queued || 0) > 0) {
-          const startedAt = Date.now();
-          let warmStatus = await cacheAPI.getWarmStatus();
-          while (warmStatus?.status === 'running') {
-            if (Date.now() - startedAt > 10 * 60 * 1000) {
-              throw new Error('Playlist cache refresh timed out.');
-            }
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            warmStatus = await cacheAPI.getWarmStatus();
-          }
-        }
-      }
-
-      setLoadingMessage('Loading playlist details...');
       // Load playlist summary (metadata only)
       const summary = await playlistAPI.getPlaylistSummary(playlistId);
       
+      setLoadingMessage('Loading playlist details...');
       // Load first page of tracks (100 by default)
       const firstPage = await playlistAPI.getPlaylistTracksPaginated(playlistId, 0, 100);
       
@@ -912,7 +895,9 @@ const PlaylistDetailPage = ({ user, onLogout, globalJob, setGlobalJob, globalJob
   return (
     <Layout user={user} onLogout={onLogout} jobStatus={jobStatus} onJobIndicatorClick={onJobIndicatorClick}>
       {loading ? (
-        <LoadingSpinner text={loadingMessage} />
+        <div className="max-w-3xl mx-auto bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-2xl shadow-2xl p-8">
+          <LoadingSpinner text={loadingMessage} />
+        </div>
       ) : error ? (
         <ErrorMessage message={error} onRetry={loadPlaylistDetails} />
       ) : playlist ? (

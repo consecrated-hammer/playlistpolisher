@@ -316,7 +316,7 @@ const CachePage = ({ user, onLogout }) => {
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-spotify-black text-white">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-spotify-black text-white relative">
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -734,8 +734,8 @@ const CachePage = ({ user, onLogout }) => {
 
           {/* Loading Overlay */}
           {actionLoading && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-              <div className="bg-spotify-gray-dark rounded-2xl p-8 border border-spotify-gray-mid/60 shadow-2xl">
+            <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px] flex items-center justify-center z-40">
+              <div className="bg-spotify-gray-dark/95 rounded-2xl p-8 border border-spotify-gray-mid/60 shadow-2xl">
                 <LoadingSpinner />
                 <p className="text-white text-center mt-4">Processing...</p>
                 {refreshAllStatus?.status === 'running' && (
