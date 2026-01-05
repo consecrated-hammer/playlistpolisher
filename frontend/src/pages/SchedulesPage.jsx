@@ -90,7 +90,6 @@ const SchedulesPage = ({ user, onLogout }) => {
     return map;
   }, [playlists]);
   const filteredPlaylist = playlistFilterId ? playlistMap[playlistFilterId] : null;
-  const historyLink = playlistFilterId ? `/history?playlistId=${playlistFilterId}` : '/history';
 
   const showToast = (message, type = 'info') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -635,13 +634,6 @@ const SchedulesPage = ({ user, onLogout }) => {
                 <span className="icon text-base">add</span>
                 New Schedule
               </button>
-              <a
-                href={historyLink}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-green hover:text-black text-white transition-colors border border-spotify-gray-mid/60"
-              >
-                <span className="icon text-base">history</span>
-                History
-              </a>
               {!playlistFilterId && (
                 <button
                   onClick={() => navigate('/playlists')}
