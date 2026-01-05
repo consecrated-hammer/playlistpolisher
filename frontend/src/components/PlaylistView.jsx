@@ -426,112 +426,6 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setCacheRefreshLoading(false);
     }
   }, [cacheRefreshLoading, currentPlaylist?.id, playlist?.id]);
-  const playlistActionGroups = useMemo(() => {
-    const playlistId = currentPlaylist?.id || playlist?.id;
-    const historyLink = playlistId ? `/history?playlistId=${playlistId}` : '/history';
-    const schedulesLink = playlistId ? `/schedules?playlistId=${playlistId}` : '/schedules';
-    const backupsLink = playlistId ? `/backups?playlistId=${playlistId}` : '/backups';
-
-    const organiseItems = [
-      {
-        key: 'reorder',
-        label: 'Reorder in Spotify',
-        icon: 'reorder',
-        onClick: () => setShowSortModal(true),
-        groupKey: 'organise',
-      },
-      {
-        key: 'duplicates',
-        label: 'Find duplicates',
-        icon: 'manage_search',
-        onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
-        groupKey: 'organise',
-      },
-      {
-        key: 'artists',
-        label: 'Artist following',
-        icon: 'person_add',
-        onClick: () => setShowArtistModal(true),
-        groupKey: 'organise',
-      },
-    ];
-
-    const manageItems = [
-      {
-        key: 'edit',
-        label: 'Edit playlist',
-        icon: 'edit',
-        onClick: () => setShowEditModal(true),
-        groupKey: 'manage',
-      },
-      {
-        key: 'clone',
-        label: cloning ? 'Cloning…' : 'Clone playlist',
-        icon: 'difference',
-        onClick: handleClonePlaylist,
-        disabled: cloning,
-        groupKey: 'manage',
-      },
-      {
-        key: 'delete',
-        label: deleting ? 'Deleting…' : 'Delete playlist',
-        icon: 'delete',
-        onClick: handleDeletePlaylist,
-        disabled: deleting,
-        isDanger: true,
-        groupKey: 'manage',
-      },
-    ];
-
-    const automationItems = [
-      {
-        key: 'schedules',
-        label: 'View schedules',
-        icon: 'event',
-        onClick: () => navigate(schedulesLink),
-        groupKey: 'automation',
-      },
-      {
-        key: 'backups',
-        label: 'Backups',
-        icon: 'backup',
-        onClick: () => navigate(backupsLink),
-        groupKey: 'automation',
-      },
-      ...(historyAvailable ? [{
-        key: 'history',
-        label: 'History',
-        icon: 'history',
-        onClick: () => navigate(historyLink),
-        groupKey: 'automation',
-      }] : []),
-      {
-        key: 'cache',
-        label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
-        icon: 'cloud_sync',
-        onClick: handleCacheRefresh,
-        disabled: cacheRefreshLoading,
-        groupKey: 'automation',
-      },
-    ];
-
-    return [
-      { key: 'organise', label: 'Organise', icon: 'tune', items: organiseItems },
-      { key: 'manage', label: 'Manage', icon: 'settings', items: manageItems },
-      { key: 'automation', label: 'Automation', icon: 'auto_awesome', items: automationItems },
-    ];
-  }, [
-    cacheRefreshLoading,
-    cloning,
-    currentPlaylist?.id,
-    deleting,
-    handleCacheRefresh,
-    handleClonePlaylist,
-    handleDeletePlaylist,
-    historyAvailable,
-    navigate,
-    playlist?.id,
-  ]);
 
   useEffect(() => {
     const active = duplicatesLoading || removingDuplicates;
@@ -1617,6 +1511,113 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setDeleting(false);
     }
   }, [currentPlaylist?.id, navigate, setDeleting, setEditError, setEditMessage]);
+
+  const playlistActionGroups = useMemo(() => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    const historyLink = playlistId ? `/history?playlistId=${playlistId}` : '/history';
+    const schedulesLink = playlistId ? `/schedules?playlistId=${playlistId}` : '/schedules';
+    const backupsLink = playlistId ? `/backups?playlistId=${playlistId}` : '/backups';
+
+    const organiseItems = [
+      {
+        key: 'reorder',
+        label: 'Reorder in Spotify',
+        icon: 'reorder',
+        onClick: () => setShowSortModal(true),
+        groupKey: 'organise',
+      },
+      {
+        key: 'duplicates',
+        label: 'Find duplicates',
+        icon: 'manage_search',
+        onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
+        groupKey: 'organise',
+      },
+      {
+        key: 'artists',
+        label: 'Artist following',
+        icon: 'person_add',
+        onClick: () => setShowArtistModal(true),
+        groupKey: 'organise',
+      },
+    ];
+
+    const manageItems = [
+      {
+        key: 'edit',
+        label: 'Edit playlist',
+        icon: 'edit',
+        onClick: () => setShowEditModal(true),
+        groupKey: 'manage',
+      },
+      {
+        key: 'clone',
+        label: cloning ? 'Cloning…' : 'Clone playlist',
+        icon: 'difference',
+        onClick: handleClonePlaylist,
+        disabled: cloning,
+        groupKey: 'manage',
+      },
+      {
+        key: 'delete',
+        label: deleting ? 'Deleting…' : 'Delete playlist',
+        icon: 'delete',
+        onClick: handleDeletePlaylist,
+        disabled: deleting,
+        isDanger: true,
+        groupKey: 'manage',
+      },
+    ];
+
+    const automationItems = [
+      {
+        key: 'schedules',
+        label: 'View schedules',
+        icon: 'event',
+        onClick: () => navigate(schedulesLink),
+        groupKey: 'automation',
+      },
+      {
+        key: 'backups',
+        label: 'Backups',
+        icon: 'backup',
+        onClick: () => navigate(backupsLink),
+        groupKey: 'automation',
+      },
+      ...(historyAvailable ? [{
+        key: 'history',
+        label: 'History',
+        icon: 'history',
+        onClick: () => navigate(historyLink),
+        groupKey: 'automation',
+      }] : []),
+      {
+        key: 'cache',
+        label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
+        icon: 'cloud_sync',
+        onClick: handleCacheRefresh,
+        disabled: cacheRefreshLoading,
+        groupKey: 'automation',
+      },
+    ];
+
+    return [
+      { key: 'organise', label: 'Organise', icon: 'tune', items: organiseItems },
+      { key: 'manage', label: 'Manage', icon: 'settings', items: manageItems },
+      { key: 'automation', label: 'Automation', icon: 'auto_awesome', items: automationItems },
+    ];
+  }, [
+    cacheRefreshLoading,
+    cloning,
+    currentPlaylist?.id,
+    deleting,
+    handleCacheRefresh,
+    handleClonePlaylist,
+    handleDeletePlaylist,
+    historyAvailable,
+    navigate,
+    playlist?.id,
+  ]);
 
   const isInteractiveTarget = (event) => {
     return Boolean(event.target.closest('a, button, input, textarea, select, [data-no-select]'));
