@@ -565,7 +565,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   // Load more tracks for infinite scroll
   const loadMoreTracks = useCallback(async () => {
     if (loadingMore || !hasMoreTracks || !currentPlaylist?.id) return;
-    if (searchQuery.trim()) return;
+    if (searchLoading) return;
 
     console.log('[Infinite Scroll] Loading more tracks...', {
       currentCount: allTracks.length,
@@ -611,7 +611,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMoreTracks, currentPlaylist?.id, allTracks.length, searchQuery]);
+  }, [loadingMore, hasMoreTracks, currentPlaylist?.id, allTracks.length, searchLoading]);
 
   // Set up infinite scroll - trigger at 20% from bottom (80% scrolled)
   useInfiniteScroll(loadMoreTracks, hasMoreTracks, loadingMore || searchLoading, 0.2);
@@ -724,6 +724,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     if (searchOpen && searchInputRef.current) {
       searchInputRef.current.focus();
     }
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (searchOpen) return;
+    setSearchQuery('');
+    setSearchLoading(false);
+    searchFetchRef.current = false;
   }, [searchOpen]);
 
   useEffect(() => {
@@ -2991,7 +2998,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-visible">
         <div className="flex flex-col md:flex-row gap-6 min-w-0 max-w-full">
           {/* Cover Image */}
-          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group mx-auto md:mx-0">
+          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative z-10 group mx-auto md:mx-0">
             <div className="absolute inset-0 rounded-lg overflow-hidden bg-spotify-gray-mid">
               {currentPlaylist.images && currentPlaylist.images.length > 0 ? (
                 <img
@@ -3110,7 +3117,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               </>
             )}
           </div>
-            <div className="mt-4 relative">
+            <div className="mt-4 relative z-50">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3">
                 {player?.canUseAppPlayer && (
                   <>
@@ -3208,7 +3215,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   </>
                 )}
               </div>
-              <div className="mt-3">
+              <div className="mt-3 relative z-50">
                 {(() => {
                   const historyAvailable = Array.isArray(history) && history.length > 0;
                   const baseActions = [
