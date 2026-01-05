@@ -1,25 +1,9 @@
 # Playlist Polisher feature list
 
-## Backup and restore
-- **Backup:** reuse the existing cache as the backup source.
-- **Restore options:**
-  - **Overwrite existing playlist** (in-place restore)
-  - **Restore to new playlist** (clone-style restore)
-- **Scheduling:** enable scheduled backups of selected or all playlists.
-
 ## Known issues
 - **Web Playback SDK (Edge/Win11):** `requestMediaKeySystemAccess` robustness warning persists; investigate later.
 - In /playlist view, "Reorder in Spotify" hover text is rendering behind the playlist album art.
 - Newly-created playlist track counts show as 0 in /playlists if cache hasn't run yet.
-
-## Artist following (playlist-scoped)
-- Add an **Artist Following** action that opens a modal listing **all artists in the playlist**.
-- **Bulk actions:**
-  - **Follow all**
-  - **Unfollow all**
-- **Selective control:**
-  - Checkbox list to **tick/untick** individual artists
-  - Optional **Select all / Clear all** toggle for faster curation
 
 ## Remove explicit tracks
 - Add a **Remove Explicit Tracks** action for the current playlist.

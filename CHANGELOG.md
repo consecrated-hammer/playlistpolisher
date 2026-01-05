@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.0 - 2026-01-05
+**Artist following**
+- Artist Following: add a playlist-scoped modal with per-artist follow status, mixed follow/unfollow apply, totals, and sorting.
+- Playlist view: show primary artist follow status in the table and mobile details.
+- Context menu: add artist follow/unfollow actions from the track list.
+
 ## v1.3.0 - 2026-01-04
 **Backups**
 - Backups: add a global backups library with grouped view, filtering, sorting, and detail restore flow.

@@ -240,6 +240,43 @@ export const playlistAPI = {
   },
 
   /**
+   * Get unique artists for a playlist
+   * @param {string} playlistId - Spotify playlist ID
+   * @returns {Promise<object>} Artists response
+   */
+  getPlaylistArtists: async (playlistId) => {
+    const response = await api.get(`/playlists/${playlistId}/artists`);
+    return response.data;
+  },
+
+  /**
+   * Check if current user follows artists
+   * @param {string[]} artistIds - Spotify artist IDs
+   * @returns {Promise<boolean[]>} Follow status array
+   */
+  checkUserFollowsArtists: async (artistIds) => {
+    const response = await api.post('/playlists/artists/following', { artist_ids: artistIds });
+    const data = response.data;
+    return Array.isArray(data?.statuses) ? data.statuses : Array.isArray(data) ? data : [];
+  },
+
+  /**
+   * Follow selected artists from a playlist
+   */
+  followArtists: async (playlistId, payload) => {
+    const response = await api.post(`/playlists/${playlistId}/artists/follow`, payload);
+    return response.data;
+  },
+
+  /**
+   * Unfollow selected artists from a playlist
+   */
+  unfollowArtists: async (playlistId, payload) => {
+    const response = await api.post(`/playlists/${playlistId}/artists/unfollow`, payload);
+    return response.data;
+  },
+
+  /**
    * Update playlist metadata
    */
   updatePlaylist: async (playlistId, payload) => {

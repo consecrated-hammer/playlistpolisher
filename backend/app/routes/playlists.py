@@ -36,6 +36,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/playlists", tags=["playlists"])
 
 
+class PlaylistArtistEntry(BaseModel):
+    id: Optional[str] = None
+    name: str
+    uri: Optional[str] = None
+    external_url: Optional[str] = None
+    track_count: int = 0
+
+
+class PlaylistArtistsResponse(BaseModel):
+    artists: List[PlaylistArtistEntry] = Field(default_factory=list)
+    total: int = 0
+
+
+class PlaylistArtistActionRequest(BaseModel):
+    artist_ids: List[str] = Field(default_factory=list)
+
+
+class PlaylistArtistFollowCheckResponse(BaseModel):
+    statuses: List[bool] = Field(default_factory=list)
+
+
 def get_session_manager(request: Request) -> SessionManager:
     """Extract session manager from the incoming request cookie."""
     session_id = request.cookies.get(SESSION_COOKIE_NAME)
@@ -319,6 +340,101 @@ async def get_playlist_tracks_paginated(
         )
 
 
+@router.post("/artists/following", response_model=PlaylistArtistFollowCheckResponse)
+async def check_user_follows_artists(
+    body: PlaylistArtistActionRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service)
+):
+    """Check follow status for the current user across artist IDs."""
+    sp = spotify.get_spotify_client(session_mgr.get_user_id())
+    if not sp:
+        raise HTTPException(status_code=401, detail="Spotify authentication expired")
+    artist_ids = [artist_id for artist_id in body.artist_ids if artist_id]
+    if not artist_ids:
+        return PlaylistArtistFollowCheckResponse(statuses=[])
+    try:
+        statuses: List[bool] = []
+        for chunk in _chunk_list(artist_ids, 50):
+            params = {"type": "artist", "ids": ",".join(chunk)}
+            result = sp._get("me/following/contains", params)
+            if not isinstance(result, list):
+                raise ValueError("Unexpected response from follow status check")
+            statuses.extend([bool(item) for item in result])
+        return PlaylistArtistFollowCheckResponse(statuses=statuses)
+    except Exception as e:
+        logger.error("Failed to check artist follow status: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to check follow status")
+
+
+@router.get("/{playlist_id}/artists", response_model=PlaylistArtistsResponse)
+async def get_playlist_artists(
+    playlist_id: str = Path(..., description="Spotify playlist ID"),
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service)
+):
+    """Get unique artists for a playlist with track counts."""
+    sp = spotify.get_spotify_client(session_mgr.get_user_id())
+    if not sp:
+        raise HTTPException(status_code=401, detail="Spotify authentication expired")
+    try:
+        artists = _fetch_playlist_artists(sp, playlist_id)
+        return PlaylistArtistsResponse(artists=artists, total=len(artists))
+    except Exception as e:
+        error_msg = str(e)
+        if "404" in error_msg or "not found" in error_msg.lower():
+            logger.warning("Playlist not found for artists list: %s", playlist_id)
+            raise HTTPException(status_code=404, detail=f"Playlist not found: {playlist_id}")
+        logger.error("Failed to fetch playlist artists %s: %s", playlist_id, e)
+        raise HTTPException(status_code=500, detail="Failed to fetch playlist artists")
+
+
+@router.post("/{playlist_id}/artists/follow")
+async def follow_playlist_artists(
+    playlist_id: str,
+    body: PlaylistArtistActionRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service)
+):
+    """Follow selected artists from a playlist."""
+    sp = spotify.get_spotify_client(session_mgr.get_user_id())
+    if not sp:
+        raise HTTPException(status_code=401, detail="Spotify authentication expired")
+    artist_ids = [artist_id for artist_id in body.artist_ids if artist_id]
+    if not artist_ids:
+        return {"message": "No artists selected", "followed": 0}
+    try:
+        for chunk in _chunk_list(artist_ids, 50):
+            sp.user_follow_artists(chunk)
+        return {"message": "Artists followed", "followed": len(artist_ids)}
+    except Exception as e:
+        logger.error("Failed to follow artists for playlist %s: %s", playlist_id, e)
+        raise HTTPException(status_code=500, detail="Failed to follow artists")
+
+
+@router.post("/{playlist_id}/artists/unfollow")
+async def unfollow_playlist_artists(
+    playlist_id: str,
+    body: PlaylistArtistActionRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service)
+):
+    """Unfollow selected artists from a playlist."""
+    sp = spotify.get_spotify_client(session_mgr.get_user_id())
+    if not sp:
+        raise HTTPException(status_code=401, detail="Spotify authentication expired")
+    artist_ids = [artist_id for artist_id in body.artist_ids if artist_id]
+    if not artist_ids:
+        return {"message": "No artists selected", "unfollowed": 0}
+    try:
+        for chunk in _chunk_list(artist_ids, 50):
+            sp.user_unfollow_artists(chunk)
+        return {"message": "Artists unfollowed", "unfollowed": len(artist_ids)}
+    except Exception as e:
+        logger.error("Failed to unfollow artists for playlist %s: %s", playlist_id, e)
+        raise HTTPException(status_code=500, detail="Failed to unfollow artists")
+
+
 class PlaylistUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, description="New playlist name")
     public: Optional[bool] = Field(None, description="Whether playlist is public")
@@ -598,6 +714,47 @@ def _fetch_playlist_items(sp: Any, playlist_id: str) -> List[Dict[str, Any]]:
             break
         offset += limit
     return items
+
+
+def _fetch_playlist_artists(sp: Any, playlist_id: str) -> List[Dict[str, Any]]:
+    """Fetch unique artists from a playlist with track counts."""
+    artists: Dict[str, Dict[str, Any]] = {}
+    limit = 100
+    offset = 0
+    while True:
+        res = sp.playlist_items(
+            playlist_id,
+            limit=limit,
+            offset=offset,
+            fields="items(track(artists(id,name,uri,external_urls(spotify)))),next"
+        )
+        for item in res.get("items", []) or []:
+            track = item.get("track") or {}
+            for artist in track.get("artists") or []:
+                name = artist.get("name")
+                if not name:
+                    continue
+                artist_id = artist.get("id")
+                key = artist_id or f"name::{name.lower().strip()}"
+                if key not in artists:
+                    artists[key] = {
+                        "id": artist_id,
+                        "name": name,
+                        "uri": artist.get("uri"),
+                        "external_url": (artist.get("external_urls") or {}).get("spotify"),
+                        "track_count": 0,
+                    }
+                artists[key]["track_count"] += 1
+        if not res.get("next"):
+            break
+        offset += limit
+    artist_list = list(artists.values())
+    artist_list.sort(key=lambda entry: (entry.get("name") or "").lower())
+    return artist_list
+
+
+def _chunk_list(items: List[str], chunk_size: int = 50) -> List[List[str]]:
+    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
 @router.post("/{playlist_id}/clone")
