@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.3 - 2026-01-05
+**Cache-first playlist entry**
+- Cache: enforce snapshot checks on playlist entry and refresh caches before serving data.
+- Cache: build artist lists and duplicate analysis from cached playlist items when available.
+- UI: soften cache refresh overlay so the header remains visible.
+
 ## v1.4.2 - 2026-01-05
 **Playlist browsing fixes**
 - Playlists: use cached playlist tracks for paging when available, with stale-cache fallback for faster search.
