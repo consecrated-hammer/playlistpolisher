@@ -54,6 +54,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [ignoringPair, setIgnoringPair] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef(null);
   const searchFetchRef = useRef(false);
   const trackActionPendingRef = useRef(null);
@@ -564,6 +565,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   // Load more tracks for infinite scroll
   const loadMoreTracks = useCallback(async () => {
     if (loadingMore || !hasMoreTracks || !currentPlaylist?.id) return;
+    if (searchQuery.trim()) return;
 
     console.log('[Infinite Scroll] Loading more tracks...', {
       currentCount: allTracks.length,
@@ -609,20 +611,25 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMoreTracks, currentPlaylist?.id, allTracks.length]);
+  }, [loadingMore, hasMoreTracks, currentPlaylist?.id, allTracks.length, searchQuery]);
 
   // Set up infinite scroll - trigger at 20% from bottom (80% scrolled)
-  useInfiniteScroll(loadMoreTracks, hasMoreTracks, loadingMore, 0.2);
+  useInfiniteScroll(loadMoreTracks, hasMoreTracks, loadingMore || searchLoading, 0.2);
 
   useEffect(() => {
     const query = searchQuery.trim();
-    if (!query || !currentPlaylist?.id || !hasMoreTracks || loadingMore) return;
+    if (!query) {
+      searchFetchRef.current = false;
+      setSearchLoading(false);
+      return;
+    }
+    if (!currentPlaylist?.id || !hasMoreTracks || loadingMore) return;
     if (searchFetchRef.current) return;
 
     let active = true;
     const loadAllTracksForSearch = async () => {
       searchFetchRef.current = true;
-      setLoadingMore(true);
+      setSearchLoading(true);
       try {
         let offset = allTracks.length;
         let hasMore = hasMoreTracks;
@@ -657,10 +664,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       } catch (err) {
         console.warn('[Search] Failed to load full playlist for search:', err);
       } finally {
-        if (active) {
-          setLoadingMore(false);
-        }
         searchFetchRef.current = false;
+        if (active) {
+          setSearchLoading(false);
+        }
       }
     };
 
@@ -2981,7 +2988,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </button>
 
       {/* Playlist Header */}
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-hidden">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-visible">
         <div className="flex flex-col md:flex-row gap-6 min-w-0 max-w-full">
           {/* Cover Image */}
           <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group mx-auto md:mx-0">
@@ -3018,7 +3025,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           </div>
 
       {/* Playlist Info */}
-      <div className="flex flex-col justify-end min-w-0 w-full overflow-hidden">
+      <div className="flex flex-col justify-end min-w-0 w-full overflow-visible">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full min-w-0 w-full md:whitespace-normal md:overflow-visible md:break-words">
               {currentPlaylist.name}
@@ -3384,6 +3391,12 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     placeholder="Search this playlist"
                     className="flex-1 bg-transparent text-sm text-white placeholder:text-spotify-gray-light focus:outline-none"
                   />
+                  {searchLoading && (
+                    <div className="flex items-center gap-2 text-xs text-spotify-gray-light">
+                      <span className="w-3 h-3 border-2 border-spotify-gray-light border-t-transparent rounded-full animate-spin" />
+                      Loading full playlist…
+                    </div>
+                  )}
                   {searchQuery ? (
                     <button
                       type="button"
