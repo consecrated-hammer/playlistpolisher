@@ -62,6 +62,7 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
   const shortCommit = commitSha ? commitSha.substring(0, 7) : '';
   const imageTag = import.meta.env.VITE_IMAGE_TAG;
   const isDevBuild = (imageTag && imageTag !== 'main' && imageTag !== 'latest' && !imageTag.startsWith('v')) || IS_DEV_BUILD;
+  const versionLabel = shortCommit ? `commit ${shortCommit}` : 'local';
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-spotify-black via-spotify-gray-dark to-spotify-gray-mid flex flex-col ${showPlayerBar ? 'pb-32' : ''}`}>
@@ -247,7 +248,7 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
         <div className="container mx-auto px-4 py-3 text-center text-spotify-gray-light text-xs">
           <p className="flex items-center justify-center gap-2">
             <span>
-              Playlist Polisher {import.meta.env.VITE_APP_VERSION || 'dev'}
+              Playlist Polisher {versionLabel}
             </span>
             {IS_DEV_BUILD && (
               <span className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded text-[10px] uppercase tracking-wide font-semibold" title={shortCommit ? `Commit: ${shortCommit}` : 'Development Build'}>

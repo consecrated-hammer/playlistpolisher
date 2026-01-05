@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.1 - 2026-01-05
+**Build metadata**
+- UI: display commit-based build identifiers in the footer instead of release versions.
+
 ## v1.4.0 - 2026-01-05
 **Artist following**
 - Artist Following: add a playlist-scoped modal with per-artist follow status, mixed follow/unfollow apply, totals, and sorting.
