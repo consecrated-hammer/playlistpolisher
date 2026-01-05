@@ -1,7 +1,16 @@
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Iterable
+from typing import Dict, Iterable, List
+import logging
+import sqlite3
 
 from app.db.database import get_db_connection
+
+logger = logging.getLogger(__name__)
+
+
+def _chunk_list(items: List[str], chunk_size: int) -> Iterable[List[str]]:
+    for i in range(0, len(items), chunk_size):
+        yield items[i:i + chunk_size]
 
 
 def _now_iso() -> str:
@@ -19,23 +28,32 @@ def get_cached_follow_statuses(
 
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=ttl_minutes)
     cutoff_iso = cutoff.isoformat()
-    placeholders = ",".join(["?"] * len(ids))
+    results: Dict[str, bool] = {}
+    chunk_size = 500
 
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            f"""
-            SELECT artist_id, is_following
-            FROM artist_follow_cache
-            WHERE session_id = ?
-              AND artist_id IN ({placeholders})
-              AND cached_at > ?
-            """,
-            (session_id, *ids, cutoff_iso),
-        )
-        rows = cur.fetchall()
+    try:
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            for chunk in _chunk_list(ids, chunk_size):
+                placeholders = ",".join(["?"] * len(chunk))
+                cur.execute(
+                    f"""
+                    SELECT artist_id, is_following
+                    FROM artist_follow_cache
+                    WHERE session_id = ?
+                      AND artist_id IN ({placeholders})
+                      AND cached_at > ?
+                    """,
+                    (session_id, *chunk, cutoff_iso),
+                )
+                rows = cur.fetchall()
+                for row in rows:
+                    results[row["artist_id"]] = bool(row["is_following"])
+    except sqlite3.Error as exc:
+        logger.warning("Artist follow cache lookup failed: %s", exc)
+        return {}
 
-    return {row["artist_id"]: bool(row["is_following"]) for row in rows}
+    return results
 
 
 def set_cached_follow_statuses(
