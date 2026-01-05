@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { playlistAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -7,10 +7,13 @@ import ErrorMessage from '../components/ErrorMessage';
 
 const HistoryPage = ({ user, onLogout }) => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const playlistFilterId = searchParams.get('playlistId');
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
   const [error, setError] = useState(null);
   const [undoingPlaylist, setUndoingPlaylist] = useState(null);
+  const [filteredPlaylistName, setFilteredPlaylistName] = useState(null);
   const latestUndoableByPlaylist = useMemo(() => {
     const map = {};
     for (const entry of history) {
@@ -22,22 +25,38 @@ const HistoryPage = ({ user, onLogout }) => {
     return map;
   }, [history]);
 
-  useEffect(() => {
-    const loadHistory = async () => {
-      setLoading(true);
-      setError(null);
-      try {
+  const loadHistory = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (playlistFilterId) {
+        const [historyResp, playlistSummary] = await Promise.all([
+          playlistAPI.getHistory(playlistFilterId),
+          playlistAPI.getPlaylistSummary(playlistFilterId).catch(() => null),
+        ]);
+        const playlistName = playlistSummary?.name || playlistFilterId;
+        setFilteredPlaylistName(playlistName);
+        const scoped = (historyResp?.history || []).map((entry) => ({
+          ...entry,
+          playlist_id: playlistFilterId,
+          playlist_name: playlistName,
+        }));
+        setHistory(scoped);
+      } else {
         const data = await playlistAPI.getAllHistory();
         setHistory(data || []);
-      } catch (err) {
-        setError(err.message || 'Failed to load history');
-      } finally {
-        setLoading(false);
+        setFilteredPlaylistName(null);
       }
-    };
+    } catch (err) {
+      setError(err.message || 'Failed to load history');
+    } finally {
+      setLoading(false);
+    }
+  }, [playlistFilterId]);
 
+  useEffect(() => {
     loadHistory();
-  }, []);
+  }, [loadHistory]);
 
   const formatDate = (isoString) => {
     if (!isoString) return 'Unknown';
@@ -106,10 +125,11 @@ const HistoryPage = ({ user, onLogout }) => {
 
   const getSourceBadge = (entry) => {
     if (entry.source === 'scheduled' || entry.schedule_id) {
+      const scheduleLink = entry.playlist_id ? `/schedules?playlistId=${entry.playlist_id}` : '/schedules';
       return (
         <div className="relative group">
           <button
-            onClick={() => navigate('/schedules')}
+            onClick={() => navigate(scheduleLink)}
             className="w-6 h-6 rounded-lg flex items-center justify-center text-amber-300 hover:bg-spotify-gray-mid/60 transition-colors"
           >
             <span className="icon text-sm">event</span>
@@ -154,17 +174,47 @@ const HistoryPage = ({ user, onLogout }) => {
       <div className="bg-gradient-to-b from-spotify-gray-dark to-spotify-black text-white">
         <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
           {/* Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white">Operation History</h1>
-              <p className="text-spotify-gray-light mt-1">All recent playlist operations across your library</p>
+              <h1 className="text-3xl font-bold text-white">History</h1>
+              <p className="text-spotify-gray-light mt-1">
+                {playlistFilterId
+                  ? `Showing history for ${filteredPlaylistName || 'this playlist'}.`
+                  : 'All recent playlist operations across your library.'}
+              </p>
             </div>
-            <button
-              onClick={() => navigate('/')}
-              className="px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
-            >
-              ← Back to Playlists
-            </button>
+            <div className="flex flex-col items-start gap-2 md:items-end">
+              {playlistFilterId && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => navigate(`/playlist/${playlistFilterId}`)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
+                  >
+                    ← Back to playlist
+                  </button>
+                  <button
+                    onClick={() => navigate('/playlists')}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
+                  >
+                    ← Back to Playlists
+                  </button>
+                  <button
+                    onClick={() => setSearchParams({})}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-spotify-gray-light bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 text-white transition-colors"
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              )}
+              {!playlistFilterId && (
+                <button
+                  onClick={() => navigate('/playlists')}
+                  className="px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
+                >
+                  ← Back to Playlists
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Content */}
@@ -256,8 +306,7 @@ const HistoryPage = ({ user, onLogout }) => {
                                 try {
                                   await playlistAPI.undoLast(entry.playlist_id);
                                   // Reload history
-                                  const data = await playlistAPI.getAllHistory();
-                                  setHistory(data || []);
+                                  await loadHistory();
                                 } catch (err) {
                                   alert(err.message || 'Failed to undo operation');
                                 } finally {

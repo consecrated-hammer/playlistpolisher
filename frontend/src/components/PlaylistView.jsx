@@ -19,6 +19,159 @@ import usePlayerContext from '../context/usePlayerContext';
 import useInfiniteScroll from '../hooks/useInfiniteScroll';
 import { PLAYLIST_PAGE_SIZE } from '../config';
 
+const splitMenuItems = (items) => {
+  const primary = [];
+  const danger = [];
+  items.forEach((item) => {
+    if (item.isDanger) {
+      danger.push(item);
+    } else {
+      primary.push(item);
+    }
+  });
+  return { primary, danger };
+};
+
+const DropdownMenu = ({ menuKey, label, icon, items, openMenuKey, setOpenMenuKey }) => {
+  const isOpen = openMenuKey === menuKey;
+  const { primary, danger } = splitMenuItems(items);
+
+  const handleSelect = (item) => {
+    if (item.disabled) return;
+    if (item.onClick) item.onClick();
+    setOpenMenuKey(null);
+  };
+
+  return (
+    <div className="relative" data-action-menu>
+      <button
+        type="button"
+        onClick={() => setOpenMenuKey(isOpen ? null : menuKey)}
+        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-dark/60 text-white text-sm font-semibold hover:bg-spotify-gray-mid/60 transition-colors"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+      >
+        <span className="icon text-base">{icon}</span>
+        <span>{label}</span>
+        <span className={`icon text-base transition-transform ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
+      </button>
+      {isOpen && (
+        <div className="absolute left-0 mt-2 w-56 bg-spotify-gray-dark border border-spotify-gray-mid/60 rounded-xl shadow-2xl z-50 p-1" role="menu">
+          {primary.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => handleSelect(item)}
+              disabled={item.disabled}
+              className={`w-full px-3 py-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                item.disabled
+                  ? 'text-spotify-gray-light opacity-60 cursor-not-allowed'
+                  : 'text-white hover:bg-spotify-gray-mid/60'
+              }`}
+              role="menuitem"
+            >
+              <span className="icon text-base">{item.icon}</span>
+              <span className="min-w-0 truncate">{item.label}</span>
+            </button>
+          ))}
+          {danger.length > 0 && (
+            <>
+              <div className="my-1 border-t border-spotify-gray-mid/60" />
+              {danger.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleSelect(item)}
+                  disabled={item.disabled}
+                  className={`w-full px-3 py-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                    item.disabled
+                      ? 'text-red-400/60 opacity-60 cursor-not-allowed'
+                      : 'text-red-400 hover:bg-red-600/20'
+                  }`}
+                  role="menuitem"
+                >
+                  <span className="icon text-base">{item.icon}</span>
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ActionAccordion = ({ groupKey, label, icon, items, isOpen, onToggle }) => {
+  const { primary, danger } = splitMenuItems(items);
+  const toggleLabel = isOpen ? 'Collapse actions' : 'Expand actions';
+
+  const handleSelect = (item) => {
+    if (item.disabled) return;
+    if (item.onClick) item.onClick();
+    onToggle(null);
+  };
+
+  return (
+    <div className="bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => onToggle(isOpen ? null : groupKey)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-white font-semibold text-sm"
+        aria-expanded={isOpen}
+        aria-label={toggleLabel}
+      >
+        <div className="flex items-center gap-2">
+          <span className="icon text-base text-spotify-green">{icon}</span>
+          <span>{label}</span>
+        </div>
+        <span className={`icon text-base transition-transform ${isOpen ? 'rotate-180' : ''}`}>expand_more</span>
+      </button>
+      {isOpen && (
+        <div className="px-3 pb-3 space-y-1">
+          {primary.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => handleSelect(item)}
+              disabled={item.disabled}
+              className={`w-full px-3 py-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                item.disabled
+                  ? 'text-spotify-gray-light opacity-60 cursor-not-allowed'
+                  : 'text-white hover:bg-spotify-gray-mid/50'
+              }`}
+            >
+              <span className="icon text-base">{item.icon}</span>
+              <span className="min-w-0">{item.label}</span>
+            </button>
+          ))}
+          {danger.length > 0 && (
+            <>
+              <div className="my-1 border-t border-spotify-gray-mid/60" />
+              {danger.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleSelect(item)}
+                  disabled={item.disabled}
+                  className={`w-full px-3 py-2 rounded-lg text-left text-sm flex items-center gap-2 transition-colors ${
+                    item.disabled
+                      ? 'text-red-400/60 opacity-60 cursor-not-allowed'
+                      : 'text-red-400 hover:bg-red-600/20'
+                  }`}
+                >
+                  <span className="icon text-base">{item.icon}</span>
+                  <span className="min-w-0">{item.label}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStatus, setGlobalJobStatus, onDedupeStatusChange }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,6 +221,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [trackActionOpen, setTrackActionOpen] = useState(false);
   const [trackActionLoading, setTrackActionLoading] = useState(false);
   const [trackActionError, setTrackActionError] = useState(null);
+  const [openActionMenu, setOpenActionMenu] = useState(null);
+  const [mobileActionGroup, setMobileActionGroup] = useState(null);
   const [targetPlaylists, setTargetPlaylists] = useState([]);
   const [targetPlaylistsLoading, setTargetPlaylistsLoading] = useState(false);
   const [targetPlaylistsError, setTargetPlaylistsError] = useState(null);
@@ -217,6 +372,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
     return artists;
   }, [playlistArtists, artistSortOption]);
+
   const applyArtistFollowUpdates = useCallback((updates, options = {}) => {
     const { forceDesired = false } = options;
     if (!updates || Object.keys(updates).length === 0) return;
@@ -241,10 +397,35 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [cacheRefreshMessage, setCacheRefreshMessage] = useState(null);
   const [cacheRefreshError, setCacheRefreshError] = useState(null);
   const [history, setHistory] = useState(null);
+  const historyAvailable = useMemo(() => Array.isArray(history) && history.length > 0, [history]);
   const [schedules, setSchedules] = useState([]);
   const [schedulesOpen, setSchedulesOpen] = useState(false);
   const schedulesHoverTimer = useRef(null);
   const sortSpinnerTimer = useRef(null);
+  const handleCacheRefresh = useCallback(async () => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    if (!playlistId || cacheRefreshLoading) return;
+    setCacheRefreshLoading(true);
+    setCacheRefreshMessage(null);
+    setCacheRefreshError(null);
+    try {
+      const status = await cacheAPI.getPlaylistCacheStatus(playlistId);
+      if (status?.needs_refresh) {
+        const warmResult = await cacheAPI.warmPlaylists([playlistId]);
+        if ((warmResult?.queued || 0) > 0) {
+          setCacheRefreshMessage('Cache refresh queued.');
+        } else {
+          setCacheRefreshMessage('Cache refresh already running.');
+        }
+      } else {
+        setCacheRefreshMessage('Cache already up to date.');
+      }
+    } catch (err) {
+      setCacheRefreshError(err.message || 'Failed to refresh cache.');
+    } finally {
+      setCacheRefreshLoading(false);
+    }
+  }, [cacheRefreshLoading, currentPlaylist?.id, playlist?.id]);
 
   useEffect(() => {
     const active = duplicatesLoading || removingDuplicates;
@@ -1282,30 +1463,161 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   };
 
-  const handleCacheRefresh = async () => {
-    const playlistId = currentPlaylist?.id || playlist?.id;
-    if (!playlistId || cacheRefreshLoading) return;
-    setCacheRefreshLoading(true);
-    setCacheRefreshMessage(null);
-    setCacheRefreshError(null);
+  const handleClonePlaylist = useCallback(async () => {
+    setEditError(null);
+    setEditMessage(null);
     try {
-      const status = await cacheAPI.getPlaylistCacheStatus(playlistId);
-      if (status?.needs_refresh) {
-        const warmResult = await cacheAPI.warmPlaylists([playlistId]);
-        if ((warmResult?.queued || 0) > 0) {
-          setCacheRefreshMessage('Cache refresh queued.');
-        } else {
-          setCacheRefreshMessage('Cache refresh already running.');
-        }
-      } else {
-        setCacheRefreshMessage('Cache already up to date.');
-      }
+      const allPlaylists = await playlistAPI.getPlaylists();
+
+      // Extract base name by removing existing (clone N) suffix if present
+      const cloneRegex = /^(.+?)\s*\(clone\s+\d+\)$/i;
+      const match = currentPlaylist.name.match(cloneRegex);
+      const baseName = match ? match[1].trim() : currentPlaylist.name;
+      const escapedBaseName = baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Find all existing clones with this base name
+      const existingClones = allPlaylists
+        .map((pl) => {
+          const cloneMatch = pl.name.match(
+            new RegExp(`^${escapedBaseName}\\s*\\(clone\\s+(\\d+)\\)$`, 'i')
+          );
+          return cloneMatch ? parseInt(cloneMatch[1], 10) : null;
+        })
+        .filter((num) => num !== null);
+
+      // Find the next available clone number
+      const cloneNumber = existingClones.length > 0 ? Math.max(...existingClones) + 1 : 1;
+      const suggestedName = `${baseName} (clone ${cloneNumber})`;
+
+      setCloneName(suggestedName);
+      setShowCloneModal(true);
     } catch (err) {
-      setCacheRefreshError(err.message || 'Failed to refresh cache.');
-    } finally {
-      setCacheRefreshLoading(false);
+      setEditError(err.message || 'Failed to prepare clone');
     }
-  };
+  }, [currentPlaylist.name, setCloneName, setEditError, setEditMessage, setShowCloneModal]);
+
+  const handleDeletePlaylist = useCallback(async () => {
+    if (!currentPlaylist?.id) return;
+    if (!window.confirm('Delete this playlist from your library?')) return;
+    setEditError(null);
+    setEditMessage(null);
+    setDeleting(true);
+    try {
+      await playlistAPI.deletePlaylist(currentPlaylist.id);
+      navigate('/playlists');
+    } catch (err) {
+      setEditError(err.message || 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  }, [currentPlaylist?.id, navigate, setDeleting, setEditError, setEditMessage]);
+
+  const playlistActionGroups = useMemo(() => {
+    const playlistId = currentPlaylist?.id || playlist?.id;
+    const historyLink = playlistId ? `/history?playlistId=${playlistId}` : '/history';
+    const schedulesLink = playlistId ? `/schedules?playlistId=${playlistId}` : '/schedules';
+    const backupsLink = playlistId ? `/backups?playlistId=${playlistId}` : '/backups';
+
+    const organiseItems = [
+      {
+        key: 'reorder',
+        label: 'Reorder in Spotify',
+        icon: 'reorder',
+        onClick: () => setShowSortModal(true),
+        groupKey: 'organise',
+      },
+      {
+        key: 'duplicates',
+        label: 'Find duplicates',
+        icon: 'manage_search',
+        onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
+        groupKey: 'organise',
+      },
+      {
+        key: 'artists',
+        label: 'Artist following',
+        icon: 'person_add',
+        onClick: () => setShowArtistModal(true),
+        groupKey: 'organise',
+      },
+    ];
+
+    const manageItems = [
+      {
+        key: 'edit',
+        label: 'Edit playlist',
+        icon: 'edit',
+        onClick: () => setShowEditModal(true),
+        groupKey: 'manage',
+      },
+      {
+        key: 'clone',
+        label: cloning ? 'Cloning…' : 'Clone playlist',
+        icon: 'difference',
+        onClick: handleClonePlaylist,
+        disabled: cloning,
+        groupKey: 'manage',
+      },
+      {
+        key: 'delete',
+        label: deleting ? 'Deleting…' : 'Delete playlist',
+        icon: 'delete',
+        onClick: handleDeletePlaylist,
+        disabled: deleting,
+        isDanger: true,
+        groupKey: 'manage',
+      },
+    ];
+
+    const automationItems = [
+      {
+        key: 'schedules',
+        label: 'View schedules',
+        icon: 'event',
+        onClick: () => navigate(schedulesLink),
+        groupKey: 'automation',
+      },
+      {
+        key: 'backups',
+        label: 'Backups',
+        icon: 'backup',
+        onClick: () => navigate(backupsLink),
+        groupKey: 'automation',
+      },
+      ...(historyAvailable ? [{
+        key: 'history',
+        label: 'History',
+        icon: 'history',
+        onClick: () => navigate(historyLink),
+        groupKey: 'automation',
+      }] : []),
+      {
+        key: 'cache',
+        label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
+        icon: 'cloud_sync',
+        onClick: handleCacheRefresh,
+        disabled: cacheRefreshLoading,
+        groupKey: 'automation',
+      },
+    ];
+
+    return [
+      { key: 'organise', label: 'Organise', icon: 'tune', items: organiseItems },
+      { key: 'manage', label: 'Manage', icon: 'settings', items: manageItems },
+      { key: 'automation', label: 'Automation', icon: 'auto_awesome', items: automationItems },
+    ];
+  }, [
+    cacheRefreshLoading,
+    cloning,
+    currentPlaylist?.id,
+    deleting,
+    handleCacheRefresh,
+    handleClonePlaylist,
+    handleDeletePlaylist,
+    historyAvailable,
+    navigate,
+    playlist?.id,
+  ]);
 
   const isInteractiveTarget = (event) => {
     return Boolean(event.target.closest('a, button, input, textarea, select, [data-no-select]'));
@@ -1420,6 +1732,26 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       window.removeEventListener('scroll', handleScroll, true);
     };
   }, [closeContextMenu, contextMenu]);
+
+  useEffect(() => {
+    if (!openActionMenu) return;
+    const handleKey = (event) => {
+      if (event.key === 'Escape') {
+        setOpenActionMenu(null);
+      }
+    };
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('[data-action-menu]')) {
+        setOpenActionMenu(null);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    window.addEventListener('click', handleClickOutside, true);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener('click', handleClickOutside, true);
+    };
+  }, [openActionMenu]);
 
   const getContextMenuPosition = (event, anchorEl = null) => {
     const menuMinWidth = 288;
@@ -3216,170 +3548,32 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 )}
               </div>
               <div className="mt-3 relative z-50">
-                {(() => {
-                  const historyAvailable = Array.isArray(history) && history.length > 0;
-                  const baseActions = [
-                    {
-                      label: 'Reorder in Spotify',
-                      onClick: () => setShowSortModal(true),
-                      icon: "reorder",
-                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                      disabled: false
-                    },
-                    {
-                      label: 'Find duplicates',
-                      onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
-                      icon: "manage_search",
-                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                      disabled: false
-                    },
-                    {
-                      label: 'Artist following',
-                      onClick: () => setShowArtistModal(true),
-                      icon: "person_add",
-                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                      disabled: false
-                    },
-                    {
-                      label: 'Edit playlist',
-                      onClick: () => setShowEditModal(true),
-                      icon: "edit",
-                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                      disabled: false
-                    },
-                    {
-                      label: cloning ? 'Cloning…' : 'Clone playlist',
-                      onClick: async () => {
-                        setEditError(null); setEditMessage(null);
-                        // Generate clone name by checking existing playlists
-                        try {
-                          const allPlaylists = await playlistAPI.getPlaylists();
-                          
-                          // Extract base name by removing existing (clone N) suffix if present
-                          const cloneRegex = /^(.+?)\s*\(clone\s+\d+\)$/i;
-                          const match = currentPlaylist.name.match(cloneRegex);
-                          const baseName = match ? match[1].trim() : currentPlaylist.name;
-                          
-                          // Find all existing clones with this base name
-                          const existingClones = allPlaylists
-                            .map(p => {
-                              const cloneMatch = p.name.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\(clone\\s+(\\d+)\\)$`, 'i'));
-                              return cloneMatch ? parseInt(cloneMatch[1], 10) : null;
-                            })
-                            .filter(num => num !== null);
-                          
-                          // Find the next available clone number
-                          const cloneNumber = existingClones.length > 0 ? Math.max(...existingClones) + 1 : 1;
-                          const suggestedName = `${baseName} (clone ${cloneNumber})`;
-                          
-                          setCloneName(suggestedName);
-                          setShowCloneModal(true);
-                        } catch (err) {
-                          setEditError(err.message || 'Failed to prepare clone');
-                        }
-                      },
-                      icon: "difference",
-                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                      disabled: cloning
-                    },
-                  ];
-
-                  const historyActions = [];
-                  if (historyAvailable) {
-                    historyActions.push({
-                      label: 'Recent actions',
-                      onClick: () => navigate('/history'),
-                      icon: "history",
-                      colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                      disabled: false
-                    });
-                  }
-
-                  const deleteAction = {
-                    label: deleting ? 'Deleting…' : 'Delete playlist',
-                    onClick: async () => {
-                      if (!window.confirm('Delete this playlist from your library?')) return;
-                      setEditError(null); setEditMessage(null);
-                      setDeleting(true);
-                      try {
-                        await playlistAPI.deletePlaylist(currentPlaylist.id);
-                        navigate('/playlists');
-                      } catch (err) {
-                        setEditError(err.message || 'Delete failed');
-                      } finally {
-                        setDeleting(false);
-                      }
-                    },
-                    icon: "delete",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-red-600 hover:text-white text-red-400',
-                    disabled: deleting,
-                    tooltipClass: 'tooltip tooltip-down tooltip-danger',
-                    tooltipSide: 'down'
-                  };
-
-                  const scheduleAction = {
-                    label: 'View schedules',
-                    onClick: () => navigate(`/schedules?playlistId=${currentPlaylist.id}`),
-                    icon: "event",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  };
-
-                  const cacheAction = {
-                    label: cacheRefreshLoading ? 'Refreshing cache…' : 'Refresh cache',
-                    onClick: handleCacheRefresh,
-                    icon: "cloud_sync",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: cacheRefreshLoading
-                  };
-
-                  const backupAction = {
-                    label: 'Backups',
-                    onClick: () => navigate(`/backups?playlistId=${currentPlaylist.id}`),
-                    icon: "backup",
-                    colorClass: 'bg-spotify-gray-mid hover:bg-spotify-green hover:text-black',
-                    disabled: false
-                  };
-
-                  const actions = [...baseActions, ...historyActions, scheduleAction, cacheAction, backupAction, deleteAction];
-                  return (
-                    <>
-                      <div className="flex flex-col gap-2 md:hidden w-full max-w-xs mx-auto">
-                        {actions.map((action, idx) => (
-                          <button
-                            key={idx}
-                            onClick={action.onClick}
-                            disabled={action.disabled}
-                            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white flex items-center justify-center gap-2 text-center transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${action.colorClass}`}
-                          >
-                            <span className="icon text-sm flex-shrink-0">{action.icon}</span>
-                            <span className="min-w-0 text-center leading-snug break-words">{action.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="hidden md:flex flex-wrap items-center gap-2">
-                        {actions.map((action, idx) => (
-                          <div key={idx} className="relative group">
-                            <button
-                              onClick={action.onClick}
-                              onMouseEnter={action.onMouseEnter}
-                              onMouseLeave={action.onMouseLeave}
-                              disabled={action.disabled}
-                              className={`w-10 h-10 rounded-lg ${action.colorClass} text-white flex items-center justify-center transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed`}
-                            >
-                              <span className="icon text-base">{action.icon}</span>
-                            </button>
-                            {!action.noTooltip && (
-                              <div className={`tooltip ${action.tooltipSide === 'down' ? 'tooltip-down' : 'tooltip-up'} group-hover:tooltip-visible ${action.tooltipClass || ''}`}>
-                                {action.label}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  );
-                })()}
+                <div className="flex flex-col gap-3 md:hidden w-full max-w-md mx-auto">
+                  {playlistActionGroups.map((group) => (
+                    <ActionAccordion
+                      key={group.key}
+                      groupKey={group.key}
+                      label={group.label}
+                      icon={group.icon}
+                      items={group.items}
+                      isOpen={mobileActionGroup === group.key}
+                      onToggle={setMobileActionGroup}
+                    />
+                  ))}
+                </div>
+                <div className="hidden md:flex flex-wrap items-center gap-3">
+                  {playlistActionGroups.map((group) => (
+                    <DropdownMenu
+                      key={group.key}
+                      menuKey={group.key}
+                      label={group.label}
+                      icon={group.icon}
+                      items={group.items}
+                      openMenuKey={openActionMenu}
+                      setOpenMenuKey={setOpenActionMenu}
+                    />
+                  ))}
+                </div>
                 {(cacheRefreshMessage || cacheRefreshError) && (
                   <div className="mt-2 text-xs">
                     {cacheRefreshMessage && <div className="text-spotify-green">{cacheRefreshMessage}</div>}
