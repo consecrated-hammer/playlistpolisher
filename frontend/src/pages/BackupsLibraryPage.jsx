@@ -412,7 +412,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                     onClick={() => navigate('/playlists')}
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
                   >
-                    All playlists
+                    ← Back to Playlists
                   </button>
                   <button
                     onClick={handleRemoveFilter}
@@ -427,7 +427,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                   onClick={() => navigate('/playlists')}
                   className="px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
                 >
-                  All playlists
+                  ← Back to Playlists
                 </button>
               )}
             </div>
