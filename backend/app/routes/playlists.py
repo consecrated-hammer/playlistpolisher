@@ -914,7 +914,12 @@ def _get_cached_playlist_tracks_page(
         )
 
     track_ids = [item["track_id"] for item in items if item.get("track_id")]
-    cached_tracks, missing_ids = CacheService.get_tracks(track_ids, session_id)
+    cached_tracks, missing_ids = CacheService.get_tracks(
+        track_ids,
+        session_id,
+        allow_stale=True,
+        allow_legacy=True,
+    )
     cache_hits = len(cached_tracks)
     cache_misses = len(missing_ids)
     cache_warmed = 0

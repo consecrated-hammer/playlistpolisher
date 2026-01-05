@@ -2,8 +2,6 @@
 
 ## Known issues
 - **Web Playback SDK (Edge/Win11):** `requestMediaKeySystemAccess` robustness warning persists; investigate later.
-- In /playlist view, "Reorder in Spotify" hover text is rendering behind the playlist album art.
-- Newly-created playlist track counts show as 0 in /playlists if cache hasn't run yet.
 
 ## Remove explicit tracks
 - Add a **Remove Explicit Tracks** action for the current playlist.

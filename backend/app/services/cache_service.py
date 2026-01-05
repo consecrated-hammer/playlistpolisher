@@ -31,7 +31,12 @@ class CacheService:
         return cutoff.isoformat()
     
     @staticmethod
-    def get_tracks(track_ids: List[str], session_id: Optional[str] = None) -> Tuple[Dict[str, Dict], Set[str]]:
+    def get_tracks(
+        track_ids: List[str],
+        session_id: Optional[str] = None,
+        allow_stale: bool = False,
+        allow_legacy: bool = False,
+    ) -> Tuple[Dict[str, Dict], Set[str]]:
         """
         Get cached track metadata for given track IDs.
         
@@ -48,7 +53,7 @@ class CacheService:
         
         cached = {}
         missing = set(track_ids)
-        cutoff = CacheService._get_ttl_cutoff()
+        cutoff = CacheService._get_ttl_cutoff() if not allow_stale else None
         now = datetime.now(timezone.utc).isoformat()
         
         with get_db_connection() as conn:
@@ -56,14 +61,23 @@ class CacheService:
             placeholders = ','.join('?' * len(track_ids))
             
             # Fetch from cache, excluding expired entries
-            cursor.execute(f"""
-                SELECT track_id, name, artists_json, album, album_id, album_uri,
-                       album_release_date, album_release_date_precision, album_type,
-                       album_total_tracks, duration_ms, album_art_url, track_uri
-                FROM track_cache
-                WHERE track_id IN ({placeholders})
-                AND cached_at > ?
-            """, (*track_ids, cutoff))
+            if cutoff:
+                cursor.execute(f"""
+                    SELECT track_id, name, artists_json, album, album_id, album_uri,
+                           album_release_date, album_release_date_precision, album_type,
+                           album_total_tracks, duration_ms, album_art_url, track_uri
+                    FROM track_cache
+                    WHERE track_id IN ({placeholders})
+                    AND cached_at > ?
+                """, (*track_ids, cutoff))
+            else:
+                cursor.execute(f"""
+                    SELECT track_id, name, artists_json, album, album_id, album_uri,
+                           album_release_date, album_release_date_precision, album_type,
+                           album_total_tracks, duration_ms, album_art_url, track_uri
+                    FROM track_cache
+                    WHERE track_id IN ({placeholders})
+                """, tuple(track_ids))
             
             rows = cursor.fetchall()
             for row in rows:
@@ -73,7 +87,7 @@ class CacheService:
                 album_release_date = row["album_release_date"]
                 album_release_date_precision = row["album_release_date_precision"]
                 has_release_info = bool(album_release_date) or bool(album_release_date_precision)
-                if not has_release_info:
+                if not has_release_info and not allow_legacy:
                     continue
 
                 artists_payload = json.loads(row["artists_json"])
@@ -131,9 +145,15 @@ class CacheService:
                 conn.commit()
         
         if cached:
-            logger.info(f"Cache hit: {len(cached)}/{len(track_ids)} tracks, {len(missing)} misses")
+            logger.info(
+                "Cache hit%s: %s/%s tracks, %s misses",
+                " (stale ok)" if allow_stale else "",
+                len(cached),
+                len(track_ids),
+                len(missing),
+            )
         if missing:
-            logger.info("Cache misses: %s", len(missing))
+            logger.info("Cache misses%s: %s", " (stale ok)" if allow_stale else "", len(missing))
         
         return cached, missing
     
