@@ -38,29 +38,66 @@ const RoadmapPage = () => {
     const lines = markdown.split('\n');
     const sections = [];
     let currentSection = null;
+    let currentSubsection = null;
     let currentContent = [];
 
     lines.forEach((line) => {
-      // H2 sections (##)
-      if (line.startsWith('## ')) {
+      // H2 sections (##) - Main categories
+      if (line.startsWith('## ') && !line.startsWith('### ')) {
+        // Flush current subsection if exists
+        if (currentSubsection) {
+          currentSubsection.content = currentContent.join('\n');
+          currentContent = [];
+        }
+        
+        // Flush current section if exists
         if (currentSection) {
-          currentSection.content = currentContent.join('\n');
           sections.push(currentSection);
         }
+        
         currentSection = {
           title: line.replace('## ', '').trim(),
           content: '',
+          subsections: [],
           id: line.replace('## ', '').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         };
-        currentContent = [];
-      } else if (currentSection) {
+        currentSubsection = null;
+      }
+      // H3 subsections (###)
+      else if (line.startsWith('### ')) {
+        // Flush previous subsection if exists
+        if (currentSubsection) {
+          currentSubsection.content = currentContent.join('\n');
+          currentSection.subsections.push(currentSubsection);
+          currentContent = [];
+        }
+        
+        currentSubsection = {
+          title: line.replace('### ', '').trim(),
+          content: '',
+          id: line.replace('### ', '').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        };
+      }
+      // Content lines
+      else if (currentSubsection) {
         currentContent.push(line);
+      } else if (currentSection) {
+        if (!currentSection.content) {
+          currentSection.content = line;
+        } else {
+          currentSection.content += '\n' + line;
+        }
       }
     });
 
+    // Flush last subsection
+    if (currentSubsection && currentSection) {
+      currentSubsection.content = currentContent.join('\n');
+      currentSection.subsections.push(currentSubsection);
+    }
+    
     // Push last section
     if (currentSection) {
-      currentSection.content = currentContent.join('\n');
       sections.push(currentSection);
     }
 
@@ -196,24 +233,38 @@ const RoadmapPage = () => {
               <div className="w-10 h-10 rounded-lg bg-spotify-gray-mid text-spotify-green flex items-center justify-center">
                 <span className="icon text-xl">
                   {section.title.includes('Issue') ? 'warning' :
-                   section.title.includes('Explicit') ? 'explicit' :
-                   section.title.includes('Metadata') || section.title.includes('Smart') ? 'auto_awesome' :
-                   section.title.includes('Merge') ? 'merge' :
-                   section.title.includes('Split') ? 'call_split' :
-                   section.title.includes('Duplicate') ? 'content_copy' :
-                   section.title.includes('Mobile') ? 'smartphone' :
-                   section.title.includes('Configuration') ? 'settings' :
-                   section.title.includes('Cosmetics') ? 'palette' :
+                   section.title.includes('Organise') || section.title.includes('Organize') ? 'sort' :
+                   section.title.includes('Manage') ? 'tune' :
+                   section.title.includes('Automation') ? 'schedule' :
                    'label'}
                 </span>
               </div>
               <h2 className="text-xl font-bold text-white">{section.title}</h2>
             </div>
 
-            {/* Section Content */}
-            <div className="ml-13">
-              {renderContent(section.content)}
-            </div>
+            {/* Section Description */}
+            {section.content && (
+              <div className="ml-13 mb-4">
+                {renderContent(section.content)}
+              </div>
+            )}
+
+            {/* Subsections */}
+            {section.subsections && section.subsections.length > 0 && (
+              <div className="ml-13 space-y-6">
+                {section.subsections.map((subsection) => (
+                  <div key={subsection.id} id={subsection.id} className="border-l-2 border-spotify-green/30 pl-4">
+                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                      <span className="text-spotify-green">▸</span>
+                      {subsection.title}
+                    </h3>
+                    <div className="space-y-2">
+                      {renderContent(subsection.content)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
