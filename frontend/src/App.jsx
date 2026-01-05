@@ -35,32 +35,32 @@ import usePlayerContext from './context/usePlayerContext';
 
 const PRIMARY_TASKS = [
   {
-    title: 'Play in Playlist Polisher',
+    title: 'Play and manage playback',
     icon: 'play_circle',
-    description: 'Premium users can play tracks in-app with queue, shuffle, and repeat.',
-    cta: 'Open the player',
+    description: 'Premium users: play tracks with queue, follow artists, and browse your library.',
+    cta: 'Open player',
     to: '/playlists',
   },
   {
-    title: 'Sort playlists',
+    title: 'Sort and organize',
     icon: 'swap_vert',
-    description: 'Reorder tracks by artist, title, album, or date added.',
-    cta: 'Sort a playlist',
+    description: 'Reorder by artist, title, album, or date. Schedule recurring sorts.',
+    cta: 'Sort playlists',
     to: '/playlists',
   },
   {
-    title: 'Remove duplicate songs',
+    title: 'Backup and restore',
+    icon: 'backup',
+    description: 'Automatic playlist backups with restore and rename options.',
+    cta: 'Manage backups',
+    to: '/backups',
+  },
+  {
+    title: 'Remove duplicates',
     icon: 'manage_search',
-    description: 'Find exact or similar duplicates with a review step.',
+    description: 'Find exact or similar duplicates with smart keep strategies.',
     cta: 'Find duplicates',
     to: '/playlists',
-  },
-  {
-    title: 'Automate with schedules',
-    icon: 'schedule',
-    description: 'Schedule sorts and cache refreshes that run in the background.',
-    cta: 'Manage schedules',
-    to: '/schedules',
   },
 ];
 
@@ -137,12 +137,21 @@ const SECONDARY_FEATURES = [
     ],
   },
   {
-    title: 'Queue & context',
-    icon: 'queue_music',
+    title: 'Artist following',
+    icon: 'person_add',
     items: [
-      'Clickable queue modal with scrollable list.',
-      'From-playlist links keep your context while browsing.',
-      'Jump to the current track in its playlist.',
+      'View follow status for all playlist artists.',
+      'Batch follow/unfollow operations with totals.',
+      'Context menu actions from track lists and sorting.',
+    ],
+  },
+  {
+    title: 'Backups & automation',
+    icon: 'backup',
+    items: [
+      'Automatic playlist snapshots with configurable retention.',
+      'Restore to any previous state with one click.',
+      'Schedule cache refreshes and maintenance tasks.',
     ],
   },
   {
@@ -150,17 +159,17 @@ const SECONDARY_FEATURES = [
     icon: 'cloud_sync',
     items: [
       'Track metadata cache to reduce Spotify API calls.',
-      'Choose cache scope and run warm-up passes.',
-      'Cache status indicators and dashboard.',
+      'Playlist-specific cache stats and freshness checks.',
+      'Cache status indicators, warm-up, and dashboard.',
     ],
   },
   {
     title: 'Browse your playlists',
     icon: 'grid_view',
     items: [
-      'Grid, list, or table views for your library.',
-      'Filter by ownership and privacy settings.',
-      'Estimated recency sort when cache coverage is available.',
+      'Grid, list, or table views with persistent preferences.',
+      'Context menus with quick actions (backup, sort, dedupe).',
+      'Filter by ownership, privacy, and cache status.',
     ],
   },
   {
@@ -169,16 +178,7 @@ const SECONDARY_FEATURES = [
     items: [
       'Search within playlists by title, artist, or album.',
       'Sortable columns for key track metadata.',
-      'Hover tooltips for quick context.',
-    ],
-  },
-  {
-    title: 'Edit and manage playlists',
-    icon: 'edit',
-    items: [
-      'Update playlist names and descriptions.',
-      'Clone playlists for safe experimentation.',
-      'Delete playlists you own, per Spotify rules.',
+      'Right-click context menus with track actions.',
     ],
   },
   {
@@ -186,17 +186,17 @@ const SECONDARY_FEATURES = [
     icon: 'content_copy',
     items: [
       'Exact or similar duplicate detection with options.',
-      'Prefer album releases and keep strategies.',
+      'Prefer album releases, studio versions, and keep strategies.',
       'Ignore duplicate pairs globally or per playlist.',
     ],
   },
   {
-    title: 'Automation & history',
-    icon: 'history',
+    title: 'Settings & preferences',
+    icon: 'settings',
     items: [
-      'Schedule sorts and cache refreshes.',
-      'History view with undo for recent changes.',
-      'Activity indicators for background jobs.',
+      'Customize cache TTL and backup retention.',
+      'Configure backup naming templates and schedules.',
+      'Persist view modes and sorting preferences.',
     ],
   },
 ];
@@ -288,10 +288,10 @@ const HomePage = ({ isAuthenticated, user, onLogout }) => {
         <div className="bg-spotify-gray-dark/70 border border-spotify-gray-mid rounded-2xl p-6 md:p-8 shadow-xl">
           <p className="text-xs uppercase tracking-[0.2em] text-spotify-green font-semibold mb-3">Playlist Polisher</p>
           <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-3">
-            Organize, clean, and maintain your Spotify playlists with confidence.
+            The complete toolkit for managing your Spotify playlists.
           </h1>
           <p className="text-spotify-gray-light text-lg mb-6">
-            Sign in with Spotify to sort, dedupe, cache, and play your playlists. Authentication is handled securely by Spotify - Playlist Polisher never sees or stores your Spotify password.
+            Sort, dedupe, backup, and play your playlists with powerful automation. Follow artists in bulk, schedule recurring tasks, and keep your library organized with intelligent caching. Authentication is handled securely by Spotify.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             {!isAuthenticated ? (

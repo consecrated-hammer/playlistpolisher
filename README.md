@@ -5,11 +5,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](docker-compose.yml)
 
-**A modern, self-hosted Spotify playlist management tool**
+**A powerful, production-ready Spotify playlist manager**
 
-Sort, clean, and organize your Spotify playlists with a beautiful Spotify-themed UI.
+Sort, clean, backup, and organize your Spotify playlists with advanced automation, artist management, and a beautiful Spotify-themed UI.
 
-[Features](#features) • [Quick Start](#quick-start) • [Spotify Setup](#spotify-developer-app-setup) • [Configuration](#configuration) • [Contributing](#contributing)
+[Features](#features) • [Recent Updates](#recent-updates) • [Quick Start](#quick-start) • [Spotify Setup](#spotify-developer-app-setup) • [Configuration](#configuration) • [Contributing](#contributing)
 
 </div>
 
@@ -17,13 +17,43 @@ Sort, clean, and organize your Spotify playlists with a beautiful Spotify-themed
 
 ## Features
 
-- **Smart Playlist Sorting** - Sort by artist, album, title, date added, or custom order
-- **Duplicate Detection & Removal** - Find and remove duplicates with intelligent matching
-- **Track Caching** - Fast playlist loading with local track cache
-- **Scheduled Operations** - Automate sorting and cleaning tasks
-- **In-App Playback** - Play music directly in the app (Spotify Premium)
-- **Background Jobs** - Long operations run asynchronously with progress tracking
-- **Spotify-Themed UI** - Beautiful, familiar interface matching Spotify's design
+### Core Functionality
+- **Smart Playlist Sorting** - Sort by artist, album, title, date added, or custom order with preview
+- **Duplicate Detection & Removal** - Find exact or similar duplicates with intelligent keep strategies
+- **Artist Follow Management** - View and manage follow status for all playlist artists with batch operations
+- **Backup & Restore** - Automatic playlist snapshots with restore, rename, and version history
+- **Track Caching System** - High-performance local cache reduces API calls and speeds up operations
+
+### Automation & Scheduling
+- **Scheduled Operations** - Automate sorting, deduplication, and cache refresh tasks
+- **Background Jobs** - Long operations run asynchronously with real-time progress tracking
+- **Operation History** - View and undo recent playlist changes
+
+### Playback & Discovery
+- **In-App Playback** - Full Spotify Web Player integration with queue, shuffle, and repeat (Premium)
+- **Now Playing Panel** - See what's playing with context menu actions and artist links
+- **Playlist Context** - Navigate between playlist, schedules, history, and backups
+
+### User Experience
+- **Mobile-Optimized UI** - Responsive design with touch-friendly controls and layouts
+- **Multiple View Modes** - Grid, list, or table views with persistent preferences
+- **Spotify-Themed Design** - Beautiful, familiar interface matching Spotify's aesthetic
+- **Settings & Preferences** - Customize cache TTL, backup retention, and automation behavior
+
+## Recent Updates
+
+**v1.4.5** (Jan 2026) - Playlist action navigation with grouped dropdowns and context links  
+**v1.4.4** (Jan 2026) - Artist follow cache rehydration for legacy entries  
+**v1.4.3** (Jan 2026) - Cache-first playlist entry with snapshot validation  
+**v1.4.2** (Jan 2026) - Playlist browsing fixes and artist follow caching  
+**v1.4.1** (Jan 2026) - Commit-based build identifiers  
+**v1.4.0** (Jan 2026) - Artist following with batch operations and modal UI  
+**v1.3.0** (Jan 2026) - Backups library with restore, settings page  
+**v1.2.x** (Jan 2026) - Mobile UI optimization and polish  
+**v1.1.0** (Jan 2026) - Cache enhancements and freshness checks  
+**v1.0.0** (Dec 2025) - Initial public release
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
 ## Quick Start
 
@@ -290,7 +320,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) for deta
 
 Playlist Polisher is an independent tool and is not affiliated with, endorsed by, or sponsored by Spotify AB.
 
-**Development Status:** This app runs on Spotify's Development Mode API (limited to 25 users). Perfect for personal use and small groups.
+**Development Status:** This app runs on Spotify's Development Mode API (limited to 25 users). Perfect for personal use and small groups. Actively maintained with regular feature updates and security patches.
 
 ---
 
