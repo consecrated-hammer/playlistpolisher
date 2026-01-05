@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.2 - 2026-01-05
+**Playlist browsing fixes**
+- Playlists: use cached playlist tracks for paging when available, with stale-cache fallback for faster search.
+- Playlist view: resolve tooltip layering over artwork and stabilize search/infinite scroll behavior.
+- Artist following: cache follow status per session for quicker status refresh.
+
 ## v1.4.1 - 2026-01-05
 **Build metadata**
 - UI: display commit-based build identifiers in the footer instead of release versions.
