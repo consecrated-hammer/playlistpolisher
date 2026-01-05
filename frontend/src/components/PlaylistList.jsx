@@ -54,13 +54,40 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
       </div>
     );
   };
+  const parseTrackTotal = (value) => {
+    if (value === null || value === undefined) return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+  const resolveTrackTotal = (playlist) => {
+    const direct = parseTrackTotal(playlist?.tracks?.total);
+    if (direct !== null) return direct;
+    const fallbacks = [
+      playlist?.tracks_total,
+      playlist?.total_tracks,
+      playlist?.track_count,
+    ];
+    for (const candidate of fallbacks) {
+      const parsed = parseTrackTotal(candidate);
+      if (parsed !== null) return parsed;
+    }
+    const cached = parseTrackTotal(cacheFacts?.[playlist?.id]?.track_count_cached);
+    if (cached !== null) return cached;
+    return null;
+  };
+  const formatTrackTotal = (total) => {
+    if (!Number.isFinite(total)) return '—';
+    return `${total} ${total === 1 ? 'track' : 'tracks'}`;
+  };
 
   if (viewMode === 'list') {
     return (
       <div className="space-y-3">
         {playlists.map((playlist) => {
           const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
-          const trackTotal = playlist.tracks?.total || 0;
+          const trackTotal = resolveTrackTotal(playlist);
+          const trackLabel = formatTrackTotal(trackTotal);
+          const trackTitle = Number.isFinite(trackTotal) ? trackLabel : 'Track count unavailable';
           return (
             <button
               key={playlist.id}
@@ -96,8 +123,8 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   </p>
                 </div>
                 <div className="flex items-center gap-2 text-spotify-gray-light text-xs sm:text-sm sm:ml-auto">
-                  <span>
-                    {trackTotal} {trackTotal === 1 ? 'track' : 'tracks'}
+                  <span title={trackTitle}>
+                    {trackLabel}
                   </span>
                   {renderCachedIcon(playlist.id)}
                 </div>
@@ -191,7 +218,8 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
           <tbody className="text-xs sm:text-sm">
             {playlists.map((playlist) => {
               const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
-              const trackTotal = playlist.tracks?.total || 0;
+              const trackTotal = resolveTrackTotal(playlist);
+              const trackTitle = Number.isFinite(trackTotal) ? `${trackTotal}` : 'Track count unavailable';
               return (
                 <tr
                   key={playlist.id}
@@ -232,8 +260,11 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   <td className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-spotify-gray-mid/40 text-spotify-gray-light truncate" title={ownerName}>
                     {ownerName}
                   </td>
-                  <td className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-r border-spotify-gray-mid/40 rounded-r-lg text-spotify-gray-light text-right tabular-nums">
-                    {trackTotal}
+                  <td
+                    className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-r border-spotify-gray-mid/40 rounded-r-lg text-spotify-gray-light text-right tabular-nums"
+                    title={trackTitle}
+                  >
+                    {Number.isFinite(trackTotal) ? trackTotal : '—'}
                   </td>
                 </tr>
               );
@@ -280,9 +311,16 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
               by {playlist.owner?.display_name || playlist.owner?.id || 'Unknown'}
             </p>
             <div className="flex items-center justify-between text-spotify-gray-light text-xs">
-              <span>
-                {playlist.tracks?.total || 0} {(playlist.tracks?.total === 1) ? 'track' : 'tracks'}
-              </span>
+              {(() => {
+                const trackTotal = resolveTrackTotal(playlist);
+                const trackLabel = formatTrackTotal(trackTotal);
+                const trackTitle = Number.isFinite(trackTotal) ? trackLabel : 'Track count unavailable';
+                return (
+                  <span title={trackTitle}>
+                    {trackLabel}
+                  </span>
+                );
+              })()}
               {renderCachedIcon(playlist.id)}
             </div>
           </div>

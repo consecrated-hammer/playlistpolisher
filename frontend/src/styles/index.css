@@ -58,7 +58,7 @@
 
   /* Tooltip bubble */
   .tooltip {
-    @apply absolute text-white text-xs;
+    @apply absolute text-white text-xs z-50;
     top: calc(100% + 10px);
     left: 50%;
     transform: translateX(-50%) translateY(-4px);

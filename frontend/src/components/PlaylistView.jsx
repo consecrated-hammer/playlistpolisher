@@ -55,6 +55,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef(null);
+  const searchFetchRef = useRef(false);
   const trackActionPendingRef = useRef(null);
   const playlistViewRef = useRef(null);
   const [selectedTrackKeys, setSelectedTrackKeys] = useState([]);
@@ -612,6 +613,62 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
   // Set up infinite scroll - trigger at 20% from bottom (80% scrolled)
   useInfiniteScroll(loadMoreTracks, hasMoreTracks, loadingMore, 0.2);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query || !currentPlaylist?.id || !hasMoreTracks || loadingMore) return;
+    if (searchFetchRef.current) return;
+
+    let active = true;
+    const loadAllTracksForSearch = async () => {
+      searchFetchRef.current = true;
+      setLoadingMore(true);
+      try {
+        let offset = allTracks.length;
+        let hasMore = hasMoreTracks;
+        while (active && hasMore) {
+          const response = await playlistAPI.getPlaylistTracksPaginated(
+            currentPlaylist.id,
+            offset,
+            PLAYLIST_PAGE_SIZE
+          );
+          if (!active) return;
+          const incoming = response?.tracks || [];
+          if (!incoming.length) {
+            hasMore = false;
+            setHasMoreTracks(false);
+            break;
+          }
+          setAllTracks((prev) => {
+            const existingIds = new Set(prev.map((track, idx) => `${track.id}-${idx}`));
+            const newTracks = incoming.filter((track, idx) => {
+              const key = `${track.id}-${offset + idx}`;
+              return !existingIds.has(key);
+            });
+            return [...prev, ...newTracks];
+          });
+          offset += incoming.length;
+          hasMore = Boolean(response?.has_more);
+          setHasMoreTracks(hasMore);
+          if (Number.isFinite(response?.total)) {
+            setTotalTrackCount(response.total);
+          }
+        }
+      } catch (err) {
+        console.warn('[Search] Failed to load full playlist for search:', err);
+      } finally {
+        if (active) {
+          setLoadingMore(false);
+        }
+        searchFetchRef.current = false;
+      }
+    };
+
+    loadAllTracksForSearch();
+    return () => {
+      active = false;
+    };
+  }, [searchQuery, currentPlaylist?.id, hasMoreTracks, loadingMore, allTracks.length]);
 
   // Format date and time for display
   const formatDateTime = (isoString) => {
