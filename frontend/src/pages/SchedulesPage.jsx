@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import * as Select from '@radix-ui/react-select';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { playlistAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -58,7 +58,9 @@ const actionConfigs = {
 };
 
 const SchedulesPage = ({ user, onLogout }) => {
-  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const playlistFilterId = searchParams.get('playlistId');
   const [loading, setLoading] = useState(true);
   const [playlists, setPlaylists] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -87,6 +89,8 @@ const SchedulesPage = ({ user, onLogout }) => {
     playlists.forEach((p) => { map[p.id] = p; });
     return map;
   }, [playlists]);
+  const filteredPlaylist = playlistFilterId ? playlistMap[playlistFilterId] : null;
+  const historyLink = playlistFilterId ? `/history?playlistId=${playlistFilterId}` : '/history';
 
   const showToast = (message, type = 'info') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -104,14 +108,13 @@ const SchedulesPage = ({ user, onLogout }) => {
           playlistAPI.listSchedules().catch(() => []),
         ]);
         setPlaylists(pls);
-        const initialPlaylist = searchParams.get('playlistId');
-        if (initialPlaylist) {
-            try {
-              const scoped = await playlistAPI.listPlaylistSchedules(initialPlaylist);
-              setSchedules(scoped);
-            } catch {
-              setSchedules(schedResp || []);
-            }
+        if (playlistFilterId) {
+          try {
+            const scoped = await playlistAPI.listPlaylistSchedules(playlistFilterId);
+            setSchedules(scoped);
+          } catch {
+            setSchedules(schedResp || []);
+          }
         } else {
           setSchedules(schedResp || []);
         }
@@ -124,17 +127,26 @@ const SchedulesPage = ({ user, onLogout }) => {
       }
     };
     load();
-  }, [searchParams]);
+  }, [playlistFilterId]);
 
   const refreshSchedules = async () => {
     try {
-      const schedResp = await playlistAPI.listSchedules();
-      setSchedules(schedResp);
+      if (playlistFilterId) {
+        const scoped = await playlistAPI.listPlaylistSchedules(playlistFilterId);
+        setSchedules(scoped);
+      } else {
+        const schedResp = await playlistAPI.listSchedules();
+        setSchedules(schedResp);
+      }
     } catch (e) {
       const msg = e.message || 'Failed to refresh schedules';
       setError(msg);
       showToast(msg, 'error');
     }
+  };
+
+  const handleClearFilter = () => {
+    setSearchParams({});
   };
 
   const freqForType = (type) => {
@@ -174,7 +186,7 @@ const SchedulesPage = ({ user, onLogout }) => {
     setCreatingNew(true);
     setEditingRowId(null);
     setEditForm({
-      playlistId: '',
+      playlistId: playlistFilterId || '',
       action_type: 'sort',
       sort_by: 'date_added',
       direction: 'desc',
@@ -581,28 +593,64 @@ const SchedulesPage = ({ user, onLogout }) => {
   return (
     <Layout user={user} onLogout={onLogout}>
       <div className="bg-spotify-gray-dark/60 rounded-xl border border-spotify-gray-mid/60 p-6 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Automation</p>
             <h2 className="text-2xl font-semibold text-white">Scheduled actions</h2>
-            <p className="text-sm text-spotify-gray-light mt-1">Create and manage recurring operations. One schedule per playlist.</p>
+            <p className="text-sm text-spotify-gray-light mt-1">
+              {playlistFilterId
+                ? `Showing schedules for ${filteredPlaylist?.name || 'this playlist'}.`
+                : 'Create and manage recurring operations. One schedule per playlist.'}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleStartNew}
-              disabled={creatingNew || editingRowId}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="icon text-base">add</span>
-              New Schedule
-            </button>
-            <a
-              href="/history"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-green hover:text-black text-white transition-colors border border-spotify-gray-mid/60"
-            >
-              <span className="icon text-base">history</span>
-              History
-            </a>
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            {playlistFilterId && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => navigate(`/playlist/${playlistFilterId}`)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
+                >
+                  ← Back to playlist
+                </button>
+                <button
+                  onClick={() => navigate('/playlists')}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
+                >
+                  All playlists
+                </button>
+                <button
+                  onClick={handleClearFilter}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-spotify-gray-light bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 text-white transition-colors"
+                >
+                  Clear filter
+                </button>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleStartNew}
+                disabled={creatingNew || editingRowId}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="icon text-base">add</span>
+                New Schedule
+              </button>
+              <a
+                href={historyLink}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-green hover:text-black text-white transition-colors border border-spotify-gray-mid/60"
+              >
+                <span className="icon text-base">history</span>
+                History
+              </a>
+              {!playlistFilterId && (
+                <button
+                  onClick={() => navigate('/playlists')}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
+                >
+                  All playlists
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -704,7 +752,7 @@ const SchedulesPage = ({ user, onLogout }) => {
                         {s.status && s.last_run_at ? (
                           <>
                             <a
-                              href="/history"
+                              href={s.playlist_id ? `/history?playlistId=${s.playlist_id}` : '/history'}
                               className={`text-[11px] font-medium underline decoration-dotted underline-offset-2 hover:no-underline ${
                                 s.status === 'success' ? 'text-spotify-green' :
                                 s.status === 'failed' ? 'text-red-400' :

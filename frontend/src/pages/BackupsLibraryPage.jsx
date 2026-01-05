@@ -399,12 +399,38 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                 Browse playlist backups and restore when you need a clean slate.
               </p>
             </div>
-            <button
-              onClick={() => navigate('/playlists')}
-              className="px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
-            >
-              ← Back to Playlists
-            </button>
+            <div className="flex flex-col items-start gap-2 md:items-end">
+              {playlistId && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => navigate(`/playlist/${playlistId}`)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
+                  >
+                    ← Back to playlist
+                  </button>
+                  <button
+                    onClick={() => navigate('/playlists')}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
+                  >
+                    All playlists
+                  </button>
+                  <button
+                    onClick={handleRemoveFilter}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-spotify-gray-light bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 text-white transition-colors"
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              )}
+              {!playlistId && (
+                <button
+                  onClick={() => navigate('/playlists')}
+                  className="px-4 py-2 rounded-lg bg-spotify-gray-mid hover:bg-spotify-gray-light text-white transition-colors border border-spotify-gray-mid/60"
+                >
+                  All playlists
+                </button>
+              )}
+            </div>
           </div>
 
           {playlistId && (
@@ -424,7 +450,7 @@ const BackupsLibraryPage = ({ user, onLogout }) => {
                     onClick={handleRemoveFilter}
                     className="ml-1 text-xs text-spotify-gray-light hover:text-white"
                   >
-                    Remove filter
+                    Clear filter
                   </button>
                 </div>
               </div>
