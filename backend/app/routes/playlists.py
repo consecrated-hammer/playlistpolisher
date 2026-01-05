@@ -21,15 +21,28 @@ import json
 from app.services.spotify_service import SpotifyService, get_spotify_service
 from app.config import settings
 from app.db import app_settings
-from app.models.schemas import PlaylistSimple, PlaylistContextMeta, PlaylistDetail, ErrorResponse, PaginatedTracks
+from app.models.schemas import (
+    AlbumSimple,
+    ArtistSimple,
+    CacheInfo,
+    ErrorResponse,
+    ImageObject,
+    PaginatedTracks,
+    PlaylistContextMeta,
+    PlaylistDetail,
+    PlaylistSimple,
+    PlaylistTrack,
+)
 from app.utils.session_manager import SessionManager, SESSION_COOKIE_NAME
 from pydantic import BaseModel, Field
 from app.db import operations as op_store
 from app.db import preferences as preference_store
 from app.db import playlist_cache as playlist_cache_store
 from app.db import playlist_backups as playlist_backup_store
+from app.db import artist_follow_cache as artist_follow_cache_store
 from app.services.sort_service import get_sort_key_function
 from app.services.cache_warm_service import start_cache_warm_job
+from app.services.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
 
@@ -292,6 +305,17 @@ async def get_playlist_tracks_paginated(
         should_warm_cache = True
         if user_id:
             should_warm_cache = preference_store.should_warm_playlist_cache(user_id, playlist_id)
+
+        cached = _get_cached_playlist_tracks_page(
+            spotify=spotify,
+            playlist_id=playlist_id,
+            offset=offset,
+            limit=limit,
+            session_id=session_mgr.get_session_id(),
+            should_warm_cache=should_warm_cache,
+        )
+        if cached:
+            return cached
         
         tracks, total, cache_hits, cache_misses, cache_warmed = spotify.get_playlist_tracks_paginated(
             playlist_id,
@@ -306,8 +330,6 @@ async def get_playlist_tracks_paginated(
             f"Fetched playlist tracks page: playlist={playlist_id}, offset={offset}, "
             f"limit={limit}, returned={len(tracks)}, total={total}, has_more={has_more}"
         )
-        
-        from app.models.schemas import CacheInfo
         
         return PaginatedTracks(
             tracks=tracks,
@@ -354,13 +376,30 @@ async def check_user_follows_artists(
     if not artist_ids:
         return PlaylistArtistFollowCheckResponse(statuses=[])
     try:
-        statuses: List[bool] = []
-        for chunk in _chunk_list(artist_ids, 50):
-            params = {"type": "artist", "ids": ",".join(chunk)}
-            result = sp._get("me/following/contains", params)
-            if not isinstance(result, list):
-                raise ValueError("Unexpected response from follow status check")
-            statuses.extend([bool(item) for item in result])
+        session_id = session_mgr.get_session_id()
+        cached_statuses = {}
+        if session_id:
+            cached_statuses = artist_follow_cache_store.get_cached_follow_statuses(
+                session_id,
+                artist_ids,
+                settings.artist_follow_cache_ttl_minutes,
+            )
+        missing_ids = [artist_id for artist_id in artist_ids if artist_id not in cached_statuses]
+
+        fetched_statuses: Dict[str, bool] = {}
+        if missing_ids:
+            for chunk in _chunk_list(missing_ids, 50):
+                params = {"type": "artist", "ids": ",".join(chunk)}
+                result = sp._get("me/following/contains", params)
+                if not isinstance(result, list):
+                    raise ValueError("Unexpected response from follow status check")
+                for artist_id, status in zip(chunk, result):
+                    fetched_statuses[artist_id] = bool(status)
+            if session_id and fetched_statuses:
+                artist_follow_cache_store.set_cached_follow_statuses(session_id, fetched_statuses)
+
+        statuses_map = {**cached_statuses, **fetched_statuses}
+        statuses = [bool(statuses_map.get(artist_id, False)) for artist_id in artist_ids]
         return PlaylistArtistFollowCheckResponse(statuses=statuses)
     except Exception as e:
         logger.error("Failed to check artist follow status: %s", e)
@@ -406,6 +445,12 @@ async def follow_playlist_artists(
     try:
         for chunk in _chunk_list(artist_ids, 50):
             sp.user_follow_artists(chunk)
+        session_id = session_mgr.get_session_id()
+        if session_id:
+            artist_follow_cache_store.set_cached_follow_statuses(
+                session_id,
+                {artist_id: True for artist_id in artist_ids},
+            )
         return {"message": "Artists followed", "followed": len(artist_ids)}
     except Exception as e:
         logger.error("Failed to follow artists for playlist %s: %s", playlist_id, e)
@@ -429,6 +474,12 @@ async def unfollow_playlist_artists(
     try:
         for chunk in _chunk_list(artist_ids, 50):
             sp.user_unfollow_artists(chunk)
+        session_id = session_mgr.get_session_id()
+        if session_id:
+            artist_follow_cache_store.set_cached_follow_statuses(
+                session_id,
+                {artist_id: False for artist_id in artist_ids},
+            )
         return {"message": "Artists unfollowed", "unfollowed": len(artist_ids)}
     except Exception as e:
         logger.error("Failed to unfollow artists for playlist %s: %s", playlist_id, e)
@@ -755,6 +806,166 @@ def _fetch_playlist_artists(sp: Any, playlist_id: str) -> List[Dict[str, Any]]:
 
 def _chunk_list(items: List[str], chunk_size: int = 50) -> List[List[str]]:
     return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+
+def _normalize_spotify_track(track: Dict[str, Any]) -> Dict[str, Any]:
+    artists = []
+    for artist in track.get("artists") or []:
+        if not artist:
+            continue
+        artists.append({
+            "id": artist.get("id") or "",
+            "name": artist.get("name") or "",
+            "uri": artist.get("uri") or "",
+        })
+
+    album_data = track.get("album") or {}
+    album_images = album_data.get("images") or []
+    album_art_url = None
+    if album_images:
+        album_art_url = next(
+            (img.get("url") for img in album_images if img.get("height") == 300),
+            album_images[0].get("url"),
+        )
+
+    return {
+        "id": track.get("id"),
+        "name": track.get("name"),
+        "artists": artists,
+        "album": album_data.get("name"),
+        "album_id": album_data.get("id"),
+        "album_uri": album_data.get("uri"),
+        "album_release_date": album_data.get("release_date"),
+        "album_release_date_precision": album_data.get("release_date_precision"),
+        "album_type": album_data.get("album_type"),
+        "album_total_tracks": album_data.get("total_tracks"),
+        "duration_ms": track.get("duration_ms"),
+        "album_art_url": album_art_url,
+        "track_uri": track.get("uri"),
+    }
+
+
+def _build_playlist_track_from_cache(track_data: Dict[str, Any], added_at: Optional[str]) -> PlaylistTrack:
+    artists = []
+    for artist in track_data.get("artists") or []:
+        if isinstance(artist, dict):
+            artist_id = artist.get("id") or ""
+            artist_name = artist.get("name") or ""
+            artist_uri = artist.get("uri") or ""
+        else:
+            artist_id = ""
+            artist_name = str(artist)
+            artist_uri = ""
+        artists.append(ArtistSimple(id=artist_id, name=artist_name, uri=artist_uri))
+
+    images = []
+    album_art_url = track_data.get("album_art_url")
+    if album_art_url:
+        images.append(ImageObject(url=album_art_url))
+
+    album = AlbumSimple(
+        id=track_data.get("album_id") or "",
+        name=track_data.get("album") or "",
+        images=images,
+        release_date=track_data.get("album_release_date"),
+        release_date_precision=track_data.get("album_release_date_precision"),
+        album_type=track_data.get("album_type"),
+        total_tracks=track_data.get("album_total_tracks"),
+        uri=track_data.get("album_uri") or "",
+    )
+
+    track_id = track_data.get("id") or ""
+    return PlaylistTrack(
+        id=track_id,
+        name=track_data.get("name") or "",
+        artists=artists,
+        album=album,
+        duration_ms=int(track_data.get("duration_ms") or 0),
+        added_at=added_at,
+        uri=track_data.get("track_uri") or f"spotify:track:{track_id}",
+        preview_url=None,
+        explicit=False,
+        popularity=None,
+    )
+
+
+def _get_cached_playlist_tracks_page(
+    spotify: SpotifyService,
+    playlist_id: str,
+    offset: int,
+    limit: int,
+    session_id: Optional[str],
+    should_warm_cache: bool,
+) -> Optional[PaginatedTracks]:
+    facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
+    if not facts or facts.get("is_dirty") == 1:
+        return None
+
+    total = int(facts.get("track_count_cached") or 0)
+    items = playlist_cache_store.get_cached_playlist_items_page(playlist_id, offset, limit)
+    if not items:
+        return PaginatedTracks(
+            tracks=[],
+            offset=offset,
+            limit=limit,
+            total=total,
+            has_more=offset < total,
+            cache_info=CacheInfo(hits=0, misses=0, warmed=0, details={"track_count": 0}),
+        )
+
+    track_ids = [item["track_id"] for item in items if item.get("track_id")]
+    cached_tracks, missing_ids = CacheService.get_tracks(
+        track_ids,
+        session_id,
+        allow_stale=True,
+        allow_legacy=True,
+    )
+    cache_hits = len(cached_tracks)
+    cache_misses = len(missing_ids)
+    cache_warmed = 0
+
+    if missing_ids:
+        client = spotify.get_client()
+        fetched_tracks = []
+        for chunk in _chunk_list(list(missing_ids), 50):
+            response = client.tracks(chunk)
+            fetched_tracks.extend([track for track in response.get("tracks", []) if track])
+        if fetched_tracks:
+            if should_warm_cache:
+                cache_warmed = CacheService.set_tracks(fetched_tracks, session_id)
+                refreshed, still_missing = CacheService.get_tracks(list(missing_ids), session_id)
+                cached_tracks.update(refreshed)
+                missing_ids = still_missing
+            else:
+                for track in fetched_tracks:
+                    normalized = _normalize_spotify_track(track)
+                    if normalized.get("id"):
+                        cached_tracks[normalized["id"]] = normalized
+
+    tracks: List[PlaylistTrack] = []
+    for item in items:
+        track_id = item.get("track_id")
+        if not track_id:
+            continue
+        track_data = cached_tracks.get(track_id)
+        if not track_data:
+            continue
+        tracks.append(_build_playlist_track_from_cache(track_data, item.get("added_at")))
+
+    has_more = (offset + len(items)) < total
+    return PaginatedTracks(
+        tracks=tracks,
+        offset=offset,
+        limit=limit,
+        total=total,
+        has_more=has_more,
+        cache_info=CacheInfo(
+            hits=cache_hits,
+            misses=cache_misses,
+            warmed=cache_warmed,
+            details={"track_count": len(tracks)},
+        ),
+    )
 
 
 @router.post("/{playlist_id}/clone")
@@ -2168,18 +2379,26 @@ async def get_tracks_batch(
         for track_id in track_ids:
             if track_id in cached_tracks:
                 track = cached_tracks[track_id]
+                artists = []
+                for artist in track['artists']:
+                    if isinstance(artist, dict):
+                        artists.append({'name': artist.get('name')})
+                    else:
+                        artists.append({'name': artist})
                 results.append({
                     'id': track['id'],
                     'name': track['name'],
-                    'artists': [{'name': name} for name in track['artists']],
+                    'artists': artists,
                     'album': {
                         'name': track['album'],
                         'images': [],
                         'release_date': track.get('album_release_date'),
                         'release_date_precision': track.get('album_release_date_precision'),
+                        'id': track.get('album_id'),
+                        'uri': track.get('album_uri'),
                     },
                     'duration_ms': track['duration_ms'],
-                    'uri': f"spotify:track:{track['id']}",
+                    'uri': track.get('track_uri') or f"spotify:track:{track['id']}",
                     'album_art': track.get('album_art_url')
                 })
         

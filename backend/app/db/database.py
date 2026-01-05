@@ -200,10 +200,15 @@ def init_db():
             name TEXT NOT NULL,
             artists_json TEXT NOT NULL,
             album TEXT,
+            album_id TEXT,
+            album_uri TEXT,
             album_release_date TEXT,
             album_release_date_precision TEXT,
+            album_type TEXT,
+            album_total_tracks INTEGER,
             duration_ms INTEGER,
             album_art_url TEXT,
+            track_uri TEXT,
             cached_at TEXT NOT NULL,
             last_accessed TEXT NOT NULL
         )
@@ -216,6 +221,11 @@ def init_db():
     for col, ddl in (
         ("album_release_date", "ALTER TABLE track_cache ADD COLUMN album_release_date TEXT"),
         ("album_release_date_precision", "ALTER TABLE track_cache ADD COLUMN album_release_date_precision TEXT"),
+        ("album_id", "ALTER TABLE track_cache ADD COLUMN album_id TEXT"),
+        ("album_uri", "ALTER TABLE track_cache ADD COLUMN album_uri TEXT"),
+        ("album_type", "ALTER TABLE track_cache ADD COLUMN album_type TEXT"),
+        ("album_total_tracks", "ALTER TABLE track_cache ADD COLUMN album_total_tracks INTEGER"),
+        ("track_uri", "ALTER TABLE track_cache ADD COLUMN track_uri TEXT"),
     ):
         try:
             cursor.execute(ddl)
@@ -239,6 +249,24 @@ def init_db():
     """)
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_track_usage_track ON track_usage(track_id)
+    """)
+
+    # Short-lived artist follow status cache (per session)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS artist_follow_cache (
+            session_id TEXT NOT NULL,
+            artist_id TEXT NOT NULL,
+            is_following INTEGER NOT NULL,
+            cached_at TEXT NOT NULL,
+            PRIMARY KEY (session_id, artist_id),
+            FOREIGN KEY (session_id) REFERENCES user_sessions(session_id) ON DELETE CASCADE
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_artist_follow_cache_session ON artist_follow_cache(session_id)
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_artist_follow_cache_artist ON artist_follow_cache(artist_id)
     """)
 
     # Cached playlist items (local playlist snapshot with added_at timestamps)

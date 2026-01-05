@@ -44,6 +44,7 @@ class Settings(BaseSettings):
         token_file_path: Path to token storage file
         log_level: Logging level
         track_cache_ttl_days: Days to keep track metadata in cache (default: 30)
+        artist_follow_cache_ttl_minutes: Minutes to cache artist follow status per session (default: 10)
     """
     
     # Spotify API Configuration (supports Docker secrets via /run/secrets)
@@ -80,6 +81,9 @@ class Settings(BaseSettings):
     
     # Track Cache Configuration
     track_cache_ttl_days: int = 30
+
+    # Artist Follow Cache Configuration
+    artist_follow_cache_ttl_minutes: int = 10
     
     # Pagination Configuration
     playlist_page_size: int = 100

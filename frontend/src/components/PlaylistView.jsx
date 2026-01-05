@@ -54,7 +54,9 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [ignoringPair, setIgnoringPair] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef(null);
+  const searchFetchRef = useRef(false);
   const trackActionPendingRef = useRef(null);
   const playlistViewRef = useRef(null);
   const [selectedTrackKeys, setSelectedTrackKeys] = useState([]);
@@ -563,6 +565,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   // Load more tracks for infinite scroll
   const loadMoreTracks = useCallback(async () => {
     if (loadingMore || !hasMoreTracks || !currentPlaylist?.id) return;
+    if (searchLoading) return;
 
     console.log('[Infinite Scroll] Loading more tracks...', {
       currentCount: allTracks.length,
@@ -608,10 +611,71 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, hasMoreTracks, currentPlaylist?.id, allTracks.length]);
+  }, [loadingMore, hasMoreTracks, currentPlaylist?.id, allTracks.length, searchLoading]);
 
   // Set up infinite scroll - trigger at 20% from bottom (80% scrolled)
-  useInfiniteScroll(loadMoreTracks, hasMoreTracks, loadingMore, 0.2);
+  useInfiniteScroll(loadMoreTracks, hasMoreTracks, loadingMore || searchLoading, 0.2);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      searchFetchRef.current = false;
+      setSearchLoading(false);
+      return;
+    }
+    if (!currentPlaylist?.id || !hasMoreTracks || loadingMore) return;
+    if (searchFetchRef.current) return;
+
+    let active = true;
+    const loadAllTracksForSearch = async () => {
+      searchFetchRef.current = true;
+      setSearchLoading(true);
+      try {
+        let offset = allTracks.length;
+        let hasMore = hasMoreTracks;
+        while (active && hasMore) {
+          const response = await playlistAPI.getPlaylistTracksPaginated(
+            currentPlaylist.id,
+            offset,
+            PLAYLIST_PAGE_SIZE
+          );
+          if (!active) return;
+          const incoming = response?.tracks || [];
+          if (!incoming.length) {
+            hasMore = false;
+            setHasMoreTracks(false);
+            break;
+          }
+          setAllTracks((prev) => {
+            const existingIds = new Set(prev.map((track, idx) => `${track.id}-${idx}`));
+            const newTracks = incoming.filter((track, idx) => {
+              const key = `${track.id}-${offset + idx}`;
+              return !existingIds.has(key);
+            });
+            return [...prev, ...newTracks];
+          });
+          offset += incoming.length;
+          hasMore = Boolean(response?.has_more);
+          setHasMoreTracks(hasMore);
+          if (Number.isFinite(response?.total)) {
+            setTotalTrackCount(response.total);
+          }
+        }
+      } catch (err) {
+        console.warn('[Search] Failed to load full playlist for search:', err);
+      } finally {
+        searchFetchRef.current = false;
+        if (active) {
+          setSearchLoading(false);
+        }
+      }
+    };
+
+    loadAllTracksForSearch();
+    return () => {
+      active = false;
+    };
+  }, [searchQuery, currentPlaylist?.id, hasMoreTracks, loadingMore, allTracks.length]);
 
   // Format date and time for display
   const formatDateTime = (isoString) => {
@@ -660,6 +724,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     if (searchOpen && searchInputRef.current) {
       searchInputRef.current.focus();
     }
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (searchOpen) return;
+    setSearchQuery('');
+    setSearchLoading(false);
+    searchFetchRef.current = false;
   }, [searchOpen]);
 
   useEffect(() => {
@@ -2924,10 +2995,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       </button>
 
       {/* Playlist Header */}
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-hidden">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-visible">
         <div className="flex flex-col md:flex-row gap-6 min-w-0 max-w-full">
           {/* Cover Image */}
-          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative group mx-auto md:mx-0">
+          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative z-10 group mx-auto md:mx-0">
             <div className="absolute inset-0 rounded-lg overflow-hidden bg-spotify-gray-mid">
               {currentPlaylist.images && currentPlaylist.images.length > 0 ? (
                 <img
@@ -2961,7 +3032,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           </div>
 
       {/* Playlist Info */}
-      <div className="flex flex-col justify-end min-w-0 w-full overflow-hidden">
+      <div className="flex flex-col justify-end min-w-0 w-full overflow-visible">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full min-w-0 w-full md:whitespace-normal md:overflow-visible md:break-words">
               {currentPlaylist.name}
@@ -3046,7 +3117,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               </>
             )}
           </div>
-            <div className="mt-4 relative">
+            <div className="mt-4 relative z-50">
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3">
                 {player?.canUseAppPlayer && (
                   <>
@@ -3144,7 +3215,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                   </>
                 )}
               </div>
-              <div className="mt-3">
+              <div className="mt-3 relative z-50">
                 {(() => {
                   const historyAvailable = Array.isArray(history) && history.length > 0;
                   const baseActions = [
@@ -3327,6 +3398,12 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     placeholder="Search this playlist"
                     className="flex-1 bg-transparent text-sm text-white placeholder:text-spotify-gray-light focus:outline-none"
                   />
+                  {searchLoading && (
+                    <div className="flex items-center gap-2 text-xs text-spotify-gray-light">
+                      <span className="w-3 h-3 border-2 border-spotify-gray-light border-t-transparent rounded-full animate-spin" />
+                      Loading full playlist…
+                    </div>
+                  )}
                   {searchQuery ? (
                     <button
                       type="button"
