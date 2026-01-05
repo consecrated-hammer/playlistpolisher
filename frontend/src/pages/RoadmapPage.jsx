@@ -6,6 +6,14 @@ const RoadmapPage = () => {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [expandedSubsections, setExpandedSubsections] = useState({});
+
+  const toggleSubsection = (subsectionId) => {
+    setExpandedSubsections(prev => ({
+      ...prev,
+      [subsectionId]: !prev[subsectionId]
+    }));
+  };
 
   useEffect(() => {
     const fetchRoadmap = async () => {
@@ -251,18 +259,32 @@ const RoadmapPage = () => {
 
             {/* Subsections */}
             {section.subsections && section.subsections.length > 0 && (
-              <div className="ml-13 space-y-6">
-                {section.subsections.map((subsection) => (
-                  <div key={subsection.id} id={subsection.id} className="border-l-2 border-spotify-green/30 pl-4">
-                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-                      <span className="text-spotify-green">▸</span>
-                      {subsection.title}
-                    </h3>
-                    <div className="space-y-2">
-                      {renderContent(subsection.content)}
+              <div className="ml-13 space-y-4">
+                {section.subsections.map((subsection) => {
+                  const isExpanded = expandedSubsections[subsection.id];
+                  return (
+                    <div key={subsection.id} id={subsection.id} className="border border-spotify-gray-mid/60 rounded-lg overflow-hidden hover:border-spotify-gray-light/40 transition-colors">
+                      <button
+                        onClick={() => toggleSubsection(subsection.id)}
+                        className="w-full flex items-center justify-between gap-3 p-4 bg-spotify-gray-mid/30 hover:bg-spotify-gray-mid/50 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`icon text-spotify-green transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                            chevron_right
+                          </span>
+                          <h3 className="text-base font-semibold text-white">
+                            {subsection.title}
+                          </h3>
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <div className="p-4 border-t border-spotify-gray-mid/60 bg-spotify-black/20 space-y-2 animate-fade-in">
+                          {renderContent(subsection.content)}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
