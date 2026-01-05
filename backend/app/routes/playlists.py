@@ -107,6 +107,12 @@ def _queue_cache_refresh(session_mgr: SessionManager, playlist_id: str, source: 
         logger.warning("Failed to queue cache refresh for playlist %s: %s", playlist_id, exc)
 
 
+def _spotify_external_url(entity_type: str, entity_id: Optional[str]) -> Optional[str]:
+    if not entity_id:
+        return None
+    return f"https://open.spotify.com/{entity_type}/{entity_id}"
+
+
 @router.get("/", response_model=List[PlaylistSimple])
 async def get_playlists(
     session_mgr: SessionManager = Depends(require_auth),
@@ -246,7 +252,7 @@ async def get_playlist_summary(
 ):
     """Get lightweight playlist metadata without loading tracks."""
     try:
-        meta = spotify.get_playlist_context_meta(playlist_id)
+        meta = _ensure_playlist_cache(spotify, session_mgr, playlist_id)
         return meta
     except ValueError as e:
         logger.error(f"Authentication error: {e}")
@@ -316,7 +322,19 @@ async def get_playlist_tracks_paginated(
         )
         if cached:
             return cached
-        
+
+        _ensure_playlist_cache(spotify, session_mgr, playlist_id)
+        cached = _get_cached_playlist_tracks_page(
+            spotify=spotify,
+            playlist_id=playlist_id,
+            offset=offset,
+            limit=limit,
+            session_id=session_mgr.get_session_id(),
+            should_warm_cache=should_warm_cache,
+        )
+        if cached:
+            return cached
+
         tracks, total, cache_hits, cache_misses, cache_warmed = spotify.get_playlist_tracks_paginated(
             playlist_id,
             offset=offset,
@@ -429,7 +447,16 @@ async def get_playlist_artists(
     if not sp:
         raise HTTPException(status_code=401, detail="Spotify authentication expired")
     try:
-        artists = _fetch_playlist_artists(sp, playlist_id)
+        _ensure_playlist_cache(spotify, session_mgr, playlist_id)
+        cached_items = _build_cached_playlist_items(
+            spotify,
+            playlist_id,
+            session_mgr.get_session_id(),
+        )
+        if cached_items is not None:
+            artists = _build_playlist_artists_from_items(cached_items)
+        else:
+            artists = _fetch_playlist_artists(sp, playlist_id)
         return PlaylistArtistsResponse(artists=artists, total=len(artists))
     except Exception as e:
         error_msg = str(e)
@@ -819,6 +846,192 @@ def _fetch_playlist_artists(sp: Any, playlist_id: str) -> List[Dict[str, Any]]:
 def _chunk_list(items: List[str], chunk_size: int = 50) -> List[List[str]]:
     return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
 
+
+def _build_artist_payload(artist: Dict[str, Any]) -> Dict[str, Any]:
+    artist_id = artist.get("id") or None
+    artist_name = artist.get("name") or ""
+    artist_uri = artist.get("uri") or (f"spotify:artist:{artist_id}" if artist_id else None)
+    payload = {
+        "id": artist_id,
+        "name": artist_name,
+        "uri": artist_uri,
+    }
+    external_url = _spotify_external_url("artist", artist_id)
+    if external_url:
+        payload["external_urls"] = {"spotify": external_url}
+    return payload
+
+
+def _build_track_payload_from_cache(track_data: Dict[str, Any]) -> Dict[str, Any]:
+    track_id = track_data.get("id") or None
+    artists = []
+    for artist in track_data.get("artists") or []:
+        if isinstance(artist, dict):
+            artists.append(_build_artist_payload(artist))
+        else:
+            artists.append({"id": None, "name": str(artist), "uri": None})
+
+    album_id = track_data.get("album_id") or None
+    album_uri = track_data.get("album_uri") or (f"spotify:album:{album_id}" if album_id else None)
+    album_payload = {
+        "id": album_id,
+        "name": track_data.get("album") or "",
+        "uri": album_uri,
+        "images": [],
+        "release_date": track_data.get("album_release_date"),
+        "release_date_precision": track_data.get("album_release_date_precision"),
+        "album_type": track_data.get("album_type"),
+        "total_tracks": track_data.get("album_total_tracks"),
+    }
+    album_external_url = _spotify_external_url("album", album_id)
+    if album_external_url:
+        album_payload["external_urls"] = {"spotify": album_external_url}
+    album_art_url = track_data.get("album_art_url")
+    if album_art_url:
+        album_payload["images"] = [{"url": album_art_url}]
+
+    track_uri = track_data.get("track_uri") or (f"spotify:track:{track_id}" if track_id else None)
+    return {
+        "id": track_id,
+        "name": track_data.get("name") or "",
+        "artists": artists,
+        "album": album_payload,
+        "duration_ms": track_data.get("duration_ms"),
+        "uri": track_uri,
+    }
+
+
+def _get_cached_tracks_chunked(
+    track_ids: List[str],
+    session_id: Optional[str],
+    allow_stale: bool = True,
+) -> tuple[Dict[str, Dict[str, Any]], set[str]]:
+    cached_tracks: Dict[str, Dict[str, Any]] = {}
+    missing_ids: set[str] = set()
+    if not track_ids:
+        return cached_tracks, missing_ids
+
+    for chunk in _chunk_list(track_ids, 500):
+        cached_chunk, missing_chunk = CacheService.get_tracks(
+            chunk,
+            session_id,
+            allow_stale=allow_stale,
+            allow_legacy=True,
+        )
+        cached_tracks.update(cached_chunk)
+        missing_ids.update(missing_chunk)
+    return cached_tracks, missing_ids
+
+
+def _fetch_tracks_from_spotify(spotify: SpotifyService, track_ids: List[str]) -> List[Dict[str, Any]]:
+    if not track_ids:
+        return []
+    client = spotify.get_client()
+    fetched_tracks = []
+    for chunk in _chunk_list(track_ids, 50):
+        response = client.tracks(chunk)
+        fetched_tracks.extend([track for track in response.get("tracks", []) if track])
+    return fetched_tracks
+
+
+def _build_cached_playlist_items(
+    spotify: SpotifyService,
+    playlist_id: str,
+    session_id: Optional[str],
+) -> Optional[List[Dict[str, Any]]]:
+    facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
+    if not facts or facts.get("is_dirty") == 1:
+        return None
+
+    items = playlist_cache_store.get_cached_playlist_items(playlist_id)
+    if not items:
+        return []
+
+    track_ids = [item.get("track_id") for item in items if item.get("track_id")]
+    cached_tracks, missing_ids = _get_cached_tracks_chunked(track_ids, session_id, allow_stale=True)
+
+    if missing_ids:
+        fetched_tracks = _fetch_tracks_from_spotify(spotify, list(missing_ids))
+        if fetched_tracks:
+            CacheService.set_tracks(fetched_tracks, session_id)
+            for track in fetched_tracks:
+                normalized = _normalize_spotify_track(track)
+                if normalized.get("id"):
+                    cached_tracks[normalized["id"]] = normalized
+
+    hydrated_items = []
+    for item in items:
+        track_id = item.get("track_id")
+        track_data = cached_tracks.get(track_id)
+        if not track_data:
+            continue
+        hydrated_items.append(
+            {
+                "track": _build_track_payload_from_cache(track_data),
+                "added_at": item.get("added_at"),
+                "added_by": None,
+            }
+        )
+    return hydrated_items
+
+
+def _build_playlist_artists_from_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    artists: Dict[str, Dict[str, Any]] = {}
+    for item in items:
+        track = item.get("track") or {}
+        for artist in track.get("artists") or []:
+            if not isinstance(artist, dict):
+                name = str(artist)
+                artist_id = None
+                artist_uri = None
+                external_url = None
+            else:
+                name = artist.get("name") or ""
+                artist_id = artist.get("id") or None
+                artist_uri = artist.get("uri") or (f"spotify:artist:{artist_id}" if artist_id else None)
+                external_url = (artist.get("external_urls") or {}).get("spotify")
+            if not name:
+                continue
+            key = artist_id or f"name::{name.lower().strip()}"
+            if key not in artists:
+                artists[key] = {
+                    "id": artist_id,
+                    "name": name,
+                    "uri": artist_uri,
+                    "external_url": external_url or _spotify_external_url("artist", artist_id),
+                    "track_count": 0,
+                }
+            artists[key]["track_count"] += 1
+
+    artist_list = list(artists.values())
+    artist_list.sort(key=lambda entry: (entry.get("name") or "").lower())
+    return artist_list
+
+
+def _ensure_playlist_cache(
+    spotify: SpotifyService,
+    session_mgr: SessionManager,
+    playlist_id: str,
+) -> PlaylistContextMeta:
+    meta = spotify.get_playlist_context_meta(playlist_id)
+    facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
+    last_snapshot_id = facts.get("last_snapshot_id") if facts else None
+    cached_track_count = int(facts.get("track_count_cached") or 0) if facts else 0
+    is_dirty = bool(facts.get("is_dirty")) if facts else True
+    current_snapshot_id = meta.snapshot_id
+    current_track_count = meta.total_tracks or 0
+
+    snapshot_mismatch = bool(last_snapshot_id) and bool(current_snapshot_id) and last_snapshot_id != current_snapshot_id
+    count_mismatch = cached_track_count != current_track_count
+    missing_cache = not facts or not last_snapshot_id
+    needs_refresh = missing_cache or is_dirty or snapshot_mismatch or count_mismatch
+
+    if needs_refresh:
+        if facts and (snapshot_mismatch or count_mismatch):
+            playlist_cache_store.mark_dirty(playlist_id)
+        _refresh_playlist_cache_snapshot(spotify, session_mgr, playlist_id)
+
+    return meta
 
 def _normalize_spotify_track(track: Dict[str, Any]) -> Dict[str, Any]:
     artists = []
@@ -1628,9 +1841,16 @@ async def analyze_duplicates(
                 ignored_pairs.add((row['track_id_1'], row['track_id_2']))
     
     try:
-        snapshot_info = sp.playlist(playlist_id, fields="snapshot_id")
-        snapshot_id = snapshot_info.get("snapshot_id")
-        items = _fetch_playlist_items(sp, playlist_id)
+        meta = _ensure_playlist_cache(spotify, session_mgr, playlist_id)
+        snapshot_id = meta.snapshot_id
+        items = _build_cached_playlist_items(
+            spotify,
+            playlist_id,
+            session_mgr.get_session_id(),
+        )
+        if items is None:
+            snapshot_id = snapshot_id or sp.playlist(playlist_id, fields="snapshot_id").get("snapshot_id")
+            items = _fetch_playlist_items(sp, playlist_id)
         groups: Dict[str, Dict[str, Any]] = {}
         seen_keys: Dict[str, List[int]] = {}
 
