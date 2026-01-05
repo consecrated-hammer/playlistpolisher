@@ -392,8 +392,11 @@ async def check_user_follows_artists(
         fetched_statuses: Dict[str, bool] = {}
         if missing_ids:
             for chunk in _chunk_list(missing_ids, 50):
-                params = {"type": "artist", "ids": ",".join(chunk)}
-                result = sp._get("me/following/contains", params)
+                if hasattr(sp, "current_user_following_artists"):
+                    result = sp.current_user_following_artists(chunk)
+                else:
+                    params = {"type": "artist", "ids": ",".join(chunk)}
+                    result = sp._get("me/following/contains", params)
                 if not isinstance(result, list):
                     raise ValueError("Unexpected response from follow status check")
                 for artist_id, status in zip(chunk, result):
@@ -404,6 +407,12 @@ async def check_user_follows_artists(
         statuses_map = {**cached_statuses, **fetched_statuses}
         statuses = [bool(statuses_map.get(artist_id, False)) for artist_id in artist_ids]
         return PlaylistArtistFollowCheckResponse(statuses=statuses)
+    except SpotifyException as e:
+        logger.error("Spotify error checking artist follow status: %s", e)
+        detail = e.msg or str(e)
+        if e.http_status == 403:
+            detail = "Spotify permissions missing for artist follow status. Please re-authenticate."
+        raise HTTPException(status_code=e.http_status or 502, detail=detail)
     except Exception as e:
         logger.error("Failed to check artist follow status: %s", e)
         raise HTTPException(status_code=500, detail="Failed to check follow status")
