@@ -901,10 +901,23 @@ def _build_track_payload_from_cache(track_data: Dict[str, Any]) -> Dict[str, Any
     }
 
 
+def _track_missing_artist_ids(track_data: Dict[str, Any]) -> bool:
+    artists = track_data.get("artists") or []
+    if not artists:
+        return True
+    for artist in artists:
+        if not isinstance(artist, dict):
+            return True
+        if not artist.get("id"):
+            return True
+    return False
+
+
 def _get_cached_tracks_chunked(
     track_ids: List[str],
     session_id: Optional[str],
     allow_stale: bool = True,
+    require_artist_ids: bool = False,
 ) -> tuple[Dict[str, Dict[str, Any]], set[str]]:
     cached_tracks: Dict[str, Dict[str, Any]] = {}
     missing_ids: set[str] = set()
@@ -920,6 +933,10 @@ def _get_cached_tracks_chunked(
         )
         cached_tracks.update(cached_chunk)
         missing_ids.update(missing_chunk)
+    if require_artist_ids:
+        for track_id, track_data in cached_tracks.items():
+            if _track_missing_artist_ids(track_data):
+                missing_ids.add(track_id)
     return cached_tracks, missing_ids
 
 
@@ -948,7 +965,12 @@ def _build_cached_playlist_items(
         return []
 
     track_ids = [item.get("track_id") for item in items if item.get("track_id")]
-    cached_tracks, missing_ids = _get_cached_tracks_chunked(track_ids, session_id, allow_stale=True)
+    cached_tracks, missing_ids = _get_cached_tracks_chunked(
+        track_ids,
+        session_id,
+        allow_stale=True,
+        require_artist_ids=True,
+    )
 
     if missing_ids:
         fetched_tracks = _fetch_tracks_from_spotify(spotify, list(missing_ids))
@@ -1139,33 +1161,25 @@ def _get_cached_playlist_tracks_page(
         )
 
     track_ids = [item["track_id"] for item in items if item.get("track_id")]
-    cached_tracks, missing_ids = CacheService.get_tracks(
+    cached_tracks, missing_ids = _get_cached_tracks_chunked(
         track_ids,
         session_id,
         allow_stale=True,
-        allow_legacy=True,
+        require_artist_ids=True,
     )
     cache_hits = len(cached_tracks)
     cache_misses = len(missing_ids)
     cache_warmed = 0
 
     if missing_ids:
-        client = spotify.get_client()
-        fetched_tracks = []
-        for chunk in _chunk_list(list(missing_ids), 50):
-            response = client.tracks(chunk)
-            fetched_tracks.extend([track for track in response.get("tracks", []) if track])
+        fetched_tracks = _fetch_tracks_from_spotify(spotify, list(missing_ids))
         if fetched_tracks:
-            if should_warm_cache:
-                cache_warmed = CacheService.set_tracks(fetched_tracks, session_id)
-                refreshed, still_missing = CacheService.get_tracks(list(missing_ids), session_id)
-                cached_tracks.update(refreshed)
-                missing_ids = still_missing
-            else:
-                for track in fetched_tracks:
-                    normalized = _normalize_spotify_track(track)
-                    if normalized.get("id"):
-                        cached_tracks[normalized["id"]] = normalized
+            cache_warmed = CacheService.set_tracks(fetched_tracks, session_id)
+            for track in fetched_tracks:
+                normalized = _normalize_spotify_track(track)
+                if normalized.get("id"):
+                    cached_tracks[normalized["id"]] = normalized
+            missing_ids = {track_id for track_id in missing_ids if track_id not in cached_tracks}
 
     tracks: List[PlaylistTrack] = []
     for item in items:
