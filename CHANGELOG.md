@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.4 - 2026-01-05
+**Artist follow availability**
+- Cache: rehydrate legacy track cache entries missing artist IDs to restore follow status on playlist load.
+
 ## v1.4.3 - 2026-01-05
 **Cache-first playlist entry**
 - Cache: enforce snapshot checks on playlist entry and refresh caches before serving data.
