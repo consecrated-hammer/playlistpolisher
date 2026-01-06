@@ -659,16 +659,6 @@ export const cacheAPI = {
   },
 
   /**
-   * Get playlist-specific cache statistics (legacy - requires track IDs)
-   * @param {string[]} trackIds - Array of track IDs from the playlist
-   * @returns {Promise<object>} Playlist cache stats
-   */
-  getPlaylistStats: async (trackIds) => {
-    const response = await api.post('/cache/stats/playlist', { track_ids: trackIds });
-    return response.data;
-  },
-
-  /**
    * Check playlist cache freshness without loading full tracks
    * @param {string} playlistId
    * @returns {Promise<object>} Cache status details

@@ -130,11 +130,6 @@ async def get_cache_stats(
         raise HTTPException(status_code=500, detail="Failed to retrieve cache statistics")
 
 
-class PlaylistCacheStatsRequest(BaseModel):
-    """Request model for playlist cache statistics."""
-    track_ids: List[str]
-
-
 class PlaylistCacheStatsResponse(BaseModel):
     """Response model for playlist-specific cache statistics."""
     user_cached_tracks: int
@@ -151,7 +146,6 @@ async def get_playlist_cache_stats_by_id(
     Get Playlist-Specific Cache Statistics (Efficient)
     
     Returns cache statistics for a specific playlist using the playlist_cache_facts table.
-    Much more efficient than the POST endpoint that requires all track IDs.
     
     Args:
         playlist_id: Spotify playlist ID
@@ -174,53 +168,6 @@ async def get_playlist_cache_stats_by_id(
         stats = CacheService.get_playlist_cache_stats_by_id(playlist_id, session_id)
         logger.info(f"Retrieved playlist cache stats for {playlist_id}: {stats}")
         return stats
-    except Exception as e:
-        logger.error(f"Failed to get playlist cache stats: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve playlist cache statistics")
-
-
-@router.post("/stats/playlist", response_model=PlaylistCacheStatsResponse)
-async def get_playlist_cache_stats(
-    body: PlaylistCacheStatsRequest,
-    session_mgr: SessionManager = Depends(require_auth)
-):
-    """
-    Get Playlist-Specific Cache Statistics (Legacy - requires track IDs)
-    
-    Returns cache statistics for a specific playlist's tracks, including:
-    - Number of tracks from this playlist cached for the current user
-    - Number of expired tracks from this playlist for the current user
-    - Total number of tracks from this playlist cached (all users)
-    
-    Note: This endpoint is less efficient than GET /stats/playlist/{playlist_id}
-    as it requires sending all track IDs. Use the GET endpoint when possible.
-    
-    Args:
-        body: Request with track_ids from the playlist
-    
-    Returns:
-        PlaylistCacheStatsResponse: Playlist-specific cache statistics
-        
-    Raises:
-        HTTPException: 401 if not authenticated
-        
-    Example Response:
-        {
-            "user_cached_tracks": 89,
-            "user_expired_tracks": 5,
-            "total_cached_tracks": 234
-        }
-    """
-    try:
-        session_id = session_mgr.session_id
-        stats = CacheService.get_playlist_cache_stats(body.track_ids, session_id)
-        logger.info(f"Retrieved playlist cache stats: {stats}")
-        # Map old field names to new for backward compatibility
-        return {
-            'user_cached_tracks': stats.get('user_tracks', 0),
-            'user_expired_tracks': stats.get('user_expired', 0),
-            'total_cached_tracks': stats.get('total_tracks', 0)
-        }
     except Exception as e:
         logger.error(f"Failed to get playlist cache stats: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve playlist cache statistics")
