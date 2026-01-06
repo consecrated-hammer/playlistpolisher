@@ -5,6 +5,63 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { cacheAPI, formatDuration, getBestImage, playlistAPI, smartPlaylistAPI } from '../services/api';
 
+const CollapsibleSection = ({
+  title,
+  description,
+  open,
+  onToggle,
+  onClear,
+  selectedSummary = [],
+  children,
+}) => {
+  const summary = selectedSummary.filter(Boolean);
+  const visibleSummary = summary.slice(0, 4);
+  const extraCount = summary.length - visibleSummary.length;
+
+  return (
+    <div className="rounded-2xl border border-spotify-gray-mid/60 bg-spotify-gray-mid/30">
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex-1 text-left space-y-1"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-white">{title}</span>
+            <span className={`icon text-lg text-spotify-gray-light transition-transform ${open ? 'rotate-180' : ''}`}>
+              expand_more
+            </span>
+          </div>
+          {description && <p className="text-xs text-spotify-gray-light">{description}</p>}
+          {summary.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              {visibleSummary.map((item) => (
+                <span
+                  key={item}
+                  className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-spotify-gray-mid/70 text-xs text-white border border-spotify-gray-mid/60"
+                >
+                  {item}
+                </span>
+              ))}
+              {extraCount > 0 && (
+                <span className="text-xs text-spotify-gray-light">+{extraCount} more</span>
+              )}
+            </div>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onClear}
+          className="text-xs text-spotify-gray-light hover:text-white"
+        >
+          Clear filter
+        </button>
+      </div>
+      {open && <div className="px-4 pb-4 pt-1 space-y-4">{children}</div>}
+    </div>
+  );
+};
+
 const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -29,8 +86,20 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const [selectedArtists, setSelectedArtists] = useState([]);
   const [titleFilters, setTitleFilters] = useState([]);
   const [titleInput, setTitleInput] = useState('');
+  const [albumFilters, setAlbumFilters] = useState([]);
+  const [albumInput, setAlbumInput] = useState('');
   const [genreSearch, setGenreSearch] = useState('');
   const [artistSearch, setArtistSearch] = useState('');
+  const [sectionOpen, setSectionOpen] = useState({
+    sources: true,
+    matchLogic: true,
+    genres: true,
+    dates: true,
+    artists: true,
+    title: true,
+    album: true,
+  });
+  const [openDecades, setOpenDecades] = useState({});
 
   const [preview, setPreview] = useState({ tracks: [], total_matches: 0 });
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -89,23 +158,40 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     setInitializedSources(true);
   }, [initializedSources, playlists, playlistFacts, sourceFromParam]);
 
-  const filteredSources = useMemo(() => {
+  const sourceIdSet = useMemo(() => new Set(sourceIds), [sourceIds]);
+
+  const orderedSources = useMemo(() => {
     const query = sourceSearch.trim().toLowerCase();
-    if (!query) {
-      return playlists;
-    }
-    return playlists.filter((playlist) => {
+    const selected = playlists.filter((playlist) => sourceIdSet.has(playlist.id));
+    const unselected = playlists.filter((playlist) => !sourceIdSet.has(playlist.id));
+    const matches = (playlist) => {
+      if (!query) return true;
       const name = playlist.name?.toLowerCase() || '';
       const owner = playlist.owner?.display_name?.toLowerCase() || playlist.owner?.id?.toLowerCase() || '';
       return name.includes(query) || owner.includes(query);
-    });
-  }, [playlists, sourceSearch]);
-
-  const sourceIdSet = useMemo(() => new Set(sourceIds), [sourceIds]);
+    };
+    const selectedSorted = [...selected].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const filteredUnselected = unselected.filter(matches).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    return [...selectedSorted, ...filteredUnselected];
+  }, [playlists, sourceIdSet, sourceSearch]);
 
   const uncachedSources = useMemo(() => {
     return sourceIds.filter((playlistId) => !playlistFacts[playlistId]?.last_snapshot_id);
   }, [sourceIds, playlistFacts]);
+
+  const sourceNameMap = useMemo(() => {
+    const map = {};
+    playlists.forEach((playlist) => {
+      if (playlist.id) {
+        map[playlist.id] = playlist.name || 'Untitled playlist';
+      }
+    });
+    return map;
+  }, [playlists]);
+
+  const toggleSection = (key) => {
+    setSectionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const handleToggleSource = (playlistId) => {
     setSourceIds((prev) => {
@@ -127,8 +213,15 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     setSourceIds(playlists.map((playlist) => playlist.id));
   };
 
-  const clearSources = () => {
-    setSourceIds([]);
+  const resetSourcesToDefault = () => {
+    const cachedIds = playlists
+      .filter((playlist) => playlistFacts[playlist.id]?.last_snapshot_id)
+      .map((playlist) => playlist.id);
+    if (cachedIds.length > 0) {
+      setSourceIds(cachedIds);
+    } else {
+      setSourceIds(playlists.map((playlist) => playlist.id));
+    }
   };
 
   useEffect(() => {
@@ -165,6 +258,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       years: selectedYears,
       artist_ids: selectedArtists,
       title_contains: titleFilters,
+      album_contains: albumFilters,
       limit: 250,
       offset: 0,
     };
@@ -191,6 +285,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     selectedArtists,
     sourceIds,
     titleFilters,
+    albumFilters,
   ]);
 
   useEffect(() => {
@@ -229,31 +324,93 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     setSelectedTrackIds([]);
   };
 
+  const selectedGenreSet = useMemo(() => {
+    return new Set(selectedGenres.map((genre) => genre.toLowerCase()));
+  }, [selectedGenres]);
+
   const genreGroups = useMemo(() => {
     if (!facets?.genre_groups?.length) {
       return [];
     }
-    if (!genreSearch.trim()) {
-      return facets.genre_groups;
-    }
     const query = genreSearch.trim().toLowerCase();
     return facets.genre_groups
       .map((group) => {
-        const tags = (group.tags || []).filter((tag) => tag.name.toLowerCase().includes(query));
+        const groupMatches = query ? group.group.toLowerCase().includes(query) : false;
+        const tags = (group.tags || [])
+          .filter((tag) => {
+            const tagName = tag.name.toLowerCase();
+            if (selectedGenreSet.has(tagName)) {
+              return true;
+            }
+            if (!query) return true;
+            if (groupMatches) return true;
+            return tagName.includes(query);
+          })
+          .sort((a, b) => {
+            const aSelected = selectedGenreSet.has(a.name.toLowerCase());
+            const bSelected = selectedGenreSet.has(b.name.toLowerCase());
+            if (aSelected !== bSelected) return aSelected ? -1 : 1;
+            if (b.count !== a.count) return b.count - a.count;
+            return a.name.localeCompare(b.name);
+          });
         if (!tags.length) return null;
         return { ...group, tags };
       })
-      .filter(Boolean);
-  }, [facets, genreSearch]);
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aSelected = (a.tags || []).some((tag) => selectedGenreSet.has(tag.name.toLowerCase()));
+        const bSelected = (b.tags || []).some((tag) => selectedGenreSet.has(tag.name.toLowerCase()));
+        if (aSelected !== bSelected) return aSelected ? -1 : 1;
+        if (b.count !== a.count) return b.count - a.count;
+        return a.group.localeCompare(b.group);
+      });
+  }, [facets, genreSearch, selectedGenreSet]);
 
   const artistOptions = useMemo(() => {
-    const list = facets?.artists || [];
-    if (!artistSearch.trim()) {
-      return list;
-    }
+    return facets?.artists || [];
+  }, [facets]);
+
+  const orderedArtists = useMemo(() => {
     const query = artistSearch.trim().toLowerCase();
-    return list.filter((artist) => (artist.name || '').toLowerCase().includes(query));
-  }, [facets, artistSearch]);
+    const selectedSet = new Set(selectedArtists);
+    const selectedList = artistOptions.filter((artist) => selectedSet.has(artist.id));
+    const filteredList = artistOptions.filter((artist) => {
+      if (selectedSet.has(artist.id)) return false;
+      if (!query) return true;
+      return (artist.name || '').toLowerCase().includes(query);
+    });
+    return [...selectedList, ...filteredList];
+  }, [artistOptions, artistSearch, selectedArtists]);
+
+  const sortedDecades = useMemo(() => {
+    const list = facets?.decades || [];
+    const selectedYearsSet = new Set(selectedYears);
+    const selectedDecadesSet = new Set(selectedDecades);
+    return [...list].sort((a, b) => {
+      const aSelected = selectedDecadesSet.has(a.decade)
+        || (a.years || []).some((year) => selectedYearsSet.has(year.year));
+      const bSelected = selectedDecadesSet.has(b.decade)
+        || (b.years || []).some((year) => selectedYearsSet.has(year.year));
+      if (aSelected !== bSelected) return aSelected ? -1 : 1;
+      return b.decade - a.decade;
+    });
+  }, [facets, selectedDecades, selectedYears]);
+
+  useEffect(() => {
+    if (!facets?.decades?.length) {
+      return;
+    }
+    setOpenDecades((prev) => {
+      const next = { ...prev };
+      facets.decades.forEach((decade) => {
+        const hasSelectedYear = (decade.years || []).some((year) => selectedYears.includes(year.year));
+        if (selectedDecades.includes(decade.decade) || hasSelectedYear) {
+          next[decade.decade] = true;
+        }
+      });
+      return next;
+    });
+  }, [facets, selectedDecades, selectedYears]);
 
   const artistNameMap = useMemo(() => {
     const map = {};
@@ -273,17 +430,32 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       if (name) tags.push(name);
     });
     titleFilters.forEach((term) => tags.push(term));
+    albumFilters.forEach((term) => tags.push(term));
     if (!tags.length) {
       return 'Auto: Smart playlist';
     }
     return `Auto: ${tags.join(', ')}`;
-  }, [artistNameMap, selectedDecades, selectedGenres, selectedArtists, selectedYears, titleFilters]);
+  }, [albumFilters, artistNameMap, selectedDecades, selectedGenres, selectedArtists, selectedYears, titleFilters]);
 
   useEffect(() => {
     if (!nameTouched) {
       setPlaylistName(autoName);
     }
   }, [autoName, nameTouched]);
+
+  const selectedSourceSummary = useMemo(() => {
+    return sourceIds.map((id) => sourceNameMap[id] || id).filter(Boolean);
+  }, [sourceIds, sourceNameMap]);
+
+  const selectedArtistSummary = useMemo(() => {
+    return selectedArtists.map((id) => artistNameMap[id] || id).filter(Boolean);
+  }, [artistNameMap, selectedArtists]);
+
+  const selectedDateSummary = useMemo(() => {
+    const decadeLabels = selectedDecades.map((decade) => `${decade}s`);
+    const yearLabels = selectedYears.map((year) => String(year));
+    return [...decadeLabels, ...yearLabels];
+  }, [selectedDecades, selectedYears]);
 
   const handleAddTitleFilter = () => {
     const value = titleInput.trim();
@@ -301,6 +473,43 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     setTitleFilters((prev) => prev.filter((item) => item !== term));
   };
 
+  const handleAddAlbumFilter = () => {
+    const value = albumInput.trim();
+    if (!value) return;
+    const exists = albumFilters.some((term) => term.toLowerCase() === value.toLowerCase());
+    if (exists) {
+      setAlbumInput('');
+      return;
+    }
+    setAlbumFilters((prev) => [...prev, value]);
+    setAlbumInput('');
+  };
+
+  const handleRemoveAlbumFilter = (term) => {
+    setAlbumFilters((prev) => prev.filter((item) => item !== term));
+  };
+
+  const handleClearAllFilters = () => {
+    resetSourcesToDefault();
+    setSourceSearch('');
+    setMatchMode('any');
+    setSelectedGenres([]);
+    setSelectedDecades([]);
+    setSelectedYears([]);
+    setSelectedArtists([]);
+    setTitleFilters([]);
+    setAlbumFilters([]);
+    setGenreSearch('');
+    setArtistSearch('');
+    setTitleInput('');
+    setAlbumInput('');
+    setSelectionTouched(false);
+    setSelectedTrackIds([]);
+    setNameTouched(false);
+    setCreateMessage(null);
+    setCreateError(null);
+  };
+
   const toggleGenre = (genreName) => {
     setSelectedGenres((prev) => {
       if (prev.includes(genreName)) {
@@ -308,6 +517,39 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       }
       return [...prev, genreName];
     });
+  };
+
+  const removeSource = (playlistId) => {
+    setSourceIds((prev) => prev.filter((id) => id !== playlistId));
+  };
+
+  const clearMatchLogic = () => {
+    setMatchMode('any');
+  };
+
+  const clearGenres = () => {
+    setSelectedGenres([]);
+    setGenreSearch('');
+  };
+
+  const clearDates = () => {
+    setSelectedDecades([]);
+    setSelectedYears([]);
+  };
+
+  const clearArtists = () => {
+    setSelectedArtists([]);
+    setArtistSearch('');
+  };
+
+  const clearTitleTags = () => {
+    setTitleFilters([]);
+    setTitleInput('');
+  };
+
+  const clearAlbumTags = () => {
+    setAlbumFilters([]);
+    setAlbumInput('');
   };
 
   const toggleDecade = (decade) => {
@@ -398,348 +640,536 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
               {error && <ErrorMessage message={error} />}
 
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-                <div className="bg-spotify-gray-dark/40 rounded-2xl border border-spotify-gray-mid/60 p-6 space-y-6">
-                  <div className="space-y-3">
+                <div className="space-y-6">
+                  <div className="bg-spotify-gray-dark/40 rounded-2xl border border-spotify-gray-mid/60 p-6 space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-white">Source playlists</p>
-                        <p className="text-xs text-spotify-gray-light">
-                          Choose cached playlists to pull tracks from.
+                        <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Config</p>
+                        <p className="text-sm text-spotify-gray-light mt-1">
+                          Sources, match logic, and core behavior.
                         </p>
                       </div>
-                      <span className="text-xs text-spotify-gray-light">
-                        {sourceIds.length} selected
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={selectAllCached}
+                        onClick={handleClearAllFilters}
                         className="px-3 py-1.5 text-xs rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors"
                       >
-                        Select cached
-                      </button>
-                      <button
-                        type="button"
-                        onClick={selectAllSources}
-                        className="px-3 py-1.5 text-xs rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors"
-                      >
-                        Select all
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearSources}
-                        className="px-3 py-1.5 text-xs rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors"
-                      >
-                        Clear
+                        Clear all filters
                       </button>
                     </div>
 
-                    <input
-                      type="text"
-                      value={sourceSearch}
-                      onChange={(event) => setSourceSearch(event.target.value)}
-                      placeholder="Search playlists"
-                      className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                    />
-
-                    <div className="max-h-56 overflow-y-auto divide-y divide-spotify-gray-mid/60 border border-spotify-gray-mid/60 rounded-lg">
-                      {filteredSources.length === 0 ? (
-                        <div className="p-4 text-sm text-spotify-gray-light">No playlists match your search.</div>
-                      ) : (
-                        filteredSources.map((playlist) => {
-                          const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
-                          const cached = Boolean(playlistFacts[playlist.id]?.last_snapshot_id);
-                          const isSelected = sourceIdSet.has(playlist.id);
-                          return (
-                            <label
-                              key={playlist.id}
-                              className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-spotify-gray-light hover:bg-spotify-gray-mid/40 cursor-pointer"
+                    <CollapsibleSection
+                      title="Source playlists"
+                      description="Choose cached playlists to pull tracks from."
+                      open={sectionOpen.sources}
+                      onToggle={() => toggleSection('sources')}
+                      onClear={() => {
+                        resetSourcesToDefault();
+                        setSourceSearch('');
+                      }}
+                      selectedSummary={selectedSourceSummary}
+                    >
+                      {selectedSourceSummary.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {sourceIds.map((id) => (
+                            <span
+                              key={id}
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-spotify-gray-mid/60 text-xs text-white border border-spotify-gray-mid/60"
                             >
-                              <div className="flex items-center gap-3 min-w-0">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => handleToggleSource(playlist.id)}
-                                  className="accent-spotify-green"
-                                />
-                                <div className="min-w-0">
-                                  <div className="text-white font-medium truncate">{playlist.name}</div>
-                                  <div className="text-xs text-spotify-gray-light truncate">
-                                    {ownerName}
-                                  </div>
-                                </div>
-                              </div>
-                              <span
-                                className={`text-[11px] px-2 py-1 rounded-full border ${
-                                  cached
-                                    ? 'border-spotify-green/40 text-spotify-green'
-                                    : 'border-spotify-gray-mid/60 text-spotify-gray-light'
-                                }`}
+                              {sourceNameMap[id] || id}
+                              <button
+                                type="button"
+                                onClick={() => removeSource(id)}
+                                className="text-spotify-gray-light hover:text-white"
                               >
-                                {cached ? 'Cached' : 'Not cached'}
-                              </span>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-
-                    {uncachedSources.length > 0 && (
-                      <div className="rounded-lg border border-amber-700/40 bg-amber-900/20 p-3 text-xs text-amber-300">
-                        {uncachedSources.length} selected playlists are not cached yet. Refresh the cache to include them.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white">Match logic</p>
-                      <p className="text-xs text-spotify-gray-light">
-                        Control whether tracks must match all tags or any tag.
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMatchMode('any')}
-                        className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
-                          matchMode === 'any'
-                            ? 'border-spotify-green bg-spotify-green text-black'
-                            : 'border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light'
-                        }`}
-                      >
-                        Match any
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMatchMode('all')}
-                        className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
-                          matchMode === 'all'
-                            ? 'border-spotify-green bg-spotify-green text-black'
-                            : 'border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light'
-                        }`}
-                      >
-                        Match all
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-white">Genres</p>
-                        <p className="text-xs text-spotify-gray-light">
-                          Auto-grouped by genre families with counts.
-                        </p>
-                      </div>
-                      <span className="text-xs text-spotify-gray-light">{selectedGenres.length} selected</span>
-                    </div>
-
-                    <input
-                      type="text"
-                      value={genreSearch}
-                      onChange={(event) => setGenreSearch(event.target.value)}
-                      placeholder="Search genres"
-                      className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                    />
-
-                    {facetsLoading && (
-                      <div className="text-xs text-spotify-gray-light">Loading genre tags...</div>
-                    )}
-                    {facetsError && (
-                      <div className="text-xs text-red-400">{facetsError}</div>
-                    )}
-                    {!facetsLoading && genreGroups.length === 0 && (
-                      <div className="text-xs text-spotify-gray-light">No genre tags available yet.</div>
-                    )}
-
-                    <div className="space-y-2">
-                      {genreGroups.map((group) => (
-                        <details
-                          key={group.group}
-                          className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 px-3 py-2"
-                        >
-                          <summary className="cursor-pointer text-sm text-white flex items-center justify-between">
-                            <span>{group.group}</span>
-                            <span className="text-xs text-spotify-gray-light">{group.count}</span>
-                          </summary>
-                          <div className="mt-2 space-y-2">
-                            {group.tags.map((tag) => {
-                              const checked = selectedGenres.includes(tag.name);
-                              return (
-                                <label
-                                  key={tag.name}
-                                  className="flex items-center justify-between text-sm text-spotify-gray-light"
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={() => toggleGenre(tag.name)}
-                                      className="accent-spotify-green"
-                                    />
-                                    <span>{tag.name}</span>
-                                  </span>
-                                  <span className="text-xs text-spotify-gray-light">{tag.count}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </details>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-white">Release dates</p>
-                        <p className="text-xs text-spotify-gray-light">
-                          Pick decades or drill down to specific years.
-                        </p>
-                      </div>
-                      <span className="text-xs text-spotify-gray-light">
-                        {selectedDecades.length + selectedYears.length} selected
-                      </span>
-                    </div>
-
-                    {facets?.decades?.length ? (
-                      <div className="space-y-2">
-                        {facets.decades.map((decade) => (
-                          <details
-                            key={decade.decade}
-                            className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 px-3 py-2"
-                          >
-                            <summary className="cursor-pointer text-sm text-white flex items-center justify-between">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedDecades.includes(decade.decade)}
-                                  onChange={() => toggleDecade(decade.decade)}
-                                  className="accent-spotify-green"
-                                />
-                                <span>{decade.label}</span>
-                              </label>
-                              <span className="text-xs text-spotify-gray-light">{decade.count}</span>
-                            </summary>
-                            <div className="mt-2 space-y-2">
-                              {decade.years.map((year) => (
-                                <label
-                                  key={year.year}
-                                  className="flex items-center justify-between text-sm text-spotify-gray-light"
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedYears.includes(year.year)}
-                                      onChange={() => toggleYear(year.year)}
-                                      className="accent-spotify-green"
-                                    />
-                                    <span>{year.year}</span>
-                                  </span>
-                                  <span className="text-xs text-spotify-gray-light">{year.count}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </details>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-spotify-gray-light">No release date tags available yet.</div>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-white">Artists</p>
-                        <p className="text-xs text-spotify-gray-light">
-                          Filter by artist names from cached tracks.
-                        </p>
-                      </div>
-                      <span className="text-xs text-spotify-gray-light">{selectedArtists.length} selected</span>
-                    </div>
-
-                    <input
-                      type="text"
-                      value={artistSearch}
-                      onChange={(event) => setArtistSearch(event.target.value)}
-                      placeholder="Search artists"
-                      className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                    />
-
-                    <div className="max-h-48 overflow-y-auto divide-y divide-spotify-gray-mid/60 border border-spotify-gray-mid/60 rounded-lg">
-                      {(artistOptions || []).length === 0 ? (
-                        <div className="p-4 text-sm text-spotify-gray-light">No artists match your search.</div>
-                      ) : (
-                        artistOptions.slice(0, 200).map((artist) => (
-                          <label
-                            key={artist.id}
-                            className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-spotify-gray-light hover:bg-spotify-gray-mid/40 cursor-pointer"
-                          >
-                            <span className="flex items-center gap-2 min-w-0">
-                              <input
-                                type="checkbox"
-                                checked={selectedArtists.includes(artist.id)}
-                                onChange={() => toggleArtist(artist.id)}
-                                className="accent-spotify-green"
-                              />
-                              <span className="truncate">{artist.name}</span>
+                                <span className="icon text-sm">close</span>
+                              </button>
                             </span>
-                            <span className="text-xs text-spotify-gray-light">{artist.count}</span>
-                          </label>
-                        ))
+                          ))}
+                        </div>
                       )}
-                    </div>
-                    {(artistOptions || []).length > 200 && (
-                      <p className="text-xs text-spotify-gray-light">Showing top 200 matches.</p>
-                    )}
-                  </div>
 
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-semibold text-white">Custom tag</p>
-                      <p className="text-xs text-spotify-gray-light">
-                        Add title keywords to include tracks that match the phrase.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={selectAllCached}
+                          className="px-3 py-1.5 text-xs rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors"
+                        >
+                          Select cached
+                        </button>
+                        <button
+                          type="button"
+                          onClick={selectAllSources}
+                          className="px-3 py-1.5 text-xs rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors"
+                        >
+                          Select all
+                        </button>
+                      </div>
+
                       <input
                         type="text"
-                        value={titleInput}
-                        onChange={(event) => setTitleInput(event.target.value)}
-                        placeholder="Title contains..."
-                        className="flex-1 min-w-[160px] bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                        value={sourceSearch}
+                        onChange={(event) => setSourceSearch(event.target.value)}
+                        placeholder="Search playlists"
+                        className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
                       />
-                      <button
-                        type="button"
-                        onClick={handleAddTitleFilter}
-                        className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
-                      >
-                        Add
-                      </button>
+
+                      <div className="max-h-56 overflow-y-auto divide-y divide-spotify-gray-mid/60 border border-spotify-gray-mid/60 rounded-lg">
+                        {orderedSources.length === 0 ? (
+                          <div className="p-4 text-sm text-spotify-gray-light">No playlists match your search.</div>
+                        ) : (
+                          orderedSources.map((playlist) => {
+                            const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
+                            const cached = Boolean(playlistFacts[playlist.id]?.last_snapshot_id);
+                            const isSelected = sourceIdSet.has(playlist.id);
+                            return (
+                              <label
+                                key={playlist.id}
+                                className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-spotify-gray-light hover:bg-spotify-gray-mid/40 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => handleToggleSource(playlist.id)}
+                                    className="accent-spotify-green"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="text-white font-medium truncate">{playlist.name}</div>
+                                    <div className="text-xs text-spotify-gray-light truncate">
+                                      {ownerName}
+                                    </div>
+                                  </div>
+                                </div>
+                                <span
+                                  className={`text-[11px] px-2 py-1 rounded-full border ${
+                                    cached
+                                      ? 'border-spotify-green/40 text-spotify-green'
+                                      : 'border-spotify-gray-mid/60 text-spotify-gray-light'
+                                  }`}
+                                >
+                                  {cached ? 'Cached' : 'Not cached'}
+                                </span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {uncachedSources.length > 0 && (
+                        <div className="rounded-lg border border-amber-700/40 bg-amber-900/20 p-3 text-xs text-amber-300">
+                          {uncachedSources.length} selected playlists are not cached yet. Refresh the cache to include them.
+                        </div>
+                      )}
+                    </CollapsibleSection>
+
+                    <CollapsibleSection
+                      title="Match logic"
+                      description="Control whether tracks must match all tags or any tag."
+                      open={sectionOpen.matchLogic}
+                      onToggle={() => toggleSection('matchLogic')}
+                      onClear={clearMatchLogic}
+                      selectedSummary={[matchMode === 'all' ? 'Match all' : 'Match any']}
+                    >
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMatchMode('any')}
+                          className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
+                            matchMode === 'any'
+                              ? 'border-spotify-green bg-spotify-green text-black'
+                              : 'border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light'
+                          }`}
+                        >
+                          Match any
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMatchMode('all')}
+                          className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
+                            matchMode === 'all'
+                              ? 'border-spotify-green bg-spotify-green text-black'
+                              : 'border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light'
+                          }`}
+                        >
+                          Match all
+                        </button>
+                      </div>
+                    </CollapsibleSection>
+                  </div>
+
+                  <div className="bg-spotify-gray-dark/40 rounded-2xl border border-spotify-gray-mid/60 p-6 space-y-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Filtering</p>
+                      <p className="text-sm text-spotify-gray-light mt-1">
+                        Pick tags, dates, artists, and custom terms.
+                      </p>
                     </div>
-                    {titleFilters.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {titleFilters.map((term) => (
-                          <span
-                            key={term}
-                            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-spotify-gray-mid/60 text-xs text-white border border-spotify-gray-mid/60"
-                          >
-                            {term}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveTitleFilter(term)}
-                              className="text-spotify-gray-light hover:text-white"
+
+                    <CollapsibleSection
+                      title="Genres"
+                      description="Auto-grouped by genre families with counts."
+                      open={sectionOpen.genres}
+                      onToggle={() => toggleSection('genres')}
+                      onClear={clearGenres}
+                      selectedSummary={selectedGenres}
+                    >
+                      {selectedGenres.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedGenres.map((term) => (
+                            <span
+                              key={term}
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-spotify-gray-mid/60 text-xs text-white border border-spotify-gray-mid/60"
                             >
-                              <span className="icon text-sm">close</span>
-                            </button>
-                          </span>
+                              {term}
+                              <button
+                                type="button"
+                                onClick={() => toggleGenre(term)}
+                                className="text-spotify-gray-light hover:text-white"
+                              >
+                                <span className="icon text-sm">close</span>
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <input
+                        type="text"
+                        value={genreSearch}
+                        onChange={(event) => setGenreSearch(event.target.value)}
+                        placeholder="Search genres"
+                        className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                      />
+
+                      {facetsLoading && (
+                        <div className="text-xs text-spotify-gray-light">Loading genre tags...</div>
+                      )}
+                      {facetsError && (
+                        <div className="text-xs text-red-400">{facetsError}</div>
+                      )}
+                      {!facetsLoading && genreGroups.length === 0 && genreSearch && facets?.genre_groups?.length > 0 && (
+                        <div className="text-xs text-spotify-gray-light">No genres match your search.</div>
+                      )}
+                      {!facetsLoading && genreGroups.length === 0 && (!genreSearch || !facets?.genre_groups?.length) && (
+                        <div className="text-xs text-spotify-gray-light">
+                          No genre tags in cache yet. Refresh the cache to enrich artists.
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        {genreGroups.map((group) => (
+                          <div
+                            key={group.group}
+                            className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 px-3 py-2"
+                          >
+                            <div className="flex items-center justify-between text-sm text-white">
+                              <span>{group.group}</span>
+                              <span className="text-xs text-spotify-gray-light">{group.count}</span>
+                            </div>
+                            <div className="mt-2 space-y-2">
+                              {group.tags.map((tag) => {
+                                const checked = selectedGenres.includes(tag.name);
+                                return (
+                                  <label
+                                    key={tag.name}
+                                    className="flex items-center justify-between text-sm text-spotify-gray-light"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => toggleGenre(tag.name)}
+                                        className="accent-spotify-green"
+                                      />
+                                      <span>{tag.name}</span>
+                                    </span>
+                                    <span className="text-xs text-spotify-gray-light">{tag.count}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
                         ))}
                       </div>
-                    )}
+                    </CollapsibleSection>
+
+                    <CollapsibleSection
+                      title="Release dates"
+                      description="Pick decades or drill down to specific years."
+                      open={sectionOpen.dates}
+                      onToggle={() => toggleSection('dates')}
+                      onClear={clearDates}
+                      selectedSummary={selectedDateSummary}
+                    >
+                      {selectedDateSummary.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedDateSummary.map((term) => (
+                            <span
+                              key={term}
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-spotify-gray-mid/60 text-xs text-white border border-spotify-gray-mid/60"
+                            >
+                              {term}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (term.endsWith('s')) {
+                                    const decadeValue = Number(term.replace('s', ''));
+                                    if (!Number.isNaN(decadeValue)) {
+                                      toggleDecade(decadeValue);
+                                      return;
+                                    }
+                                  }
+                                  const yearValue = Number(term);
+                                  if (!Number.isNaN(yearValue)) {
+                                    toggleYear(yearValue);
+                                  }
+                                }}
+                                className="text-spotify-gray-light hover:text-white"
+                              >
+                                <span className="icon text-sm">close</span>
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {sortedDecades.length ? (
+                        <div className="space-y-2">
+                          {sortedDecades.map((decade) => {
+                            const isOpen = Boolean(openDecades[decade.decade]);
+                            const yearList = [...(decade.years || [])].sort((a, b) => {
+                              const aSelected = selectedYears.includes(a.year);
+                              const bSelected = selectedYears.includes(b.year);
+                              if (aSelected !== bSelected) return aSelected ? -1 : 1;
+                              return b.year - a.year;
+                            });
+                            return (
+                              <div
+                                key={decade.decade}
+                                className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 px-3 py-2"
+                              >
+                                <div className="flex items-center justify-between text-sm text-white">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setOpenDecades((prev) => ({
+                                        ...prev,
+                                        [decade.decade]: !prev[decade.decade],
+                                      }))}
+                                      className="text-spotify-gray-light hover:text-white"
+                                    >
+                                      <span className={`icon text-base transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+                                        expand_more
+                                      </span>
+                                    </button>
+                                    <label className="flex items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedDecades.includes(decade.decade)}
+                                        onChange={() => toggleDecade(decade.decade)}
+                                        className="accent-spotify-green"
+                                      />
+                                      <span>{decade.label}</span>
+                                    </label>
+                                  </div>
+                                  <span className="text-xs text-spotify-gray-light">{decade.count}</span>
+                                </div>
+                                {isOpen && (
+                                  <div className="mt-2 space-y-2 border-l border-spotify-gray-mid/60 pl-4">
+                                    {yearList.map((year) => (
+                                      <label
+                                        key={year.year}
+                                        className="flex items-center justify-between text-sm text-spotify-gray-light"
+                                      >
+                                        <span className="flex items-center gap-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedYears.includes(year.year)}
+                                            onChange={() => toggleYear(year.year)}
+                                            className="accent-spotify-green"
+                                          />
+                                          <span>{year.year}</span>
+                                        </span>
+                                        <span className="text-xs text-spotify-gray-light">{year.count}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-spotify-gray-light">No release date tags available yet.</div>
+                      )}
+                    </CollapsibleSection>
+
+                    <CollapsibleSection
+                      title="Artists"
+                      description="Filter by artist names from cached tracks."
+                      open={sectionOpen.artists}
+                      onToggle={() => toggleSection('artists')}
+                      onClear={clearArtists}
+                      selectedSummary={selectedArtistSummary}
+                    >
+                      {selectedArtistSummary.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedArtists.map((artistId) => (
+                            <span
+                              key={artistId}
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-spotify-gray-mid/60 text-xs text-white border border-spotify-gray-mid/60"
+                            >
+                              {artistNameMap[artistId] || artistId}
+                              <button
+                                type="button"
+                                onClick={() => toggleArtist(artistId)}
+                                className="text-spotify-gray-light hover:text-white"
+                              >
+                                <span className="icon text-sm">close</span>
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <input
+                        type="text"
+                        value={artistSearch}
+                        onChange={(event) => setArtistSearch(event.target.value)}
+                        placeholder="Search artists"
+                        className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                      />
+
+                      <div className="max-h-48 overflow-y-auto divide-y divide-spotify-gray-mid/60 border border-spotify-gray-mid/60 rounded-lg">
+                        {orderedArtists.length === 0 ? (
+                          <div className="p-4 text-sm text-spotify-gray-light">No artists match your search.</div>
+                        ) : (
+                          orderedArtists.slice(0, 200).map((artist) => (
+                            <label
+                              key={artist.id}
+                              className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-spotify-gray-light hover:bg-spotify-gray-mid/40 cursor-pointer"
+                            >
+                              <span className="flex items-center gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedArtists.includes(artist.id)}
+                                  onChange={() => toggleArtist(artist.id)}
+                                  className="accent-spotify-green"
+                                />
+                                <span className="truncate">{artist.name}</span>
+                              </span>
+                              <span className="text-xs text-spotify-gray-light">{artist.count}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                      {orderedArtists.length > 200 && (
+                        <p className="text-xs text-spotify-gray-light">Showing top 200 matches.</p>
+                      )}
+                    </CollapsibleSection>
+
+                    <CollapsibleSection
+                      title="Title tags"
+                      description="Add keywords that must appear in track titles."
+                      open={sectionOpen.title}
+                      onToggle={() => toggleSection('title')}
+                      onClear={clearTitleTags}
+                      selectedSummary={titleFilters}
+                    >
+                      {titleFilters.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {titleFilters.map((term) => (
+                            <span
+                              key={term}
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-spotify-gray-mid/60 text-xs text-white border border-spotify-gray-mid/60"
+                            >
+                              {term}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTitleFilter(term)}
+                                className="text-spotify-gray-light hover:text-white"
+                              >
+                                <span className="icon text-sm">close</span>
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <input
+                          type="text"
+                          value={titleInput}
+                          onChange={(event) => setTitleInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              handleAddTitleFilter();
+                            }
+                          }}
+                          placeholder="Title contains..."
+                          className="flex-1 min-w-[160px] bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddTitleFilter}
+                          className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </CollapsibleSection>
+
+                    <CollapsibleSection
+                      title="Album tags"
+                      description="Add keywords that must appear in album titles."
+                      open={sectionOpen.album}
+                      onToggle={() => toggleSection('album')}
+                      onClear={clearAlbumTags}
+                      selectedSummary={albumFilters}
+                    >
+                      {albumFilters.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {albumFilters.map((term) => (
+                            <span
+                              key={term}
+                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-spotify-gray-mid/60 text-xs text-white border border-spotify-gray-mid/60"
+                            >
+                              {term}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAlbumFilter(term)}
+                                className="text-spotify-gray-light hover:text-white"
+                              >
+                                <span className="icon text-sm">close</span>
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <input
+                          type="text"
+                          value={albumInput}
+                          onChange={(event) => setAlbumInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              handleAddAlbumFilter();
+                            }
+                          }}
+                          placeholder="Album contains..."
+                          className="flex-1 min-w-[160px] bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddAlbumFilter}
+                          className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </CollapsibleSection>
                   </div>
                 </div>
 
@@ -877,25 +1307,114 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                                 </div>
                               </div>
                               {showMetadata && (
-                                <div className="mt-2 text-xs text-spotify-gray-light space-y-1">
-                                  <div>
-                                    <span className="text-spotify-gray-light">Year:</span>{' '}
-                                    <span className="text-white">{track.year || 'Unknown'}</span>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {(track.genres || []).slice(0, 6).map((genre) => (
+                                <div className="mt-2 text-xs text-spotify-gray-light space-y-2">
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <div className="sm:col-span-2">
+                                      <span className="text-spotify-gray-light">Artists:</span>{' '}
+                                      <span className="text-white">
+                                        {(track.artists || []).map((artist) => artist.name).join(', ') || 'Unknown'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Album:</span>{' '}
+                                      <span className="text-white">{track.album || 'Unknown'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Release:</span>{' '}
+                                      <span className="text-white">
+                                        {track.album_release_date || 'Unknown'}
+                                      </span>
+                                      {track.album_release_date_precision && (
+                                        <span className="text-spotify-gray-light">
+                                          {' '}({track.album_release_date_precision})
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Popularity:</span>{' '}
+                                      <span className="text-white">
+                                        {track.popularity ?? '—'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Explicit:</span>{' '}
+                                      <span className="text-white">{track.explicit ? 'Yes' : 'No'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Album type:</span>{' '}
+                                      <span className="text-white">{track.album_type || '—'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Label:</span>{' '}
+                                      <span className="text-white">{track.album_label || '—'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Track / Disc:</span>{' '}
+                                      <span className="text-white">
+                                        {track.track_number ?? '—'} / {track.disc_number ?? '—'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">ISRC:</span>{' '}
                                       <span
-                                        key={genre}
-                                        className="px-2 py-0.5 rounded-full bg-spotify-gray-mid/60 text-[11px] text-white"
+                                        className="text-white font-mono truncate inline-block max-w-[180px]"
+                                        title={track.isrc || ''}
                                       >
-                                        {genre}
+                                        {track.isrc || '—'}
                                       </span>
-                                    ))}
-                                    {(track.genres || []).length > 6 && (
-                                      <span className="text-[11px] text-spotify-gray-light">
-                                        +{track.genres.length - 6} more
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-spotify-gray-light">Genres:</span>
+                                    <div className="mt-1 flex flex-wrap gap-2">
+                                      {(track.genres || []).slice(0, 8).map((genre) => (
+                                        <span
+                                          key={genre}
+                                          className="px-2 py-0.5 rounded-full bg-spotify-gray-mid/60 text-[11px] text-white"
+                                        >
+                                          {genre}
+                                        </span>
+                                      ))}
+                                      {(track.genres || []).length > 8 && (
+                                        <span className="text-[11px] text-spotify-gray-light">
+                                          +{track.genres.length - 8} more
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <div>
+                                      <span className="text-spotify-gray-light">Track ID:</span>{' '}
+                                      <span className="text-white font-mono truncate inline-block max-w-[200px]" title={track.id}>
+                                        {track.id}
                                       </span>
-                                    )}
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Track URI:</span>{' '}
+                                      <span className="text-white font-mono truncate inline-block max-w-[200px]" title={track.track_uri || ''}>
+                                        {track.track_uri || '—'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Album ID:</span>{' '}
+                                      <span className="text-white font-mono truncate inline-block max-w-[200px]" title={track.album_id || ''}>
+                                        {track.album_id || '—'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-spotify-gray-light">Album URI:</span>{' '}
+                                      <span className="text-white font-mono truncate inline-block max-w-[200px]" title={track.album_uri || ''}>
+                                        {track.album_uri || '—'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-spotify-gray-light">Markets:</span>{' '}
+                                    <span className="text-white">
+                                      {(track.available_markets || []).length
+                                        ? `${track.available_markets.slice(0, 8).join(', ')}${track.available_markets.length > 8 ? ` +${track.available_markets.length - 8} more` : ''}`
+                                        : '—'}
+                                    </span>
                                   </div>
                                 </div>
                               )}

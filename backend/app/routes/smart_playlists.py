@@ -47,6 +47,7 @@ class SmartPlaylistPreviewRequest(BaseModel):
     years: List[int] = Field(default_factory=list)
     artist_ids: List[str] = Field(default_factory=list)
     title_contains: List[str] = Field(default_factory=list)
+    album_contains: List[str] = Field(default_factory=list)
     limit: int = 200
     offset: int = 0
 
@@ -62,11 +63,20 @@ class TrackRecord:
     year: Optional[int]
     decade: Optional[int]
     album: Optional[str]
+    album_id: Optional[str]
+    album_uri: Optional[str]
     album_release_date: Optional[str]
     album_release_date_precision: Optional[str]
+    album_type: Optional[str]
+    album_label: Optional[str]
     duration_ms: Optional[int]
     album_art_url: Optional[str]
     track_uri: Optional[str]
+    track_number: Optional[int]
+    disc_number: Optional[int]
+    isrc: Optional[str]
+    available_markets: List[str]
+    preview_url: Optional[str]
     popularity: Optional[int]
     explicit: bool
 
@@ -175,11 +185,20 @@ def _load_tracks_for_playlists(playlist_ids: List[str]) -> List[TrackRecord]:
                 tc.name,
                 tc.artists_json,
                 tc.album,
+                tc.album_id,
+                tc.album_uri,
                 tc.album_release_date,
                 tc.album_release_date_precision,
+                tc.album_type,
+                tc.album_label,
                 tc.duration_ms,
                 tc.album_art_url,
                 tc.track_uri,
+                tc.track_number,
+                tc.disc_number,
+                tc.isrc,
+                tc.available_markets_json,
+                tc.preview_url,
                 tc.popularity,
                 tc.explicit
             FROM playlist_cache_items pci
@@ -196,6 +215,13 @@ def _load_tracks_for_playlists(playlist_ids: List[str]) -> List[TrackRecord]:
         artist_ids.update({artist["id"] for artist in artists if artist.get("id")})
         year = _parse_year(row["album_release_date"])
         decade = (year // 10) * 10 if year else None
+        available_markets = []
+        markets_payload = row["available_markets_json"] if "available_markets_json" in row.keys() else None
+        if markets_payload:
+            try:
+                available_markets = json.loads(markets_payload) or []
+            except json.JSONDecodeError:
+                available_markets = []
         base_tracks.append(
             TrackRecord(
                 track_id=row["track_id"],
@@ -207,11 +233,20 @@ def _load_tracks_for_playlists(playlist_ids: List[str]) -> List[TrackRecord]:
                 year=year,
                 decade=decade,
                 album=row["album"],
+                album_id=row["album_id"] if "album_id" in row.keys() else None,
+                album_uri=row["album_uri"] if "album_uri" in row.keys() else None,
                 album_release_date=row["album_release_date"],
                 album_release_date_precision=row["album_release_date_precision"],
+                album_type=row["album_type"] if "album_type" in row.keys() else None,
+                album_label=row["album_label"] if "album_label" in row.keys() else None,
                 duration_ms=row["duration_ms"],
                 album_art_url=row["album_art_url"],
                 track_uri=row["track_uri"],
+                track_number=row["track_number"] if "track_number" in row.keys() else None,
+                disc_number=row["disc_number"] if "disc_number" in row.keys() else None,
+                isrc=row["isrc"] if "isrc" in row.keys() else None,
+                available_markets=available_markets,
+                preview_url=row["preview_url"] if "preview_url" in row.keys() else None,
                 popularity=row["popularity"],
                 explicit=bool(row["explicit"]) if row["explicit"] is not None else False,
             )
@@ -363,6 +398,7 @@ async def get_smart_playlist_preview(
         selected_years = {int(year) for year in body.years if year}
         selected_artists = {artist_id for artist_id in body.artist_ids if artist_id}
         title_filters = [term.strip().lower() for term in body.title_contains if term.strip()]
+        album_filters = [term.strip().lower() for term in body.album_contains if term.strip()]
 
         category_count = sum(
             1
@@ -372,6 +408,7 @@ async def get_smart_playlist_preview(
                 bool(selected_years),
                 bool(selected_artists),
                 bool(title_filters),
+                bool(album_filters),
             ]
             if flag
         )
@@ -395,6 +432,15 @@ async def get_smart_playlist_preview(
             else:
                 title_match = False
 
+            if album_filters:
+                album_name = (track.album or "").lower()
+                if body.match_mode == "all":
+                    album_match = all(term in album_name for term in album_filters)
+                else:
+                    album_match = any(term in album_name for term in album_filters)
+            else:
+                album_match = False
+
             if category_count == 0:
                 match = True
             elif body.match_mode == "all":
@@ -409,6 +455,8 @@ async def get_smart_playlist_preview(
                     match = False
                 if title_filters and not title_match:
                     match = False
+                if album_filters and not album_match:
+                    match = False
             else:
                 match = any([
                     genre_hits > 0,
@@ -416,6 +464,7 @@ async def get_smart_playlist_preview(
                     year_match,
                     artist_hits > 0,
                     title_match,
+                    album_match,
                 ])
 
             if not match:
@@ -428,6 +477,8 @@ async def get_smart_playlist_preview(
                 match_score += 1
             if title_match:
                 match_score += 1
+            if album_match:
+                match_score += 1
 
             matches.append(
                 {
@@ -439,6 +490,7 @@ async def get_smart_playlist_preview(
                         "decades": [track.decade] if decade_match else [],
                         "artists": sorted(track.artist_ids & selected_artists),
                         "title": title_filters if title_match else [],
+                        "albums": album_filters if album_match else [],
                     },
                 }
             )
@@ -465,14 +517,23 @@ async def get_smart_playlist_preview(
                     "name": track.name,
                     "artists": track.artists,
                     "album": track.album,
+                    "album_id": track.album_id,
+                    "album_uri": track.album_uri,
                     "album_release_date": track.album_release_date,
                     "album_release_date_precision": track.album_release_date_precision,
+                    "album_type": track.album_type,
+                    "album_label": track.album_label,
                     "year": track.year,
                     "decade": track.decade,
                     "genres": track.genres,
                     "duration_ms": track.duration_ms,
                     "album_art_url": track.album_art_url,
                     "track_uri": track.track_uri,
+                    "track_number": track.track_number,
+                    "disc_number": track.disc_number,
+                    "isrc": track.isrc,
+                    "available_markets": track.available_markets,
+                    "preview_url": track.preview_url,
                     "popularity": track.popularity,
                     "explicit": track.explicit,
                     "match_tags": item["match_tags"],
