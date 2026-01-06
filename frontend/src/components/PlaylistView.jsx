@@ -1569,6 +1569,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       },
     ];
 
+    const smartPlaylistSource = currentPlaylist?.id || playlist?.id;
     const automationItems = [
       {
         key: 'schedules',
@@ -1599,6 +1600,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         disabled: cacheRefreshLoading,
         groupKey: 'automation',
       },
+      ...(smartPlaylistSource ? [{
+        key: 'smart-playlist',
+        label: 'Create smart playlist',
+        icon: 'auto_awesome',
+        onClick: () => navigate(`/smart-playlists/new?source_playlist_id=${encodeURIComponent(smartPlaylistSource)}`),
+        groupKey: 'automation',
+      }] : []),
     ];
 
     return [

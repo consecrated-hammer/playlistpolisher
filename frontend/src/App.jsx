@@ -23,6 +23,7 @@ import HistoryPage from './pages/HistoryPage';
 import IgnoredTracksPage from './pages/IgnoredTracksPage';
 import CachePage from './pages/CachePage';
 import SettingsPage from './pages/SettingsPage';
+import SmartPlaylistBuilder from './pages/SmartPlaylistBuilder';
 import BackupsLibraryPage from './pages/BackupsLibraryPage';
 import BackupDetailPage from './pages/BackupDetailPage';
 import RoadmapPage from './pages/RoadmapPage';
@@ -738,6 +739,14 @@ const PlaylistsPage = ({ user, onLogout }) => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
             <h2 className="text-2xl font-bold text-white">Your Playlists ({sortedPlaylists.length})</h2>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <button
+                type="button"
+                onClick={() => navigate('/smart-playlists/new')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
+              >
+                <span className="icon text-base">auto_awesome</span>
+                Create smart playlist
+              </button>
               <div className="flex items-center gap-2">
                 <label htmlFor="playlist-filter" className="text-sm text-spotify-gray-light">
                   Filter:
@@ -1101,6 +1110,11 @@ function App() {
         <Route path="/ignored-tracks" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
             <IgnoredTracksPage user={user} onLogout={handleLogout} />
+          </ProtectedRoute>
+        } />
+        <Route path="/smart-playlists/new" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+            <SmartPlaylistBuilder user={user} onLogout={handleLogout} />
           </ProtectedRoute>
         } />
         <Route path="/cache" element={

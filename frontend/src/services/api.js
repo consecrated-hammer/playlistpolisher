@@ -770,6 +770,31 @@ export const cacheAPI = {
 };
 
 /**
+ * Smart Playlist API - cached metadata driven builder
+ */
+export const smartPlaylistAPI = {
+  /**
+   * Get available tag facets for selected playlists
+   * @param {string[]} playlistIds
+   * @returns {Promise<object>} Facets payload
+   */
+  getFacets: async (playlistIds) => {
+    const response = await api.post('/smart-playlists/facets', { playlist_ids: playlistIds });
+    return response.data;
+  },
+
+  /**
+   * Preview tracks matching the smart playlist criteria
+   * @param {object} payload
+   * @returns {Promise<object>} Preview payload
+   */
+  getPreview: async (payload) => {
+    const response = await api.post('/smart-playlists/preview', payload);
+    return response.data;
+  },
+};
+
+/**
  * Utility function to format total playlist duration
  * @param {number} ms - Total duration in milliseconds
  * @returns {string} Formatted duration (H:MM:SS or MM:SS)
