@@ -5,6 +5,8 @@ import { cacheAPI, preferencesAPI, playlistAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
+const REFRESH_STATUSES = new Set(['running', 'enriching_artists', 'enriching_audio_features']);
+
 const CachePage = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
@@ -23,6 +25,17 @@ const CachePage = ({ user, onLogout }) => {
   const [cacheRunInitial, setCacheRunInitial] = useState(true);
   const [playlistSearch, setPlaylistSearch] = useState('');
   const [playlistOptions, setPlaylistOptions] = useState([]);
+  const isRefreshInProgress = REFRESH_STATUSES.has(refreshAllStatus?.status);
+
+  const getRefreshStatusLabel = (status) => {
+    if (status === 'enriching_artists') {
+      return 'Enriching artist metadata...';
+    }
+    if (status === 'enriching_audio_features') {
+      return 'Enriching audio features...';
+    }
+    return 'Refreshing playlists...';
+  };
 
   // Load cache stats
   const loadStats = async () => {
@@ -229,7 +242,7 @@ const CachePage = ({ user, onLogout }) => {
       status = { ...status, total: expectedTotal };
     }
     setRefreshAllStatus(status);
-    while (status?.status === 'running') {
+    while (REFRESH_STATUSES.has(status?.status)) {
       if (Date.now() - startedAtMs > 30 * 60 * 1000) {
         throw new Error('Playlist cache refresh timed out.');
       }
@@ -461,14 +474,10 @@ const CachePage = ({ user, onLogout }) => {
             <div className="text-xs text-spotify-gray-light mt-1">
               This may take several minutes for large libraries.
             </div>
-            {refreshAllStatus?.status === 'running' && (
+            {isRefreshInProgress && (
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between text-xs text-spotify-gray-light">
-                  <span>
-                    {refreshAllStatus.status === 'enriching_artists' ? 'Enriching artist metadata...' :
-                     refreshAllStatus.status === 'enriching_audio_features' ? 'Enriching audio features...' :
-                     'Refreshing playlists...'}
-                  </span>
+                  <span>{getRefreshStatusLabel(refreshAllStatus?.status)}</span>
                   <span>
                     {refreshAllStatus.total
                       ? `${refreshAllStatus.completed || 0}/${refreshAllStatus.total}`
@@ -493,7 +502,7 @@ const CachePage = ({ user, onLogout }) => {
             disabled={actionLoading}
             className="px-4 py-2 bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {refreshAllStatus?.status === 'running' ? 'Refreshing...' : 'Refresh all'}
+            {isRefreshInProgress ? 'Refreshing...' : 'Refresh all'}
           </button>
         </div>
 
@@ -763,13 +772,13 @@ const CachePage = ({ user, onLogout }) => {
               <div className="bg-spotify-gray-dark/95 rounded-2xl p-8 border border-spotify-gray-mid/60 shadow-2xl">
                 <LoadingSpinner />
                 <p className="text-white text-center mt-4">Processing...</p>
-                {refreshAllStatus?.status === 'running' && (
+                {isRefreshInProgress && (
                   <div className="mt-4 w-64 space-y-2">
                     <p className="text-xs text-spotify-gray-light text-center">
                       This may take several minutes for large libraries.
                     </p>
                     <div className="flex items-center justify-between text-xs text-spotify-gray-light">
-                      <span>Refreshing playlists...</span>
+                      <span>{getRefreshStatusLabel(refreshAllStatus?.status)}</span>
                       <span>
                         {refreshAllStatus.total
                           ? `${refreshAllStatus.completed || 0}/${refreshAllStatus.total}`

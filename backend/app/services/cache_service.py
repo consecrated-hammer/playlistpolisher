@@ -396,6 +396,80 @@ class CacheService:
                 'ttl_days': app_settings.get_track_cache_ttl_days()[0],
                 'cutoff_date': cutoff
             }
+
+    @staticmethod
+    def get_playlist_cache_stats(track_ids: List[str], session_id: Optional[str] = None) -> Dict:
+        """
+        Get cache statistics for a specific playlist using track IDs (legacy method).
+
+        Args:
+            track_ids: List of Spotify track IDs
+            session_id: Optional - if provided, include user-specific stats
+
+        Returns:
+            Dict with playlist-specific cache statistics
+        """
+        if not track_ids:
+            return {
+                'user_tracks': 0,
+                'user_expired': 0,
+                'total_tracks': 0
+            }
+
+        cutoff = CacheService._get_ttl_cutoff()
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Collect all session_ids for this user
+            session_ids_for_user = []
+            if session_id:
+                cursor.execute("SELECT user_id FROM user_sessions WHERE session_id = ?", (session_id,))
+                row = cursor.fetchone()
+                if row and row["user_id"]:
+                    cursor.execute("SELECT session_id FROM user_sessions WHERE user_id = ?", (row["user_id"],))
+                    session_ids_for_user = [r["session_id"] for r in cursor.fetchall()]
+                else:
+                    session_ids_for_user = [session_id]
+
+            track_placeholders = ",".join(["?"] * len(track_ids))
+
+            cursor.execute(f"""
+                SELECT COUNT(DISTINCT track_id) as count
+                FROM track_cache
+                WHERE track_id IN ({track_placeholders})
+            """, tuple(track_ids))
+            total_tracks = cursor.fetchone()['count']
+
+            user_track_count = 0
+            user_expired_count = 0
+            if session_ids_for_user:
+                session_placeholders = ",".join(["?"] * len(session_ids_for_user))
+                cursor.execute(f"""
+                    SELECT COUNT(DISTINCT tc.track_id) as count
+                    FROM track_cache tc
+                    INNER JOIN track_usage tu ON tc.track_id = tu.track_id
+                    WHERE tc.track_id IN ({track_placeholders})
+                    AND tu.session_id IN ({session_placeholders})
+                    AND tc.cached_at > ?
+                """, tuple(track_ids) + tuple(session_ids_for_user) + (cutoff,))
+                user_track_count = cursor.fetchone()['count']
+
+                cursor.execute(f"""
+                    SELECT COUNT(DISTINCT tc.track_id) as count
+                    FROM track_cache tc
+                    INNER JOIN track_usage tu ON tc.track_id = tu.track_id
+                    WHERE tc.track_id IN ({track_placeholders})
+                    AND tu.session_id IN ({session_placeholders})
+                    AND tc.cached_at <= ?
+                """, tuple(track_ids) + tuple(session_ids_for_user) + (cutoff,))
+                user_expired_count = cursor.fetchone()['count']
+
+            return {
+                'user_tracks': user_track_count,
+                'user_expired': user_expired_count,
+                'total_tracks': total_tracks
+            }
     
     @staticmethod
     def get_playlist_cache_stats_by_id(playlist_id: str, session_id: Optional[str] = None) -> Dict:
