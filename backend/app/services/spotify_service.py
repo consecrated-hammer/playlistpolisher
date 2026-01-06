@@ -636,6 +636,8 @@ class SpotifyService:
         if not artist_ids:
             return []
         
+        sp = self.get_client()
+        
         # Spotify /artists endpoint accepts max 50 IDs
         artists = []
         batch_size = 50
@@ -643,7 +645,7 @@ class SpotifyService:
         for i in range(0, len(artist_ids), batch_size):
             batch = artist_ids[i:i + batch_size]
             try:
-                result = self.sp.artists(batch)
+                result = sp.artists(batch)
                 if result and result.get('artists'):
                     artists.extend(result['artists'])
             except Exception as e:
@@ -665,6 +667,8 @@ class SpotifyService:
         if not track_ids:
             return []
         
+        sp = self.get_client()
+        
         # Spotify /audio-features endpoint accepts max 100 IDs
         features = []
         batch_size = 100
@@ -672,7 +676,7 @@ class SpotifyService:
         for i in range(0, len(track_ids), batch_size):
             batch = track_ids[i:i + batch_size]
             try:
-                result = self.sp.audio_features(batch)
+                result = sp.audio_features(batch)
                 if result:
                     # Filter out None entries (tracks without audio features)
                     features.extend([f for f in result if f is not None])
@@ -681,6 +685,7 @@ class SpotifyService:
                 continue
         
         return features
+
     def logout(self) -> None:
         """
         Clear stored authentication tokens
