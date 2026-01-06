@@ -331,10 +331,10 @@ const CachePage = ({ user, onLogout }) => {
             <div className="bg-spotify-gray-dark/40 rounded-lg p-6 border border-spotify-gray-mid/60 space-y-4">
         <h2 className="text-xl font-semibold text-white mb-4">Cache Management</h2>
 
-        {/* Refresh All Playlists */}
+        {/* Refresh Changed Playlists */}
         <div className="flex items-center justify-between p-4 bg-spotify-gray-mid/40 rounded-lg">
           <div>
-            <div className="text-white font-medium">Refresh All Playlists</div>
+            <div className="text-white font-medium">Refresh changed playlists</div>
             <div className="text-sm text-spotify-gray-light">
               Warm the cache for changed playlists and enrich metadata (artists, audio features)
             </div>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { cacheAPI, playlistAPI, preferencesAPI, settingsAPI } from '../services/api';
+import { playlistAPI, preferencesAPI, settingsAPI } from '../services/api';
 
 const hourOptions = Array.from({ length: 24 }).map((_, i) => ({ value: i, label: `${i}:00` }));
 const dayOptions = [
@@ -81,7 +81,6 @@ const SettingsPage = ({ user, onLogout }) => {
   const [cacheScope, setCacheScope] = useState('all');
   const [cacheSelectedIds, setCacheSelectedIds] = useState([]);
   const [cacheAutoIncludeNew, setCacheAutoIncludeNew] = useState(true);
-  const [cacheRunInitial, setCacheRunInitial] = useState(true);
   const [playlistSearch, setPlaylistSearch] = useState('');
   const [playlistOptions, setPlaylistOptions] = useState([]);
   const [cachePlaylistSaving, setCachePlaylistSaving] = useState(false);
@@ -249,7 +248,6 @@ const SettingsPage = ({ user, onLogout }) => {
       setCacheScope(prefs?.cache_playlist_scope || 'all');
       setCacheSelectedIds(prefs?.cache_selected_playlist_ids || []);
       setCacheAutoIncludeNew(prefs?.cache_auto_include_new ?? true);
-      setCacheRunInitial(true);
       setPlaylistOptions(playlists || []);
       setCacheTtlDays(appSettings?.track_cache_ttl_days ?? 30);
       setCacheTtlSource(appSettings?.track_cache_ttl_source || 'env');
@@ -361,18 +359,6 @@ const SettingsPage = ({ user, onLogout }) => {
         cache_auto_include_new: cacheAutoIncludeNew,
       };
       await preferencesAPI.updatePreferences(payload);
-
-      if (cacheRunInitial) {
-        let playlistIds = [];
-        if (cacheScope === 'all') {
-          playlistIds = playlistOptions.map((playlist) => playlist.id);
-        } else if (cacheScope === 'selected' || cacheScope === 'manual') {
-          playlistIds = cacheSelectedIds;
-        }
-        if (playlistIds.length > 0) {
-          await cacheAPI.warmPlaylists(playlistIds, { source: 'settings', mode: 'initial' });
-        }
-      }
 
       setCachePlaylistMessage('Playlist caching settings saved.');
     } catch (err) {
@@ -822,16 +808,6 @@ const SettingsPage = ({ user, onLogout }) => {
                       playlists so they stay current without any extra steps from you.
                     </p>
                   </div>
-
-                  <label className="flex items-center gap-3 text-sm text-spotify-gray-light">
-                    <input
-                      type="checkbox"
-                      checked={cacheRunInitial}
-                      onChange={(event) => setCacheRunInitial(event.target.checked)}
-                      className="accent-spotify-green"
-                    />
-                    <span>Warm selected playlists now</span>
-                  </label>
 
                   {cachePlaylistError && <p className="text-sm text-red-400">{cachePlaylistError}</p>}
                   {cachePlaylistMessage && <p className="text-sm text-spotify-green">{cachePlaylistMessage}</p>}
