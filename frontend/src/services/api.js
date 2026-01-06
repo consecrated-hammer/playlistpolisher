@@ -748,6 +748,26 @@ export const cacheAPI = {
     const response = await api.get(`/cache/track/${trackId}/playlists`);
     return response.data;
   },
+
+  /**
+   * Enrich artist metadata (genres, popularity, followers)
+   * @param {string[]} artistIds - Array of Spotify artist IDs
+   * @returns {Promise<object>} Enrichment result with counts
+   */
+  enrichArtists: async (artistIds) => {
+    const response = await api.post('/cache/enrich/artists', { artist_ids: artistIds });
+    return response.data;
+  },
+
+  /**
+   * Enrich audio features (tempo, energy, danceability, etc.)
+   * @param {string[]} trackIds - Array of Spotify track IDs
+   * @returns {Promise<object>} Enrichment result with counts
+   */
+  enrichAudioFeatures: async (trackIds) => {
+    const response = await api.post('/cache/enrich/audio-features', { track_ids: trackIds });
+    return response.data;
+  },
 };
 
 /**

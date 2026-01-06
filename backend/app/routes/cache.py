@@ -488,3 +488,146 @@ async def clear_all_cache(
     except Exception as e:
         logger.error(f"Failed to clear all cache: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear cache")
+
+
+class EnrichArtistsRequest(BaseModel):
+    """Request model for enriching artist metadata."""
+    artist_ids: List[str]
+
+
+class EnrichArtistsResponse(BaseModel):
+    """Response model for artist enrichment."""
+    requested: int
+    cached: int
+    fetched: int
+    message: str
+
+
+@router.post("/enrich/artists", response_model=EnrichArtistsResponse)
+async def enrich_artists(
+    body: EnrichArtistsRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service),
+):
+    """
+    Enrich artist metadata (genres, popularity, followers).
+    
+    Checks cache first, fetches missing artists from Spotify API,
+    and stores them in artist_cache.
+    
+    Args:
+        body: Request with artist IDs to enrich
+        session_mgr: Session manager from auth dependency
+        spotify: Spotify service instance
+    
+    Returns:
+        dict: Enrichment statistics
+        
+    Example Response:
+        {
+            "requested": 50,
+            "cached": 30,
+            "fetched": 20,
+            "message": "Enriched 20 artists (30 from cache)"
+        }
+    """
+    try:
+        if not body.artist_ids:
+            raise HTTPException(status_code=400, detail="No artist IDs provided")
+        
+        session_id = session_mgr.session_id
+        
+        # Check cache first
+        cached_artists, missing_ids = CacheService.get_artists(
+            body.artist_ids,
+            session_id=session_id
+        )
+        
+        # Fetch missing artists from Spotify
+        fetched_count = 0
+        if missing_ids:
+            artists_data = spotify.get_artists(list(missing_ids))
+            if artists_data:
+                fetched_count = CacheService.set_artists(artists_data, session_id)
+        
+        return {
+            "requested": len(body.artist_ids),
+            "cached": len(cached_artists),
+            "fetched": fetched_count,
+            "message": f"Enriched {fetched_count} artists ({len(cached_artists)} from cache)"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to enrich artists: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enrich artist metadata")
+
+
+class EnrichAudioFeaturesRequest(BaseModel):
+    """Request model for enriching audio features."""
+    track_ids: List[str]
+
+
+class EnrichAudioFeaturesResponse(BaseModel):
+    """Response model for audio features enrichment."""
+    requested: int
+    cached: int
+    fetched: int
+    message: str
+
+
+@router.post("/enrich/audio-features", response_model=EnrichAudioFeaturesResponse)
+async def enrich_audio_features(
+    body: EnrichAudioFeaturesRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service),
+):
+    """
+    Enrich audio features (tempo, energy, danceability, etc.).
+    
+    Checks cache first, fetches missing features from Spotify API,
+    and stores them in audio_features_cache.
+    
+    Args:
+        body: Request with track IDs to enrich
+        session_mgr: Session manager from auth dependency
+        spotify: Spotify service instance
+    
+    Returns:
+        dict: Enrichment statistics
+        
+    Example Response:
+        {
+            "requested": 100,
+            "cached": 60,
+            "fetched": 40,
+            "message": "Enriched 40 tracks (60 from cache)"
+        }
+    """
+    try:
+        if not body.track_ids:
+            raise HTTPException(status_code=400, detail="No track IDs provided")
+        
+        # Check cache first
+        cached_features, missing_ids = CacheService.get_audio_features(
+            body.track_ids
+        )
+        
+        # Fetch missing features from Spotify
+        fetched_count = 0
+        if missing_ids:
+            features_data = spotify.get_audio_features(list(missing_ids))
+            if features_data:
+                fetched_count = CacheService.set_audio_features(features_data)
+        
+        return {
+            "requested": len(body.track_ids),
+            "cached": len(cached_features),
+            "fetched": fetched_count,
+            "message": f"Enriched {fetched_count} tracks ({len(cached_features)} from cache)"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to enrich audio features: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enrich audio features")

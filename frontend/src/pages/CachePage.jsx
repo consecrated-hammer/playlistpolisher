@@ -527,6 +527,74 @@ const CachePage = ({ user, onLogout }) => {
             </div>
           )}
 
+          {/* Metadata Enrichment */}
+          {!loading && !error && stats && stats.total_cached > 0 && (
+            <div className="bg-spotify-gray-dark/40 rounded-lg p-6 border border-spotify-gray-mid/60 space-y-4">
+              <h2 className="text-xl font-semibold text-white mb-4">Metadata Enrichment</h2>
+              <p className="text-sm text-spotify-gray-light mb-4">
+                Enrich cached tracks with additional metadata for advanced filtering, smart playlists, and duplicate detection.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Artist Enrichment */}
+                <div className="p-4 bg-spotify-gray-mid/40 rounded-lg space-y-3">
+                  <div>
+                    <div className="text-white font-medium">Artist Metadata</div>
+                    <div className="text-sm text-spotify-gray-light">
+                      Genres, popularity, followers
+                    </div>
+                  </div>
+                  <div className="text-xs text-spotify-gray-light space-y-1">
+                    <div>• Filter by genre (rock, pop, indie, etc.)</div>
+                    <div>• Sort by artist popularity</div>
+                    <div>• Smart playlist generation</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActionMessage({ type: 'info', text: 'Artist enrichment will be available soon. This feature requires fetching data for all artists in your cached tracks.' });
+                    }}
+                    disabled={actionLoading}
+                    className="w-full px-4 py-2 bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Enrich Artists
+                  </button>
+                </div>
+
+                {/* Audio Features Enrichment */}
+                <div className="p-4 bg-spotify-gray-mid/40 rounded-lg space-y-3">
+                  <div>
+                    <div className="text-white font-medium">Audio Features</div>
+                    <div className="text-sm text-spotify-gray-light">
+                      Tempo, energy, danceability, etc.
+                    </div>
+                  </div>
+                  <div className="text-xs text-spotify-gray-light space-y-1">
+                    <div>• Filter by mood (happy, energetic, chill)</div>
+                    <div>• Sort by tempo or energy</div>
+                    <div>• Smart workout/party playlists</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActionMessage({ type: 'info', text: 'Audio features enrichment will be available soon. This feature analyzes the musical characteristics of your cached tracks.' });
+                    }}
+                    disabled={actionLoading}
+                    className="w-full px-4 py-2 bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Enrich Features
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 p-4 bg-blue-900/20 border border-blue-700/40 rounded-lg">
+                <p className="text-xs text-blue-300 leading-relaxed">
+                  <strong className="text-white">Note:</strong> Enrichment fetches additional data from Spotify for your cached tracks. 
+                  This is a one-time operation per track and will enable advanced features like smart playlists, genre filtering, 
+                  and mood-based sorting. The process may take several minutes for large libraries.
+                </p>
+              </div>
+            </div>
+          )}
+
           {showCacheModal && (
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 px-4">
               <div className="bg-spotify-gray-dark rounded-2xl border border-spotify-gray-mid/60 shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden">

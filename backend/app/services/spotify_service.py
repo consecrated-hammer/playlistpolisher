@@ -623,6 +623,64 @@ class SpotifyService:
         
         return tracks, total_tracks, cache_hits, cache_misses, cache_warmed
     
+    def get_artists(self, artist_ids: List[str]) -> List[Dict]:
+        """
+        Get artist metadata from Spotify API.
+        
+        Args:
+            artist_ids: List of Spotify artist IDs (max 50 per request)
+        
+        Returns:
+            List of artist dicts with genres, popularity, followers
+        """
+        if not artist_ids:
+            return []
+        
+        # Spotify /artists endpoint accepts max 50 IDs
+        artists = []
+        batch_size = 50
+        
+        for i in range(0, len(artist_ids), batch_size):
+            batch = artist_ids[i:i + batch_size]
+            try:
+                result = self.sp.artists(batch)
+                if result and result.get('artists'):
+                    artists.extend(result['artists'])
+            except Exception as e:
+                logger.warning(f"Failed to fetch artists batch: {e}")
+                continue
+        
+        return artists
+    
+    def get_audio_features(self, track_ids: List[str]) -> List[Dict]:
+        """
+        Get audio features from Spotify API.
+        
+        Args:
+            track_ids: List of Spotify track IDs (max 100 per request)
+        
+        Returns:
+            List of audio features dicts (can contain None for unavailable tracks)
+        """
+        if not track_ids:
+            return []
+        
+        # Spotify /audio-features endpoint accepts max 100 IDs
+        features = []
+        batch_size = 100
+        
+        for i in range(0, len(track_ids), batch_size):
+            batch = track_ids[i:i + batch_size]
+            try:
+                result = self.sp.audio_features(batch)
+                if result:
+                    # Filter out None entries (tracks without audio features)
+                    features.extend([f for f in result if f is not None])
+            except Exception as e:
+                logger.warning(f"Failed to fetch audio features batch: {e}")
+                continue
+        
+        return features
     def logout(self) -> None:
         """
         Clear stored authentication tokens

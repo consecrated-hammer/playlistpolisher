@@ -567,3 +567,297 @@ class CacheService:
         
         logger.info(f"Cleared entire cache: {cache_deleted} tracks, {usage_deleted} usage entries")
         return cache_deleted
+    
+    # ===== Artist Cache Methods =====
+    
+    @staticmethod
+    def get_artists(
+        artist_ids: List[str],
+        session_id: Optional[str] = None,
+        allow_stale: bool = False,
+    ) -> Tuple[Dict[str, Dict], Set[str]]:
+        """
+        Get cached artist metadata for given artist IDs.
+        
+        Args:
+            artist_ids: List of Spotify artist IDs
+            session_id: Optional session ID to track usage
+            allow_stale: If True, return expired cache entries
+        
+        Returns:
+            Tuple of (cached_artists_dict, missing_artist_ids_set)
+        """
+        if not artist_ids:
+            return {}, set()
+        
+        cached = {}
+        missing = set(artist_ids)
+        cutoff = CacheService._get_ttl_cutoff() if not allow_stale else None
+        now = datetime.now(timezone.utc).isoformat()
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            placeholders = ','.join('?' * len(artist_ids))
+            
+            if cutoff:
+                cursor.execute(f"""
+                    SELECT artist_id, name, genres_json, popularity, followers
+                    FROM artist_cache
+                    WHERE artist_id IN ({placeholders})
+                    AND cached_at > ?
+                """, (*artist_ids, cutoff))
+            else:
+                cursor.execute(f"""
+                    SELECT artist_id, name, genres_json, popularity, followers
+                    FROM artist_cache
+                    WHERE artist_id IN ({placeholders})
+                """, tuple(artist_ids))
+            
+            rows = cursor.fetchall()
+            for row in rows:
+                artist_id = row['artist_id']
+                
+                # Parse genres
+                genres = []
+                genres_json = row["genres_json"] if "genres_json" in row.keys() else None
+                if genres_json:
+                    try:
+                        genres = json.loads(genres_json)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                
+                cached[artist_id] = {
+                    "id": artist_id,
+                    "name": row["name"],
+                    "genres": genres,
+                    "popularity": row["popularity"] if "popularity" in row.keys() else None,
+                    "followers": row["followers"] if "followers" in row.keys() else None,
+                }
+                missing.discard(artist_id)
+            
+            # Update last_accessed for cache hits
+            if cached:
+                cache_hit_ids = list(cached.keys())
+                placeholders_hits = ','.join('?' * len(cache_hit_ids))
+                cursor.execute(f"""
+                    UPDATE artist_cache
+                    SET last_accessed = ?
+                    WHERE artist_id IN ({placeholders_hits})
+                """, (now, *cache_hit_ids))
+                conn.commit()
+        
+        return cached, missing
+    
+    @staticmethod
+    def set_artists(artists: List[Dict], session_id: Optional[str] = None) -> int:
+        """
+        Cache artist metadata from Spotify API response.
+        
+        Args:
+            artists: List of artist dicts from Spotify API
+            session_id: Optional session ID to track usage
+        
+        Returns:
+            Number of artists cached
+        """
+        if not artists:
+            return 0
+        
+        now = datetime.now(tz=datetime.utcnow().astimezone().tzinfo).isoformat()
+        cached_count = 0
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            for artist in artists:
+                try:
+                    artist_id = artist['id']
+                    name = artist.get('name', '')
+                    genres = artist.get('genres', [])
+                    genres_json = json.dumps(genres) if genres else None
+                    popularity = artist.get('popularity')
+                    followers = artist.get('followers', {}).get('total') if artist.get('followers') else None
+                    
+                    cursor.execute("""
+                        INSERT INTO artist_cache (
+                            artist_id, name, genres_json, popularity, followers,
+                            cached_at, last_accessed
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(artist_id) DO UPDATE SET
+                            name = excluded.name,
+                            genres_json = excluded.genres_json,
+                            popularity = excluded.popularity,
+                            followers = excluded.followers,
+                            cached_at = excluded.cached_at,
+                            last_accessed = excluded.last_accessed
+                    """, (artist_id, name, genres_json, popularity, followers, now, now))
+                    
+                    cached_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to cache artist {artist.get('id')}: {e}")
+                    continue
+            
+            conn.commit()
+        
+        logger.info(f"Cached {cached_count} artists")
+        return cached_count
+    
+    # ===== Audio Features Cache Methods =====
+    
+    @staticmethod
+    def get_audio_features(
+        track_ids: List[str],
+        allow_stale: bool = False,
+    ) -> Tuple[Dict[str, Dict], Set[str]]:
+        """
+        Get cached audio features for given track IDs.
+        
+        Args:
+            track_ids: List of Spotify track IDs
+            allow_stale: If True, return expired cache entries
+        
+        Returns:
+            Tuple of (cached_features_dict, missing_track_ids_set)
+        """
+        if not track_ids:
+            return {}, set()
+        
+        cached = {}
+        missing = set(track_ids)
+        cutoff = CacheService._get_ttl_cutoff() if not allow_stale else None
+        now = datetime.now(timezone.utc).isoformat()
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            placeholders = ','.join('?' * len(track_ids))
+            
+            if cutoff:
+                cursor.execute(f"""
+                    SELECT track_id, danceability, energy, key, loudness, mode,
+                           speechiness, acousticness, instrumentalness, liveness,
+                           valence, tempo, time_signature
+                    FROM audio_features_cache
+                    WHERE track_id IN ({placeholders})
+                    AND cached_at > ?
+                """, (*track_ids, cutoff))
+            else:
+                cursor.execute(f"""
+                    SELECT track_id, danceability, energy, key, loudness, mode,
+                           speechiness, acousticness, instrumentalness, liveness,
+                           valence, tempo, time_signature
+                    FROM audio_features_cache
+                    WHERE track_id IN ({placeholders})
+                """, tuple(track_ids))
+            
+            rows = cursor.fetchall()
+            for row in rows:
+                track_id = row['track_id']
+                
+                cached[track_id] = {
+                    "id": track_id,
+                    "danceability": row["danceability"] if "danceability" in row.keys() else None,
+                    "energy": row["energy"] if "energy" in row.keys() else None,
+                    "key": row["key"] if "key" in row.keys() else None,
+                    "loudness": row["loudness"] if "loudness" in row.keys() else None,
+                    "mode": row["mode"] if "mode" in row.keys() else None,
+                    "speechiness": row["speechiness"] if "speechiness" in row.keys() else None,
+                    "acousticness": row["acousticness"] if "acousticness" in row.keys() else None,
+                    "instrumentalness": row["instrumentalness"] if "instrumentalness" in row.keys() else None,
+                    "liveness": row["liveness"] if "liveness" in row.keys() else None,
+                    "valence": row["valence"] if "valence" in row.keys() else None,
+                    "tempo": row["tempo"] if "tempo" in row.keys() else None,
+                    "time_signature": row["time_signature"] if "time_signature" in row.keys() else None,
+                }
+                missing.discard(track_id)
+            
+            # Update last_accessed for cache hits
+            if cached:
+                cache_hit_ids = list(cached.keys())
+                placeholders_hits = ','.join('?' * len(cache_hit_ids))
+                cursor.execute(f"""
+                    UPDATE audio_features_cache
+                    SET last_accessed = ?
+                    WHERE track_id IN ({placeholders_hits})
+                """, (now, *cache_hit_ids))
+                conn.commit()
+        
+        return cached, missing
+    
+    @staticmethod
+    def set_audio_features(features_list: List[Dict]) -> int:
+        """
+        Cache audio features from Spotify API response.
+        
+        Args:
+            features_list: List of audio features dicts from Spotify API
+        
+        Returns:
+            Number of features cached
+        """
+        if not features_list:
+            return 0
+        
+        now = datetime.now(tz=datetime.utcnow().astimezone().tzinfo).isoformat()
+        cached_count = 0
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            for features in features_list:
+                # Spotify API can return None for tracks without audio features
+                if not features or not features.get('id'):
+                    continue
+                
+                try:
+                    track_id = features['id']
+                    
+                    cursor.execute("""
+                        INSERT INTO audio_features_cache (
+                            track_id, danceability, energy, key, loudness, mode,
+                            speechiness, acousticness, instrumentalness, liveness,
+                            valence, tempo, time_signature, cached_at, last_accessed
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(track_id) DO UPDATE SET
+                            danceability = excluded.danceability,
+                            energy = excluded.energy,
+                            key = excluded.key,
+                            loudness = excluded.loudness,
+                            mode = excluded.mode,
+                            speechiness = excluded.speechiness,
+                            acousticness = excluded.acousticness,
+                            instrumentalness = excluded.instrumentalness,
+                            liveness = excluded.liveness,
+                            valence = excluded.valence,
+                            tempo = excluded.tempo,
+                            time_signature = excluded.time_signature,
+                            cached_at = excluded.cached_at,
+                            last_accessed = excluded.last_accessed
+                    """, (
+                        track_id,
+                        features.get('danceability'),
+                        features.get('energy'),
+                        features.get('key'),
+                        features.get('loudness'),
+                        features.get('mode'),
+                        features.get('speechiness'),
+                        features.get('acousticness'),
+                        features.get('instrumentalness'),
+                        features.get('liveness'),
+                        features.get('valence'),
+                        features.get('tempo'),
+                        features.get('time_signature'),
+                        now,
+                        now
+                    ))
+                    
+                    cached_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to cache audio features for {features.get('id')}: {e}")
+                    continue
+            
+            conn.commit()
+        
+        logger.info(f"Cached audio features for {cached_count} tracks")
+        return cached_count
