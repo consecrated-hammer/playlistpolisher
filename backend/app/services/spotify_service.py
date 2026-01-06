@@ -372,6 +372,42 @@ class SpotifyService:
             external_url=(data.get("external_urls") or {}).get("spotify"),
             total_tracks=data.get("tracks", {}).get("total")
         )
+
+    def _attach_album_labels(self, client: spotipy.Spotify, tracks_data: List[Dict[str, Any]]) -> None:
+        album_ids = {
+            track.get("album", {}).get("id")
+            for track in tracks_data
+            if track.get("album", {}).get("id")
+        }
+        if not album_ids:
+            return
+
+        labels: Dict[str, str] = {}
+        batch_size = 20
+        album_list = list(album_ids)
+        for i in range(0, len(album_list), batch_size):
+            batch = album_list[i:i + batch_size]
+            try:
+                result = client.albums(batch)
+            except Exception as exc:
+                logger.warning("Failed to fetch album metadata: %s", exc)
+                continue
+            for album in result.get("albums", []) or []:
+                if not album or not album.get("id"):
+                    continue
+                label = album.get("label")
+                if label:
+                    labels[album["id"]] = label
+
+        if not labels:
+            return
+
+        for track in tracks_data:
+            album = track.get("album") or {}
+            album_id = album.get("id")
+            if album_id and album_id in labels:
+                album["label"] = labels[album_id]
+                track["album"] = album
     
     def get_playlist_details(self, playlist_id: str, should_warm_cache: bool = True) -> PlaylistDetail:
         """
@@ -411,7 +447,8 @@ class SpotifyService:
                 playlist_id,
                 limit=limit,
                 offset=offset,
-                fields="items(added_at,track(id,name,artists(id,name,uri),album(id,name,images,release_date,release_date_precision,album_type,total_tracks,uri),duration_ms,uri,preview_url,explicit,popularity)),total,next"
+                market="from_token",
+                fields="items(added_at,track(id,name,artists(id,name,uri),album(id,name,images,release_date,release_date_precision,album_type,total_tracks,uri),duration_ms,uri,preview_url,explicit,popularity,track_number,disc_number,external_ids,available_markets,is_playable)),total,next"
             )
             
             # Capture total on first iteration
@@ -473,6 +510,8 @@ class SpotifyService:
         if track_ids and should_warm_cache:
             try:
                 from app.services.cache_service import CacheService
+                if tracks_data_for_cache:
+                    self._attach_album_labels(client, tracks_data_for_cache)
                 cached_tracks, missing_ids = CacheService.get_tracks(track_ids, session_id)
                 cache_hits = len(cached_tracks)
                 cache_misses = len(missing_ids)
@@ -548,7 +587,8 @@ class SpotifyService:
             playlist_id,
             limit=limit,
             offset=offset,
-            fields="items(added_at,track(id,name,artists(id,name,uri),album(id,name,images,release_date,release_date_precision,album_type,total_tracks,uri),duration_ms,uri,preview_url,explicit,popularity)),total"
+            market="from_token",
+            fields="items(added_at,track(id,name,artists(id,name,uri),album(id,name,images,release_date,release_date_precision,album_type,total_tracks,uri),duration_ms,uri,preview_url,explicit,popularity,track_number,disc_number,external_ids,available_markets,is_playable)),total"
         )
         
         total_tracks = results.get("total", 0)
@@ -604,6 +644,8 @@ class SpotifyService:
             session_id = self.session_manager.session_id if self.session_manager else None
             try:
                 from app.services.cache_service import CacheService
+                if tracks_data_for_cache:
+                    self._attach_album_labels(client, tracks_data_for_cache)
                 cached_tracks, missing_ids = CacheService.get_tracks(track_ids, session_id)
                 cache_hits = len(cached_tracks)
                 cache_misses = len(missing_ids)

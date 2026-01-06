@@ -11,13 +11,8 @@ const CollapsibleSection = ({
   open,
   onToggle,
   onClear,
-  selectedSummary = [],
   children,
 }) => {
-  const summary = selectedSummary.filter(Boolean);
-  const visibleSummary = summary.slice(0, 4);
-  const extraCount = summary.length - visibleSummary.length;
-
   return (
     <div className="rounded-2xl border border-spotify-gray-mid/60 bg-spotify-gray-mid/30">
       <div className="flex items-start justify-between gap-3 px-4 py-3">
@@ -33,29 +28,16 @@ const CollapsibleSection = ({
             </span>
           </div>
           {description && <p className="text-xs text-spotify-gray-light">{description}</p>}
-          {summary.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-2">
-              {visibleSummary.map((item) => (
-                <span
-                  key={item}
-                  className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-spotify-gray-mid/70 text-xs text-white border border-spotify-gray-mid/60"
-                >
-                  {item}
-                </span>
-              ))}
-              {extraCount > 0 && (
-                <span className="text-xs text-spotify-gray-light">+{extraCount} more</span>
-              )}
-            </div>
-          )}
         </button>
-        <button
-          type="button"
-          onClick={onClear}
-          className="text-xs text-spotify-gray-light hover:text-white"
-        >
-          Clear filter
-        </button>
+        {onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-xs text-spotify-gray-light hover:text-white"
+          >
+            Clear filter
+          </button>
+        )}
       </div>
       {open && <div className="px-4 pb-4 pt-1 space-y-4">{children}</div>}
     </div>
@@ -100,6 +82,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     album: true,
   });
   const [openDecades, setOpenDecades] = useState({});
+  const [openGenreGroups, setOpenGenreGroups] = useState({});
 
   const [preview, setPreview] = useState({ tracks: [], total_matches: 0 });
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -178,16 +161,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const uncachedSources = useMemo(() => {
     return sourceIds.filter((playlistId) => !playlistFacts[playlistId]?.last_snapshot_id);
   }, [sourceIds, playlistFacts]);
-
-  const sourceNameMap = useMemo(() => {
-    const map = {};
-    playlists.forEach((playlist) => {
-      if (playlist.id) {
-        map[playlist.id] = playlist.name || 'Untitled playlist';
-      }
-    });
-    return map;
-  }, [playlists]);
 
   const toggleSection = (key) => {
     setSectionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -412,6 +385,23 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     });
   }, [facets, selectedDecades, selectedYears]);
 
+  useEffect(() => {
+    if (!facets?.genre_groups?.length) {
+      return;
+    }
+    setOpenGenreGroups((prev) => {
+      const next = { ...prev };
+      facets.genre_groups.forEach((group) => {
+        const hasSelected = (group.tags || [])
+          .some((tag) => selectedGenreSet.has(tag.name.toLowerCase()));
+        if (hasSelected) {
+          next[group.group] = true;
+        }
+      });
+      return next;
+    });
+  }, [facets, selectedGenreSet]);
+
   const artistNameMap = useMemo(() => {
     const map = {};
     (facets?.artists || []).forEach((artist) => {
@@ -442,10 +432,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       setPlaylistName(autoName);
     }
   }, [autoName, nameTouched]);
-
-  const selectedSourceSummary = useMemo(() => {
-    return sourceIds.map((id) => sourceNameMap[id] || id).filter(Boolean);
-  }, [sourceIds, sourceNameMap]);
 
   const selectedArtistSummary = useMemo(() => {
     return selectedArtists.map((id) => artistNameMap[id] || id).filter(Boolean);
@@ -519,14 +505,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     });
   };
 
-  const removeSource = (playlistId) => {
-    setSourceIds((prev) => prev.filter((id) => id !== playlistId));
-  };
-
-  const clearMatchLogic = () => {
-    setMatchMode('any');
-  };
-
   const clearGenres = () => {
     setSelectedGenres([]);
     setGenreSearch('');
@@ -550,6 +528,13 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const clearAlbumTags = () => {
     setAlbumFilters([]);
     setAlbumInput('');
+  };
+
+  const toggleGenreGroup = (groupName) => {
+    setOpenGenreGroups((prev) => ({
+      ...prev,
+      [groupName]: !prev[groupName],
+    }));
   };
 
   const toggleDecade = (decade) => {
@@ -667,28 +652,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                         resetSourcesToDefault();
                         setSourceSearch('');
                       }}
-                      selectedSummary={selectedSourceSummary}
                     >
-                      {selectedSourceSummary.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {sourceIds.map((id) => (
-                            <span
-                              key={id}
-                              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-spotify-gray-mid/60 text-xs text-white border border-spotify-gray-mid/60"
-                            >
-                              {sourceNameMap[id] || id}
-                              <button
-                                type="button"
-                                onClick={() => removeSource(id)}
-                                className="text-spotify-gray-light hover:text-white"
-                              >
-                                <span className="icon text-sm">close</span>
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -768,8 +732,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                       description="Control whether tracks must match all tags or any tag."
                       open={sectionOpen.matchLogic}
                       onToggle={() => toggleSection('matchLogic')}
-                      onClear={clearMatchLogic}
-                      selectedSummary={[matchMode === 'all' ? 'Match all' : 'Match any']}
                     >
                       <div className="flex items-center gap-2">
                         <button
@@ -812,7 +774,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                       open={sectionOpen.genres}
                       onToggle={() => toggleSection('genres')}
                       onClear={clearGenres}
-                      selectedSummary={selectedGenres}
                     >
                       {selectedGenres.length > 0 && (
                         <div className="flex flex-wrap gap-2">
@@ -864,31 +825,46 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                             className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 px-3 py-2"
                           >
                             <div className="flex items-center justify-between text-sm text-white">
-                              <span>{group.group}</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleGenreGroup(group.group)}
+                                className="flex items-center gap-2 text-left"
+                              >
+                                <span
+                                  className={`icon text-base text-spotify-gray-light transition-transform ${
+                                    genreSearch || openGenreGroups[group.group] ? 'rotate-180' : ''
+                                  }`}
+                                >
+                                  expand_more
+                                </span>
+                                <span>{group.group}</span>
+                              </button>
                               <span className="text-xs text-spotify-gray-light">{group.count}</span>
                             </div>
-                            <div className="mt-2 space-y-2">
-                              {group.tags.map((tag) => {
-                                const checked = selectedGenres.includes(tag.name);
-                                return (
-                                  <label
-                                    key={tag.name}
-                                    className="flex items-center justify-between text-sm text-spotify-gray-light"
-                                  >
-                                    <span className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() => toggleGenre(tag.name)}
-                                        className="accent-spotify-green"
-                                      />
-                                      <span>{tag.name}</span>
-                                    </span>
-                                    <span className="text-xs text-spotify-gray-light">{tag.count}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
+                            {(genreSearch || openGenreGroups[group.group]) && (
+                              <div className="mt-2 space-y-2 border-l border-spotify-gray-mid/60 pl-4">
+                                {group.tags.map((tag) => {
+                                  const checked = selectedGenres.includes(tag.name);
+                                  return (
+                                    <label
+                                      key={tag.name}
+                                      className="flex items-center justify-between text-sm text-spotify-gray-light"
+                                    >
+                                      <span className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => toggleGenre(tag.name)}
+                                          className="accent-spotify-green"
+                                        />
+                                        <span>{tag.name}</span>
+                                      </span>
+                                      <span className="text-xs text-spotify-gray-light">{tag.count}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -900,7 +876,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                       open={sectionOpen.dates}
                       onToggle={() => toggleSection('dates')}
                       onClear={clearDates}
-                      selectedSummary={selectedDateSummary}
                     >
                       {selectedDateSummary.length > 0 && (
                         <div className="flex flex-wrap gap-2">
@@ -1011,7 +986,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                       open={sectionOpen.artists}
                       onToggle={() => toggleSection('artists')}
                       onClear={clearArtists}
-                      selectedSummary={selectedArtistSummary}
                     >
                       {selectedArtistSummary.length > 0 && (
                         <div className="flex flex-wrap gap-2">
@@ -1075,7 +1049,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                       open={sectionOpen.title}
                       onToggle={() => toggleSection('title')}
                       onClear={clearTitleTags}
-                      selectedSummary={titleFilters}
                     >
                       {titleFilters.length > 0 && (
                         <div className="flex flex-wrap gap-2">
@@ -1126,7 +1099,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                       open={sectionOpen.album}
                       onToggle={() => toggleSection('album')}
                       onClear={clearAlbumTags}
-                      selectedSummary={albumFilters}
                     >
                       {albumFilters.length > 0 && (
                         <div className="flex flex-wrap gap-2">
