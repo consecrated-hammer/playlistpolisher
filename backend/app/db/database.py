@@ -225,9 +225,6 @@ def init_db():
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_track_cache_accessed ON track_cache(last_accessed)
     """)
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_track_cache_isrc ON track_cache(isrc)
-    """)
 
     # Migrations: add fields to existing DBs
     for col, ddl in (
@@ -253,6 +250,11 @@ def init_db():
             logger.info("Added %s column to track_cache", col)
         except sqlite3.OperationalError:
             pass  # Column already exists (or table missing during initial creation)
+    
+    # Create ISRC index after migration (column must exist first)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_track_cache_isrc ON track_cache(isrc)
+    """)
     
     # Artist metadata cache (for genres, popularity, followers)
     cursor.execute("""
