@@ -502,7 +502,7 @@ const CachePage = ({ user, onLogout }) => {
             disabled={actionLoading}
             className="px-4 py-2 bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isRefreshInProgress ? 'Refreshing...' : 'Refresh all'}
+            {isRefreshInProgress ? 'Refreshing...' : 'Refresh changed'}
           </button>
         </div>
 
@@ -519,7 +519,7 @@ const CachePage = ({ user, onLogout }) => {
             disabled={actionLoading}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Refresh
+            Rebuild cache
           </button>
         </div>
 
