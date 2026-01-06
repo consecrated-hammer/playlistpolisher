@@ -750,6 +750,15 @@ export const cacheAPI = {
   },
 
   /**
+   * Get all artist and track IDs from cache for enrichment
+   * @returns {Promise<object>} Object with artist_ids and track_ids arrays
+   */
+  getEnrichmentIds: async () => {
+    const response = await api.get('/cache/enrichment-ids');
+    return response.data;
+  },
+
+  /**
    * Enrich artist metadata (genres, popularity, followers)
    * @param {string[]} artistIds - Array of Spotify artist IDs
    * @returns {Promise<object>} Enrichment result with counts

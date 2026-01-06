@@ -490,6 +490,60 @@ async def clear_all_cache(
         raise HTTPException(status_code=500, detail="Failed to clear cache")
 
 
+@router.get("/enrichment-ids")
+async def get_enrichment_ids(
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    """
+    Get all artist and track IDs from cache for enrichment.
+    
+    Returns:
+        dict: Lists of unique artist IDs and track IDs
+        
+    Example Response:
+        {
+            "artist_ids": ["3TVXtAsR1Inumwj472S9r4", ...],
+            "track_ids": ["11dFghVXANMlKmJXsNCbNl", ...],
+            "artist_count": 1234,
+            "track_count": 5678
+        }
+    """
+    try:
+        import json
+        from app.db.database import get_db_connection
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get all track IDs
+            cursor.execute("SELECT track_id FROM track_cache")
+            track_ids = [row[0] for row in cursor.fetchall()]
+            
+            # Get all unique artist IDs from artists_json
+            cursor.execute("SELECT DISTINCT artists_json FROM track_cache WHERE artists_json IS NOT NULL")
+            artist_ids = set()
+            for row in cursor.fetchall():
+                try:
+                    artists = json.loads(row[0])
+                    for artist in artists:
+                        if isinstance(artist, dict) and artist.get('id'):
+                            artist_ids.add(artist['id'])
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            
+            artist_ids = list(artist_ids)
+            
+        return {
+            "artist_ids": artist_ids,
+            "track_ids": track_ids,
+            "artist_count": len(artist_ids),
+            "track_count": len(track_ids)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get enrichment IDs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get enrichment IDs")
+
+
 class EnrichArtistsRequest(BaseModel):
     """Request model for enriching artist metadata."""
     artist_ids: List[str]
