@@ -112,9 +112,10 @@ class CacheService:
 
                 # Parse available markets if present
                 available_markets = []
-                if row.get("available_markets_json"):
+                available_markets_json = row["available_markets_json"] if "available_markets_json" in row.keys() else None
+                if available_markets_json:
                     try:
-                        available_markets = json.loads(row["available_markets_json"])
+                        available_markets = json.loads(available_markets_json)
                     except (json.JSONDecodeError, TypeError):
                         pass
 
@@ -129,18 +130,18 @@ class CacheService:
                     "album_release_date_precision": album_release_date_precision,
                     "album_type": row["album_type"],
                     "album_total_tracks": row["album_total_tracks"],
-                    "album_label": row.get("album_label"),
+                    "album_label": row["album_label"] if "album_label" in row.keys() else None,
                     "duration_ms": row["duration_ms"],
                     "album_art_url": row["album_art_url"],
                     "track_uri": row["track_uri"],
-                    "track_number": row.get("track_number"),
-                    "disc_number": row.get("disc_number"),
-                    "explicit": bool(row.get("explicit")),
-                    "popularity": row.get("popularity"),
-                    "isrc": row.get("isrc"),
-                    "is_playable": bool(row.get("is_playable")) if row.get("is_playable") is not None else None,
+                    "track_number": row["track_number"] if "track_number" in row.keys() else None,
+                    "disc_number": row["disc_number"] if "disc_number" in row.keys() else None,
+                    "explicit": bool(row["explicit"]) if "explicit" in row.keys() and row["explicit"] is not None else False,
+                    "popularity": row["popularity"] if "popularity" in row.keys() else None,
+                    "isrc": row["isrc"] if "isrc" in row.keys() else None,
+                    "is_playable": bool(row["is_playable"]) if "is_playable" in row.keys() and row["is_playable"] is not None else None,
                     "available_markets": available_markets,
-                    "preview_url": row.get("preview_url"),
+                    "preview_url": row["preview_url"] if "preview_url" in row.keys() else None,
                 }
                 missing.discard(track_id)
             
