@@ -628,10 +628,16 @@ class CacheService:
         """
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Clear track usage first (foreign key constraint)
             cursor.execute("DELETE FROM track_usage")
             usage_deleted = cursor.rowcount
+
+            # Clear auxiliary metadata caches
+            cursor.execute("DELETE FROM audio_features_cache")
+            audio_deleted = cursor.rowcount
+            cursor.execute("DELETE FROM artist_cache")
+            artist_deleted = cursor.rowcount
             
             # Clear track cache
             cursor.execute("DELETE FROM track_cache")
@@ -639,7 +645,13 @@ class CacheService:
             
             conn.commit()
         
-        logger.info(f"Cleared entire cache: {cache_deleted} tracks, {usage_deleted} usage entries")
+        logger.info(
+            "Cleared entire cache: %s tracks, %s usage entries, %s audio features, %s artists",
+            cache_deleted,
+            usage_deleted,
+            audio_deleted,
+            artist_deleted,
+        )
         return cache_deleted
     
     # ===== Artist Cache Methods =====
