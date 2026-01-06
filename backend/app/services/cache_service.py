@@ -65,7 +65,9 @@ class CacheService:
                 cursor.execute(f"""
                     SELECT track_id, name, artists_json, album, album_id, album_uri,
                            album_release_date, album_release_date_precision, album_type,
-                           album_total_tracks, duration_ms, album_art_url, track_uri
+                           album_total_tracks, album_label, duration_ms, album_art_url, track_uri,
+                           track_number, disc_number, explicit, popularity, isrc, 
+                           is_playable, available_markets_json, preview_url
                     FROM track_cache
                     WHERE track_id IN ({placeholders})
                     AND cached_at > ?
@@ -74,7 +76,9 @@ class CacheService:
                 cursor.execute(f"""
                     SELECT track_id, name, artists_json, album, album_id, album_uri,
                            album_release_date, album_release_date_precision, album_type,
-                           album_total_tracks, duration_ms, album_art_url, track_uri
+                           album_total_tracks, album_label, duration_ms, album_art_url, track_uri,
+                           track_number, disc_number, explicit, popularity, isrc,
+                           is_playable, available_markets_json, preview_url
                     FROM track_cache
                     WHERE track_id IN ({placeholders})
                 """, tuple(track_ids))
@@ -106,6 +110,14 @@ class CacheService:
                         for name in artists_payload
                     ]
 
+                # Parse available markets if present
+                available_markets = []
+                if row.get("available_markets_json"):
+                    try:
+                        available_markets = json.loads(row["available_markets_json"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
                 cached[track_id] = {
                     "id": track_id,
                     "name": row["name"],
@@ -117,9 +129,18 @@ class CacheService:
                     "album_release_date_precision": album_release_date_precision,
                     "album_type": row["album_type"],
                     "album_total_tracks": row["album_total_tracks"],
+                    "album_label": row.get("album_label"),
                     "duration_ms": row["duration_ms"],
                     "album_art_url": row["album_art_url"],
                     "track_uri": row["track_uri"],
+                    "track_number": row.get("track_number"),
+                    "disc_number": row.get("disc_number"),
+                    "explicit": bool(row.get("explicit")),
+                    "popularity": row.get("popularity"),
+                    "isrc": row.get("isrc"),
+                    "is_playable": bool(row.get("is_playable")) if row.get("is_playable") is not None else None,
+                    "available_markets": available_markets,
+                    "preview_url": row.get("preview_url"),
                 }
                 missing.discard(track_id)
             
@@ -201,8 +222,23 @@ class CacheService:
                     album_release_date_precision = album_data.get('release_date_precision')
                     album_type = album_data.get("album_type")
                     album_total_tracks = album_data.get("total_tracks")
+                    album_label = album_data.get("label")
                     duration_ms = track.get('duration_ms')
                     track_uri = track.get("uri")
+                    track_number = track.get("track_number")
+                    disc_number = track.get("disc_number")
+                    explicit = 1 if track.get("explicit") else 0
+                    popularity = track.get("popularity")
+                    
+                    # External IDs
+                    external_ids = track.get("external_ids") or {}
+                    isrc = external_ids.get("isrc")
+                    
+                    # Market availability
+                    is_playable = 1 if track.get("is_playable") else 0 if track.get("is_playable") is not None else None
+                    available_markets = track.get("available_markets") or []
+                    available_markets_json = json.dumps(available_markets) if available_markets else None
+                    preview_url = track.get("preview_url")
                     
                     # Get album art (prefer medium size)
                     album_art_url = None
@@ -217,23 +253,14 @@ class CacheService:
                     # Insert or update cache
                     cursor.execute("""
                         INSERT INTO track_cache (
-                            track_id,
-                            name,
-                            artists_json,
-                            album,
-                            album_id,
-                            album_uri,
-                            album_release_date,
-                            album_release_date_precision,
-                            album_type,
-                            album_total_tracks,
-                            duration_ms,
-                            album_art_url,
-                            track_uri,
-                            cached_at,
-                            last_accessed
+                            track_id, name, artists_json, album, album_id, album_uri,
+                            album_release_date, album_release_date_precision, album_type,
+                            album_total_tracks, album_label, duration_ms, album_art_url,
+                            track_uri, track_number, disc_number, explicit, popularity, isrc,
+                            is_playable, available_markets_json, preview_url,
+                            cached_at, last_accessed
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(track_id) DO UPDATE SET
                             name = excluded.name,
                             artists_json = excluded.artists_json,
@@ -244,27 +271,26 @@ class CacheService:
                             album_release_date_precision = excluded.album_release_date_precision,
                             album_type = excluded.album_type,
                             album_total_tracks = excluded.album_total_tracks,
+                            album_label = excluded.album_label,
                             duration_ms = excluded.duration_ms,
                             album_art_url = excluded.album_art_url,
                             track_uri = excluded.track_uri,
+                            track_number = excluded.track_number,
+                            disc_number = excluded.disc_number,
+                            explicit = excluded.explicit,
+                            popularity = excluded.popularity,
+                            isrc = excluded.isrc,
+                            is_playable = excluded.is_playable,
+                            available_markets_json = excluded.available_markets_json,
+                            preview_url = excluded.preview_url,
                             cached_at = excluded.cached_at,
                             last_accessed = excluded.last_accessed
                     """, (
-                        track_id,
-                        track['name'],
-                        artists_json,
-                        album,
-                        album_id,
-                        album_uri,
-                        album_release_date,
-                        album_release_date_precision,
-                        album_type,
-                        album_total_tracks,
-                        duration_ms,
-                        album_art_url,
-                        track_uri,
-                        now,
-                        now,
+                        track_id, track['name'], artists_json, album, album_id, album_uri,
+                        album_release_date, album_release_date_precision, album_type,
+                        album_total_tracks, album_label, duration_ms, album_art_url,
+                        track_uri, track_number, disc_number, explicit, popularity, isrc,
+                        is_playable, available_markets_json, preview_url, now, now,
                     ))
                     
                     # Track usage if session_id provided

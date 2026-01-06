@@ -206,9 +206,18 @@ def init_db():
             album_release_date_precision TEXT,
             album_type TEXT,
             album_total_tracks INTEGER,
+            album_label TEXT,
             duration_ms INTEGER,
             album_art_url TEXT,
             track_uri TEXT,
+            track_number INTEGER,
+            disc_number INTEGER,
+            explicit INTEGER,
+            popularity INTEGER,
+            isrc TEXT,
+            is_playable INTEGER,
+            available_markets_json TEXT,
+            preview_url TEXT,
             cached_at TEXT NOT NULL,
             last_accessed TEXT NOT NULL
         )
@@ -216,8 +225,11 @@ def init_db():
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_track_cache_accessed ON track_cache(last_accessed)
     """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_track_cache_isrc ON track_cache(isrc)
+    """)
 
-    # Migrations: add album release date fields to existing DBs
+    # Migrations: add fields to existing DBs
     for col, ddl in (
         ("album_release_date", "ALTER TABLE track_cache ADD COLUMN album_release_date TEXT"),
         ("album_release_date_precision", "ALTER TABLE track_cache ADD COLUMN album_release_date_precision TEXT"),
@@ -225,13 +237,63 @@ def init_db():
         ("album_uri", "ALTER TABLE track_cache ADD COLUMN album_uri TEXT"),
         ("album_type", "ALTER TABLE track_cache ADD COLUMN album_type TEXT"),
         ("album_total_tracks", "ALTER TABLE track_cache ADD COLUMN album_total_tracks INTEGER"),
+        ("album_label", "ALTER TABLE track_cache ADD COLUMN album_label TEXT"),
         ("track_uri", "ALTER TABLE track_cache ADD COLUMN track_uri TEXT"),
+        ("track_number", "ALTER TABLE track_cache ADD COLUMN track_number INTEGER"),
+        ("disc_number", "ALTER TABLE track_cache ADD COLUMN disc_number INTEGER"),
+        ("explicit", "ALTER TABLE track_cache ADD COLUMN explicit INTEGER"),
+        ("popularity", "ALTER TABLE track_cache ADD COLUMN popularity INTEGER"),
+        ("isrc", "ALTER TABLE track_cache ADD COLUMN isrc TEXT"),
+        ("is_playable", "ALTER TABLE track_cache ADD COLUMN is_playable INTEGER"),
+        ("available_markets_json", "ALTER TABLE track_cache ADD COLUMN available_markets_json TEXT"),
+        ("preview_url", "ALTER TABLE track_cache ADD COLUMN preview_url TEXT"),
     ):
         try:
             cursor.execute(ddl)
             logger.info("Added %s column to track_cache", col)
         except sqlite3.OperationalError:
             pass  # Column already exists (or table missing during initial creation)
+    
+    # Artist metadata cache (for genres, popularity, followers)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS artist_cache (
+            artist_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            genres_json TEXT,
+            popularity INTEGER,
+            followers INTEGER,
+            cached_at TEXT NOT NULL,
+            last_accessed TEXT NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_artist_cache_accessed ON artist_cache(last_accessed)
+    """)
+
+    # Audio features cache (optional enrichment)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS audio_features_cache (
+            track_id TEXT PRIMARY KEY,
+            tempo REAL,
+            energy REAL,
+            danceability REAL,
+            valence REAL,
+            acousticness REAL,
+            instrumentalness REAL,
+            liveness REAL,
+            speechiness REAL,
+            loudness REAL,
+            key INTEGER,
+            mode INTEGER,
+            time_signature INTEGER,
+            cached_at TEXT NOT NULL,
+            last_accessed TEXT NOT NULL,
+            FOREIGN KEY (track_id) REFERENCES track_cache(track_id) ON DELETE CASCADE
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_audio_features_accessed ON audio_features_cache(last_accessed)
+    """)
     
     # Track usage by users (for user-specific cache management)
     cursor.execute("""
