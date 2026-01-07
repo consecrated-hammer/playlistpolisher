@@ -156,6 +156,10 @@ app.include_router(preferences.router)
 from app.routes import smart_playlists
 app.include_router(smart_playlists.router)
 
+# Import and include AI playlist builder router
+from app.routes import ai_playlists
+app.include_router(ai_playlists.router)
+
 # Security and cache headers middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
