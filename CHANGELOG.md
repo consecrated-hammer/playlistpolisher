@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.0 - 2026-01-08
+**AI playlist discovery**
+- Playlists: replace the single smart-playlist button with a create playlist dropdown (smart vs AI).
+- AI playlists: add a full-page builder for describing or manually guiding AI playlist suggestions.
+- AI playlists: generate Spotify catalog previews with selectable tracks and AI-generated playlist names.
+
 ## v1.4.6 - 2026-01-08
 **Smart playlist builder + cache polish**
 - Smart playlists: add full-page builder with responsive desktop/mobile layouts, active filters, and live preview tooling.
