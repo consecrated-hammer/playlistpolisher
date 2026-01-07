@@ -138,7 +138,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const [sectionOpen, setSectionOpen] = useState({
     sources: false,
     matchLogic: false,
-    constraints: false,
     genres: false,
     dates: false,
     artists: false,
@@ -611,6 +610,20 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     });
   }, []);
 
+  const toggleGenreGroupSelection = useCallback((tags) => {
+    const tagNames = tags.map((tag) => tag.name);
+    setSelectedGenres((prev) => {
+      const selectedSet = new Set(prev);
+      const allSelected = tagNames.every((name) => selectedSet.has(name));
+      if (allSelected) {
+        return prev.filter((name) => !tagNames.includes(name));
+      }
+      const next = new Set(prev);
+      tagNames.forEach((name) => next.add(name));
+      return Array.from(next);
+    });
+  }, []);
+
   const clearGenres = () => {
     setSelectedGenres([]);
     setGenreSearch('');
@@ -964,17 +977,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       </div>
 
       <CollapsibleSection
-        title="Track filters"
-        description="Hard constraints applied alongside tag matches."
-        open={sectionOpen.constraints}
-        onToggle={() => toggleSection('constraints')}
-      >
-        <div className="text-xs text-spotify-gray-light">
-          No track constraints configured yet.
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
         title="Release dates"
         description="Pick decades or drill down to specific years."
         open={sectionOpen.dates}
@@ -1125,20 +1127,34 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
               className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 px-3 py-2"
             >
               <div className="flex items-center justify-between text-sm text-white">
-                <button
-                  type="button"
-                  onClick={() => toggleGenreGroup(group.group)}
-                  className="flex items-center gap-2 text-left"
-                >
-                  <span
-                    className={`icon text-base text-spotify-gray-light transition-transform ${
-                      genreSearch || openGenreGroups[group.group] ? 'rotate-180' : ''
-                    }`}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleGenreGroup(group.group)}
+                    className="flex items-center gap-2 text-left"
                   >
-                    expand_more
-                  </span>
-                  <span>{group.group}</span>
-                </button>
+                    <span
+                      className={`icon text-base text-spotify-gray-light transition-transform ${
+                        genreSearch || openGenreGroups[group.group] ? 'rotate-180' : ''
+                      }`}
+                    >
+                      expand_more
+                    </span>
+                    <span>{group.group}</span>
+                  </button>
+                  <input
+                    type="checkbox"
+                    checked={group.tags.every((tag) => selectedGenres.includes(tag.name))}
+                    ref={(input) => {
+                      if (!input) return;
+                      const selectedCount = group.tags.filter((tag) => selectedGenres.includes(tag.name)).length;
+                      input.indeterminate = selectedCount > 0 && selectedCount < group.tags.length;
+                    }}
+                    onChange={() => toggleGenreGroupSelection(group.tags)}
+                    className="accent-spotify-green"
+                    aria-label={`Select all ${group.group}`}
+                  />
+                </div>
                 <span className="text-xs text-spotify-gray-light">{group.count}</span>
               </div>
               {(genreSearch || openGenreGroups[group.group]) && (
