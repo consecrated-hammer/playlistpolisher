@@ -775,11 +775,12 @@ export const cacheAPI = {
 export const smartPlaylistAPI = {
   /**
    * Get available tag facets for selected playlists
-   * @param {string[]} playlistIds
+   * @param {string[]|object} payload
    * @returns {Promise<object>} Facets payload
    */
-  getFacets: async (playlistIds) => {
-    const response = await api.post('/smart-playlists/facets', { playlist_ids: playlistIds });
+  getFacets: async (payload) => {
+    const body = Array.isArray(payload) ? { playlist_ids: payload } : payload;
+    const response = await api.post('/smart-playlists/facets', body);
     return response.data;
   },
 

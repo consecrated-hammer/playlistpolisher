@@ -68,6 +68,9 @@ const ActiveFiltersBar = ({
   chips,
   onClearAll,
   compact = false,
+  collapsible = false,
+  expanded = true,
+  onToggle,
 }) => {
   const hasChips = chips.length > 0;
   return (
@@ -77,9 +80,23 @@ const ActiveFiltersBar = ({
       }`}
     >
       <div className="flex items-center justify-between">
-        <p className="text-[11px] uppercase tracking-wide text-spotify-gray-light">
-          Active filters
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] uppercase tracking-wide text-spotify-gray-light">
+            Active filters
+          </p>
+          {collapsible && (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="text-spotify-gray-light hover:text-white"
+              aria-label={expanded ? 'Collapse active filters' : 'Expand active filters'}
+            >
+              <span className={`icon text-base transition-transform ${expanded ? 'rotate-180' : ''}`}>
+                expand_more
+              </span>
+            </button>
+          )}
+        </div>
         <button
           type="button"
           onClick={onClearAll}
@@ -89,19 +106,25 @@ const ActiveFiltersBar = ({
           Clear all
         </button>
       </div>
-      {hasChips ? (
-        <div className={`mt-2 flex flex-wrap gap-2 ${compact ? '' : 'pt-1'}`}>
-          {chips.map((chip) => (
-            <FilterChip
-              key={chip.key}
-              label={chip.label}
-              onRemove={chip.onRemove}
-              compact={compact}
-            />
-          ))}
-        </div>
+      {expanded ? (
+        hasChips ? (
+          <div className={`mt-2 flex flex-wrap gap-2 ${compact ? '' : 'pt-1'}`}>
+            {chips.map((chip) => (
+              <FilterChip
+                key={chip.key}
+                label={chip.label}
+                onRemove={chip.onRemove}
+                compact={compact}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-spotify-gray-light">No active filters.</p>
+        )
       ) : (
-        <p className="mt-2 text-xs text-spotify-gray-light">No active filters.</p>
+        <p className="mt-2 text-xs text-spotify-gray-light">
+          {hasChips ? `${chips.length} active filters` : 'No active filters.'}
+        </p>
       )}
     </div>
   );
@@ -157,6 +180,8 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const [previewSearch, setPreviewSearch] = useState('');
   const [previewSort, setPreviewSort] = useState('default');
   const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
+  const [previewLimit, setPreviewLimit] = useState(250);
+  const [activeFiltersExpanded, setActiveFiltersExpanded] = useState(true);
 
   const [playlistName, setPlaylistName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
@@ -302,20 +327,39 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       setFacets(null);
       return;
     }
-    const fetchFacets = async () => {
+    const payload = {
+      playlist_ids: sourceIds,
+      match_mode: matchMode,
+      genres: selectedGenres,
+      decades: selectedDecades,
+      years: selectedYears,
+      artist_ids: selectedArtists,
+      title_contains: titleFilters,
+      album_contains: albumFilters,
+    };
+    const handle = setTimeout(async () => {
       setFacetsLoading(true);
       setFacetsError(null);
       try {
-        const data = await smartPlaylistAPI.getFacets(sourceIds);
+        const data = await smartPlaylistAPI.getFacets(payload);
         setFacets(data);
       } catch (err) {
         setFacetsError(err.message || 'Failed to load tags');
       } finally {
         setFacetsLoading(false);
       }
-    };
-    fetchFacets();
-  }, [sourceIds]);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [
+    sourceIds,
+    matchMode,
+    selectedGenres,
+    selectedDecades,
+    selectedYears,
+    selectedArtists,
+    titleFilters,
+    albumFilters,
+  ]);
 
   useEffect(() => {
     if (!sourceIds.length) {
@@ -332,7 +376,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       artist_ids: selectedArtists,
       title_contains: titleFilters,
       album_contains: albumFilters,
-      limit: 250,
+      limit: previewLimit,
       offset: 0,
     };
 
@@ -359,6 +403,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     sourceIds,
     titleFilters,
     albumFilters,
+    previewLimit,
   ]);
 
   useEffect(() => {
@@ -529,7 +574,18 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     if (!tags.length) {
       return 'Auto: Smart playlist';
     }
-    return `Auto: ${tags.join(', ')}`;
+    const maxTags = 6;
+    let visibleTags = tags;
+    let suffix = '';
+    if (tags.length > maxTags) {
+      visibleTags = tags.slice(0, maxTags);
+      suffix = ` +${tags.length - maxTags} more`;
+    }
+    const baseName = `Auto: ${visibleTags.join(', ')}${suffix}`;
+    if (baseName.length <= 80) {
+      return baseName;
+    }
+    return `Auto: ${visibleTags.join(', ')}`.slice(0, 77) + '...';
   }, [albumFilters, artistNameMap, selectedDecades, selectedGenres, selectedArtists, selectedYears, titleFilters]);
 
   useEffect(() => {
@@ -834,9 +890,9 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     handleRemoveAlbumFilter,
   ]);
 
-  const visibleCount = sortedPreviewTracks.length;
+  const previewCount = previewTracks.length;
   const previewStatusLabel = totalMatches > 0
-    ? `Showing ${visibleCount} of ${totalMatches} matches`
+    ? `Showing ${previewCount} of ${totalMatches} matches`
     : 'No matches yet.';
   const previewUpdating = previewLoading && previewTracks.length > 0;
 
@@ -964,6 +1020,19 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
           </button>
         </div>
       </CollapsibleSection>
+
+      <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
+        Preview cap
+        <select
+          value={previewLimit}
+          onChange={(event) => setPreviewLimit(Number(event.target.value))}
+          className="bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+        >
+          <option value={100}>100 tracks</option>
+          <option value={250}>250 tracks</option>
+          <option value={500}>500 tracks</option>
+        </select>
+      </label>
     </div>
   );
 
@@ -1407,16 +1476,22 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
 
                 {activeFilterChips.length > 0 && (
                   <div className="md:hidden">
-                    <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
-                      {activeFilterChips.map((chip) => (
-                        <FilterChip
-                          key={chip.key}
-                          label={chip.label}
-                          onRemove={chip.onRemove}
-                          compact
-                        />
-                      ))}
-                    </div>
+                    {activeFiltersExpanded ? (
+                      <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
+                        {activeFilterChips.map((chip) => (
+                          <FilterChip
+                            key={chip.key}
+                            label={chip.label}
+                            onRemove={chip.onRemove}
+                            compact
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-spotify-gray-light">
+                        {activeFilterChips.length} active filters
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -1426,6 +1501,9 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                       <ActiveFiltersBar
                         chips={activeFilterChips}
                         onClearAll={handleClearAllFilters}
+                        collapsible
+                        expanded={activeFiltersExpanded}
+                        onToggle={() => setActiveFiltersExpanded((prev) => !prev)}
                       />
                     </div>
                     <div className="space-y-6">
@@ -1872,6 +1950,9 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                           chips={activeFilterChips}
                           onClearAll={handleClearAllFilters}
                           compact
+                          collapsible
+                          expanded={activeFiltersExpanded}
+                          onToggle={() => setActiveFiltersExpanded((prev) => !prev)}
                         />
                       </div>
                       <div className="px-4 py-6 space-y-4">

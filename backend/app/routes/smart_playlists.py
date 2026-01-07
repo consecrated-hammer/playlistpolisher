@@ -37,6 +37,13 @@ def require_auth(session_mgr: SessionManager = Depends(get_session_manager)) -> 
 
 class SmartPlaylistFacetsRequest(BaseModel):
     playlist_ids: List[str] = Field(default_factory=list)
+    match_mode: str = "any"
+    genres: List[str] = Field(default_factory=list)
+    decades: List[int] = Field(default_factory=list)
+    years: List[int] = Field(default_factory=list)
+    artist_ids: List[str] = Field(default_factory=list)
+    title_contains: List[str] = Field(default_factory=list)
+    album_contains: List[str] = Field(default_factory=list)
 
 
 class SmartPlaylistPreviewRequest(BaseModel):
@@ -265,6 +272,83 @@ def _load_tracks_for_playlists(playlist_ids: List[str]) -> List[TrackRecord]:
     return base_tracks
 
 
+def _filter_tracks(
+    tracks: List[TrackRecord],
+    match_mode: str,
+    selected_genres: Set[str],
+    selected_decades: Set[int],
+    selected_years: Set[int],
+    selected_artists: Set[str],
+    title_filters: List[str],
+    album_filters: List[str],
+) -> List[TrackRecord]:
+    if not any([
+        selected_genres,
+        selected_decades,
+        selected_years,
+        selected_artists,
+        title_filters,
+        album_filters,
+    ]):
+        return tracks
+
+    match_all = match_mode == "all"
+    filtered = []
+
+    for track in tracks:
+        genre_hits = len(track.genre_keys & selected_genres) if selected_genres else 0
+        decade_match = track.decade in selected_decades if selected_decades else False
+        year_match = track.year in selected_years if selected_years else False
+        artist_hits = len(track.artist_ids & selected_artists) if selected_artists else 0
+
+        if title_filters:
+            name_lower = (track.name or "").lower()
+            if match_all:
+                title_match = all(term in name_lower for term in title_filters)
+            else:
+                title_match = any(term in name_lower for term in title_filters)
+        else:
+            title_match = False
+
+        if album_filters:
+            album_name = (track.album or "").lower()
+            if match_all:
+                album_match = all(term in album_name for term in album_filters)
+            else:
+                album_match = any(term in album_name for term in album_filters)
+        else:
+            album_match = False
+
+        if match_all:
+            match = True
+            if selected_genres and not genre_hits:
+                match = False
+            if selected_decades and not decade_match:
+                match = False
+            if selected_years and not year_match:
+                match = False
+            if selected_artists and not artist_hits:
+                match = False
+            if title_filters and not title_match:
+                match = False
+            if album_filters and not album_match:
+                match = False
+        else:
+            match = any([
+                genre_hits > 0,
+                decade_match,
+                year_match,
+                artist_hits > 0,
+                title_match,
+                album_match,
+            ])
+
+        if match:
+            filtered.append(track)
+
+    return filtered
+
+
 @router.post("/facets")
 async def get_smart_playlist_facets(
     body: SmartPlaylistFacetsRequest,
@@ -275,6 +359,32 @@ async def get_smart_playlist_facets(
         _ = session_mgr.get_user_id()
         tracks = _load_tracks_for_playlists(body.playlist_ids)
         total_tracks = len(tracks)
+
+        selected_genres = {genre.lower() for genre in body.genres if genre}
+        selected_decades = {int(decade) for decade in body.decades if decade}
+        selected_years = {int(year) for year in body.years if year}
+        selected_artists = {artist_id for artist_id in body.artist_ids if artist_id}
+        title_filters = [term.strip().lower() for term in body.title_contains if term.strip()]
+        album_filters = [term.strip().lower() for term in body.album_contains if term.strip()]
+
+        match_mode = body.match_mode if body.match_mode in {"any", "all"} else "any"
+        filtered_tracks = _filter_tracks(
+            tracks,
+            match_mode,
+            selected_genres,
+            selected_decades,
+            selected_years,
+            selected_artists,
+            title_filters,
+            album_filters,
+        )
+
+        artist_label_lookup: Dict[str, str] = {}
+        for track in tracks:
+            for artist in track.artists:
+                artist_id = artist.get("id")
+                if artist_id:
+                    artist_label_lookup.setdefault(artist_id, artist.get("name") or "")
 
         genre_counts: Dict[str, int] = defaultdict(int)
         genre_labels: Dict[str, str] = {}
@@ -288,7 +398,7 @@ async def get_smart_playlist_facets(
         decade_counts: Dict[int, int] = defaultdict(int)
         decade_year_counts: Dict[int, Dict[int, int]] = defaultdict(lambda: defaultdict(int))
 
-        for track in tracks:
+        for track in filtered_tracks:
             if track.year:
                 year_counts[track.year] += 1
                 decade_counts[track.decade] += 1
@@ -315,6 +425,38 @@ async def get_smart_playlist_facets(
                     genre_group_counts[group] += 1
                     seen_groups.add(group)
                 genre_group_tags[group].add(genre_key)
+
+        for genre in body.genres:
+            if not genre:
+                continue
+            genre_key = genre.lower()
+            genre_counts.setdefault(genre_key, 0)
+            genre_labels.setdefault(genre_key, genre)
+            group = _genre_group(genre)
+            genre_group_counts.setdefault(group, 0)
+            genre_group_tags[group].add(genre_key)
+
+        for artist_id in body.artist_ids:
+            if not artist_id:
+                continue
+            artist_counts.setdefault(artist_id, 0)
+            artist_labels.setdefault(artist_id, artist_label_lookup.get(artist_id, artist_id))
+
+        for year in body.years:
+            if not year:
+                continue
+            year_value = int(year)
+            year_counts.setdefault(year_value, 0)
+            decade_value = (year_value // 10) * 10
+            decade_counts.setdefault(decade_value, 0)
+            decade_year_counts[decade_value].setdefault(year_value, 0)
+
+        for decade in body.decades:
+            if not decade:
+                continue
+            decade_value = int(decade)
+            decade_counts.setdefault(decade_value, 0)
+            decade_year_counts.setdefault(decade_value, {})
 
         genres = [
             {
