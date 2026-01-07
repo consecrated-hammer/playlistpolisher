@@ -168,6 +168,13 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
                     </button>
                     <button
                       className="w-full text-left px-4 py-3 text-sm text-white hover:bg-spotify-gray-mid transition-colors flex items-center gap-2"
+                      onClick={() => { navigate('/smart-playlists/new'); }}
+                    >
+                      <span className="icon text-base">auto_awesome</span>
+                      Smart playlists
+                    </button>
+                    <button
+                      className="w-full text-left px-4 py-3 text-sm text-white hover:bg-spotify-gray-mid transition-colors flex items-center gap-2"
                       onClick={() => { navigate('/backups'); }}
                     >
                       <span className="icon text-base">backup</span>

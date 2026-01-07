@@ -78,6 +78,14 @@ const SettingsPage = ({ user, onLogout }) => {
   const [cacheSaving, setCacheSaving] = useState(false);
   const [cacheMessage, setCacheMessage] = useState(null);
   const [cacheError, setCacheError] = useState(null);
+  const [cacheScope, setCacheScope] = useState('all');
+  const [cacheSelectedIds, setCacheSelectedIds] = useState([]);
+  const [cacheAutoIncludeNew, setCacheAutoIncludeNew] = useState(true);
+  const [playlistSearch, setPlaylistSearch] = useState('');
+  const [playlistOptions, setPlaylistOptions] = useState([]);
+  const [cachePlaylistSaving, setCachePlaylistSaving] = useState(false);
+  const [cachePlaylistMessage, setCachePlaylistMessage] = useState(null);
+  const [cachePlaylistError, setCachePlaylistError] = useState(null);
   const [cleanupSchedule, setCleanupSchedule] = useState(null);
 
   const [backupNameTemplate, setBackupNameTemplate] = useState('{playlist} backup {date}');
@@ -133,8 +141,52 @@ const SettingsPage = ({ user, onLogout }) => {
       .replace('{datetime}', datetime);
   }, [backupNameTemplate]);
 
+  const visiblePlaylists = useMemo(() => {
+    const query = playlistSearch.trim().toLowerCase();
+    if (!query) {
+      return playlistOptions;
+    }
+    return playlistOptions.filter((playlist) => {
+      const name = playlist.name?.toLowerCase() || '';
+      const owner = playlist.owner?.display_name?.toLowerCase() || playlist.owner?.id?.toLowerCase() || '';
+      return name.includes(query) || owner.includes(query);
+    });
+  }, [playlistOptions, playlistSearch]);
+
+  const allVisibleSelected = useMemo(() => {
+    if (!visiblePlaylists.length) {
+      return false;
+    }
+    const selected = new Set(cacheSelectedIds);
+    return visiblePlaylists.every((playlist) => selected.has(playlist.id));
+  }, [visiblePlaylists, cacheSelectedIds]);
+
   const toggleSection = (key) => {
     setSectionsOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const togglePlaylistSelection = (playlistId) => {
+    setCacheSelectedIds((prev) => {
+      if (prev.includes(playlistId)) {
+        return prev.filter((id) => id !== playlistId);
+      }
+      return [...prev, playlistId];
+    });
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visibleIds = visiblePlaylists.map((playlist) => playlist.id);
+    if (!visibleIds.length) {
+      return;
+    }
+    setCacheSelectedIds((prev) => {
+      const prevSet = new Set(prev);
+      if (allVisibleSelected) {
+        return prev.filter((id) => !visibleIds.includes(id));
+      }
+      visibleIds.forEach((id) => prevSet.add(id));
+      return Array.from(prevSet);
+    });
   };
 
   const computeFirstRunIso = (scheduleType, hourOfDay, dayOfWeek, dayOfMonth) => {
@@ -168,10 +220,11 @@ const SettingsPage = ({ user, onLogout }) => {
     setLoading(true);
     setError(null);
     try {
-      const [prefs, schedules, appSettings] = await Promise.all([
+      const [prefs, schedules, appSettings, playlists] = await Promise.all([
         preferencesAPI.getPreferences(),
         playlistAPI.listSchedules().catch(() => []),
         settingsAPI.getSettings().catch(() => null),
+        playlistAPI.getPlaylists().catch(() => []),
       ]);
       const cleanup = (schedules || []).find((sched) => sched.action_type === 'backup_cleanup');
       setCleanupSchedule(cleanup || null);
@@ -192,6 +245,10 @@ const SettingsPage = ({ user, onLogout }) => {
       setPlaylistAlbumOpen(prefs?.playlist_album_details_open ?? false);
       setPlaylistActionsOpen(prefs?.playlist_action_details_open ?? false);
       setNowPlayingOpen(prefs?.now_playing_details_open ?? false);
+      setCacheScope(prefs?.cache_playlist_scope || 'all');
+      setCacheSelectedIds(prefs?.cache_selected_playlist_ids || []);
+      setCacheAutoIncludeNew(prefs?.cache_auto_include_new ?? true);
+      setPlaylistOptions(playlists || []);
       setCacheTtlDays(appSettings?.track_cache_ttl_days ?? 30);
       setCacheTtlSource(appSettings?.track_cache_ttl_source || 'env');
     } catch (err) {
@@ -287,6 +344,27 @@ const SettingsPage = ({ user, onLogout }) => {
       setPlayerError(err.message || 'Failed to save player settings');
     } finally {
       setPlayerSaving(false);
+    }
+  };
+
+  const handleSavePlaylistCacheSettings = async () => {
+    setCachePlaylistSaving(true);
+    setCachePlaylistError(null);
+    setCachePlaylistMessage(null);
+
+    try {
+      const payload = {
+        cache_playlist_scope: cacheScope,
+        cache_selected_playlist_ids: cacheSelectedIds,
+        cache_auto_include_new: cacheAutoIncludeNew,
+      };
+      await preferencesAPI.updatePreferences(payload);
+
+      setCachePlaylistMessage('Playlist caching settings saved.');
+    } catch (err) {
+      setCachePlaylistError(err.message || 'Failed to save playlist caching settings');
+    } finally {
+      setCachePlaylistSaving(false);
     }
   };
 
@@ -576,49 +654,208 @@ const SettingsPage = ({ user, onLogout }) => {
 
               <SettingsSection
                 title="Cache"
-                description="Track cache configuration and retention."
+                description="Playlist caching preferences and retention."
                 open={sectionsOpen.cache}
                 onToggle={() => toggleSection('cache')}
               >
-                <p className="text-xs text-spotify-gray-light">
-                  Cached track metadata expires after the configured TTL.
-                </p>
-                {cacheTtlSource === 'env' && (
-                  <p className="text-xs text-spotify-gray-light">
-                    Inherited from `.env` on first load. Saving here overrides it.
-                  </p>
-                )}
-                <div className="md:max-w-md">
-                  <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
-                    TTL (days)
-                    <input
-                      type="number"
-                      min="1"
-                      max="3650"
-                      value={cacheTtlDays}
-                      onChange={(event) => setCacheTtlDays(event.target.value)}
-                      className="w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                    />
-                  </label>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-white">Playlist caching</p>
+                    <p className="text-sm text-spotify-gray-light">
+                      Playlist caching keeps a local copy of your chosen playlists so they open faster and stay ready
+                      when you return.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-white">Caching scope</p>
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-3 text-sm text-spotify-gray-light">
+                        <input
+                          type="radio"
+                          name="cache-scope"
+                          value="all"
+                          checked={cacheScope === 'all'}
+                          onChange={() => setCacheScope('all')}
+                          className="mt-1 accent-spotify-green"
+                        />
+                        <span>
+                          <span className="text-white font-medium">Cache all current playlists</span>
+                          <span className="block text-xs text-spotify-gray-light">
+                            Keep all playlists you see today ready for faster access.
+                          </span>
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-3 text-sm text-spotify-gray-light">
+                        <input
+                          type="radio"
+                          name="cache-scope"
+                          value="selected"
+                          checked={cacheScope === 'selected'}
+                          onChange={() => setCacheScope('selected')}
+                          className="mt-1 accent-spotify-green"
+                        />
+                        <span>
+                          <span className="text-white font-medium">Cache selected playlists</span>
+                          <span className="block text-xs text-spotify-gray-light">
+                            Choose only the playlists you want kept locally.
+                          </span>
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-3 text-sm text-spotify-gray-light">
+                        <input
+                          type="radio"
+                          name="cache-scope"
+                          value="manual"
+                          checked={cacheScope === 'manual'}
+                          onChange={() => setCacheScope('manual')}
+                          className="mt-1 accent-spotify-green"
+                        />
+                        <span>
+                          <span className="text-white font-medium">Manual caching only</span>
+                          <span className="block text-xs text-spotify-gray-light">
+                            Only cache playlists when you trigger it here.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {cacheScope === 'all' && (
+                    <label className="flex items-start gap-3 text-sm text-spotify-gray-light bg-spotify-gray-mid/40 p-3 rounded-lg border border-spotify-gray-mid/60">
+                      <input
+                        type="checkbox"
+                        checked={cacheAutoIncludeNew}
+                        onChange={(event) => setCacheAutoIncludeNew(event.target.checked)}
+                        className="mt-1 accent-spotify-green"
+                      />
+                      <span>
+                        <span className="text-white font-medium">
+                          Automatically cache playlists I create or follow in the future
+                        </span>
+                        <span className="block text-xs text-spotify-gray-light">
+                          New playlists will follow the same caching rules without extra setup.
+                        </span>
+                      </span>
+                    </label>
+                  )}
+
+                  {(cacheScope === 'selected' || cacheScope === 'manual') && (
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">Select playlists</p>
+                          <p className="text-xs text-spotify-gray-light">
+                            {cacheSelectedIds.length} selected
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={toggleSelectAllVisible}
+                            className="px-3 py-1.5 text-xs rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors"
+                          >
+                            {allVisibleSelected ? 'Clear visible' : 'Select visible'}
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={playlistSearch}
+                        onChange={(event) => setPlaylistSearch(event.target.value)}
+                        placeholder="Search playlists"
+                        className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                      />
+                      <div className="max-h-56 overflow-y-auto divide-y divide-spotify-gray-mid/60 border border-spotify-gray-mid/60 rounded-lg">
+                        {visiblePlaylists.length === 0 ? (
+                          <div className="p-4 text-sm text-spotify-gray-light">No playlists match your search.</div>
+                        ) : (
+                          visiblePlaylists.map((playlist) => {
+                            const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
+                            const trackTotal = playlist.tracks?.total || 0;
+                            const isSelected = cacheSelectedIds.includes(playlist.id);
+                            return (
+                              <label
+                                key={playlist.id}
+                                className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-spotify-gray-light hover:bg-spotify-gray-mid/40 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => togglePlaylistSelection(playlist.id)}
+                                    className="accent-spotify-green"
+                                  />
+                                  <div className="min-w-0">
+                                    <div className="text-white font-medium truncate">{playlist.name}</div>
+                                    <div className="text-xs text-spotify-gray-light truncate">
+                                      {ownerName} • {trackTotal} {trackTotal === 1 ? 'track' : 'tracks'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-spotify-gray-mid/40 rounded-lg p-4 text-xs text-spotify-gray-light leading-relaxed border border-spotify-gray-mid/60">
+                    <p className="text-white font-semibold mb-1">How playlist caching works</p>
+                    <p>
+                      Cached playlists load faster because we keep a local copy. Over time, the app refreshes cached
+                      playlists so they stay current without any extra steps from you.
+                    </p>
+                  </div>
+
+                  {cachePlaylistError && <p className="text-sm text-red-400">{cachePlaylistError}</p>}
+                  {cachePlaylistMessage && <p className="text-sm text-spotify-green">{cachePlaylistMessage}</p>}
+
+                  <button
+                    type="button"
+                    onClick={handleSavePlaylistCacheSettings}
+                    disabled={cachePlaylistSaving}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {cachePlaylistSaving ? 'Saving...' : 'Save playlist caching settings'}
+                  </button>
                 </div>
-                {cacheError && <p className="text-sm text-red-400">{cacheError}</p>}
-                {cacheMessage && <p className="text-sm text-spotify-green">{cacheMessage}</p>}
-                <div className="flex flex-col sm:flex-row gap-3">
+
+                <div className="border-t border-spotify-gray-mid/60 pt-4 space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-white">Cache retention</p>
+                    <p className="text-xs text-spotify-gray-light">
+                      Cached track metadata expires after the configured TTL.
+                    </p>
+                    {cacheTtlSource === 'env' && (
+                      <p className="text-xs text-spotify-gray-light">
+                        Inherited from `.env` on first load. Saving here overrides it.
+                      </p>
+                    )}
+                  </div>
+                  <div className="md:max-w-md">
+                    <label className="text-sm text-spotify-gray-light flex flex-col gap-2">
+                      TTL (days)
+                      <input
+                        type="number"
+                        min="1"
+                        max="3650"
+                        value={cacheTtlDays}
+                        onChange={(event) => setCacheTtlDays(event.target.value)}
+                        className="w-full bg-spotify-gray-mid text-white rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                      />
+                    </label>
+                  </div>
+                  {cacheError && <p className="text-sm text-red-400">{cacheError}</p>}
+                  {cacheMessage && <p className="text-sm text-spotify-green">{cacheMessage}</p>}
                   <button
                     type="button"
                     onClick={handleSaveCacheSettings}
                     disabled={cacheSaving}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {cacheSaving ? 'Saving...' : 'Save cache settings'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/cache')}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-spotify-gray-light bg-spotify-gray-dark/60 hover:bg-spotify-gray-mid/60 text-white transition-colors"
-                  >
-                    <span className="icon text-base">storage</span>
-                    Manage cache settings
+                    {cacheSaving ? 'Saving...' : 'Save cache retention'}
                   </button>
                 </div>
               </SettingsSection>

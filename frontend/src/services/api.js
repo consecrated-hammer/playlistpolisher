@@ -659,16 +659,6 @@ export const cacheAPI = {
   },
 
   /**
-   * Get playlist-specific cache statistics (legacy - requires track IDs)
-   * @param {string[]} trackIds - Array of track IDs from the playlist
-   * @returns {Promise<object>} Playlist cache stats
-   */
-  getPlaylistStats: async (trackIds) => {
-    const response = await api.post('/cache/stats/playlist', { track_ids: trackIds });
-    return response.data;
-  },
-
-  /**
    * Check playlist cache freshness without loading full tracks
    * @param {string} playlistId
    * @returns {Promise<object>} Cache status details
@@ -746,6 +736,61 @@ export const cacheAPI = {
    */
   getTrackPlaylists: async (trackId) => {
     const response = await api.get(`/cache/track/${trackId}/playlists`);
+    return response.data;
+  },
+
+  /**
+   * Get all artist and track IDs from cache for enrichment
+   * @returns {Promise<object>} Object with artist_ids and track_ids arrays
+   */
+  getEnrichmentIds: async () => {
+    const response = await api.get('/cache/enrichment-ids');
+    return response.data;
+  },
+
+  /**
+   * Enrich artist metadata (genres, popularity, followers)
+   * @param {string[]} artistIds - Array of Spotify artist IDs
+   * @returns {Promise<object>} Enrichment result with counts
+   */
+  enrichArtists: async (artistIds) => {
+    const response = await api.post('/cache/enrich/artists', { artist_ids: artistIds });
+    return response.data;
+  },
+
+  /**
+   * Enrich audio features (tempo, energy, danceability, etc.)
+   * @param {string[]} trackIds - Array of Spotify track IDs
+   * @returns {Promise<object>} Enrichment result with counts
+   */
+  enrichAudioFeatures: async (trackIds) => {
+    const response = await api.post('/cache/enrich/audio-features', { track_ids: trackIds });
+    return response.data;
+  },
+};
+
+/**
+ * Smart Playlist API - cached metadata driven builder
+ */
+export const smartPlaylistAPI = {
+  /**
+   * Get available tag facets for selected playlists
+   * @param {string[]|object} payload
+   * @returns {Promise<object>} Facets payload
+   */
+  getFacets: async (payload) => {
+    const body = Array.isArray(payload) ? { playlist_ids: payload } : payload;
+    const response = await api.post('/smart-playlists/facets', body);
+    return response.data;
+  },
+
+  /**
+   * Preview tracks matching the smart playlist criteria
+   * @param {object} payload
+   * @returns {Promise<object>} Preview payload
+   */
+  getPreview: async (payload) => {
+    const response = await api.post('/smart-playlists/preview', payload);
     return response.data;
   },
 };

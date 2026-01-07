@@ -12,6 +12,7 @@ from typing import Dict, Iterable, List, Optional
 from uuid import uuid4
 
 from app.services.spotify_service import SpotifyService
+from app.services.cache_service import CacheService
 from app.utils.session_manager import SessionManager
 from app.db import playlist_cache as playlist_cache_store
 from app.db import operations as op_store
@@ -142,5 +143,66 @@ def _run_cache_warm(
             with _jobs_lock:
                 current_completed = _jobs_by_user.get(user_id, {}).get("completed", 0)
             _update_job(user_id, completed=current_completed + 1)
+
+    # After caching all playlists, enrich metadata
+    try:
+        logger.info("Starting metadata enrichment for user %s", user_id)
+        _update_job(user_id, status="enriching_artists")
+        
+        # Get all cached track IDs to extract artist IDs
+        from app.db.database import get_db_connection
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT artists_json FROM track_cache")
+            rows = cursor.fetchall()
+            
+        # Extract unique artist IDs
+        artist_ids = set()
+        import json
+        for row in rows:
+            try:
+                artists = json.loads(row[0]) if row[0] else []
+                for artist in artists:
+                    if isinstance(artist, dict) and artist.get('id'):
+                        artist_ids.add(artist['id'])
+            except:
+                continue
+        
+        # Enrich artists in batches
+        if artist_ids:
+            artist_id_list = list(artist_ids)
+            batch_size = 50
+            enriched_artists = 0
+            for i in range(0, len(artist_id_list), batch_size):
+                batch = artist_id_list[i:i + batch_size]
+                cached_artists, missing_ids = CacheService.get_artists(batch, session_id)
+                if missing_ids:
+                    artists_data = spotify_service.get_artists(list(missing_ids))
+                    if artists_data:
+                        enriched_artists += CacheService.set_artists(artists_data, session_id)
+            
+            logger.info("Enriched %d artists for user %s", enriched_artists, user_id)
+        
+        # Enrich audio features
+        _update_job(user_id, status="enriching_audio_features")
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT track_id FROM track_cache")
+            track_ids = [row[0] for row in cursor.fetchall()]
+        
+        if track_ids:
+            batch_size = 100
+            enriched_features = 0
+            for i in range(0, len(track_ids), batch_size):
+                batch = track_ids[i:i + batch_size]
+                cached_features, missing_ids = CacheService.get_audio_features(batch)
+                if missing_ids:
+                    features_data = spotify_service.get_audio_features(list(missing_ids))
+                    if features_data:
+                        enriched_features += CacheService.set_audio_features(features_data)
+            
+            logger.info("Enriched audio features for %d tracks (user=%s)", enriched_features, user_id)
+    except Exception as exc:
+        logger.warning("Failed to enrich metadata for user %s: %s", user_id, exc)
 
     _update_job(user_id, status="completed")

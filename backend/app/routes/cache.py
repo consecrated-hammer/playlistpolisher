@@ -130,11 +130,6 @@ async def get_cache_stats(
         raise HTTPException(status_code=500, detail="Failed to retrieve cache statistics")
 
 
-class PlaylistCacheStatsRequest(BaseModel):
-    """Request model for playlist cache statistics."""
-    track_ids: List[str]
-
-
 class PlaylistCacheStatsResponse(BaseModel):
     """Response model for playlist-specific cache statistics."""
     user_cached_tracks: int
@@ -151,7 +146,6 @@ async def get_playlist_cache_stats_by_id(
     Get Playlist-Specific Cache Statistics (Efficient)
     
     Returns cache statistics for a specific playlist using the playlist_cache_facts table.
-    Much more efficient than the POST endpoint that requires all track IDs.
     
     Args:
         playlist_id: Spotify playlist ID
@@ -174,53 +168,6 @@ async def get_playlist_cache_stats_by_id(
         stats = CacheService.get_playlist_cache_stats_by_id(playlist_id, session_id)
         logger.info(f"Retrieved playlist cache stats for {playlist_id}: {stats}")
         return stats
-    except Exception as e:
-        logger.error(f"Failed to get playlist cache stats: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve playlist cache statistics")
-
-
-@router.post("/stats/playlist", response_model=PlaylistCacheStatsResponse)
-async def get_playlist_cache_stats(
-    body: PlaylistCacheStatsRequest,
-    session_mgr: SessionManager = Depends(require_auth)
-):
-    """
-    Get Playlist-Specific Cache Statistics (Legacy - requires track IDs)
-    
-    Returns cache statistics for a specific playlist's tracks, including:
-    - Number of tracks from this playlist cached for the current user
-    - Number of expired tracks from this playlist for the current user
-    - Total number of tracks from this playlist cached (all users)
-    
-    Note: This endpoint is less efficient than GET /stats/playlist/{playlist_id}
-    as it requires sending all track IDs. Use the GET endpoint when possible.
-    
-    Args:
-        body: Request with track_ids from the playlist
-    
-    Returns:
-        PlaylistCacheStatsResponse: Playlist-specific cache statistics
-        
-    Raises:
-        HTTPException: 401 if not authenticated
-        
-    Example Response:
-        {
-            "user_cached_tracks": 89,
-            "user_expired_tracks": 5,
-            "total_cached_tracks": 234
-        }
-    """
-    try:
-        session_id = session_mgr.session_id
-        stats = CacheService.get_playlist_cache_stats(body.track_ids, session_id)
-        logger.info(f"Retrieved playlist cache stats: {stats}")
-        # Map old field names to new for backward compatibility
-        return {
-            'user_cached_tracks': stats.get('user_tracks', 0),
-            'user_expired_tracks': stats.get('user_expired', 0),
-            'total_cached_tracks': stats.get('total_tracks', 0)
-        }
     except Exception as e:
         logger.error(f"Failed to get playlist cache stats: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve playlist cache statistics")
@@ -488,3 +435,200 @@ async def clear_all_cache(
     except Exception as e:
         logger.error(f"Failed to clear all cache: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear cache")
+
+
+@router.get("/enrichment-ids")
+async def get_enrichment_ids(
+    session_mgr: SessionManager = Depends(require_auth),
+):
+    """
+    Get all artist and track IDs from cache for enrichment.
+    
+    Returns:
+        dict: Lists of unique artist IDs and track IDs
+        
+    Example Response:
+        {
+            "artist_ids": ["3TVXtAsR1Inumwj472S9r4", ...],
+            "track_ids": ["11dFghVXANMlKmJXsNCbNl", ...],
+            "artist_count": 1234,
+            "track_count": 5678
+        }
+    """
+    try:
+        import json
+        from app.db.database import get_db_connection
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get all track IDs
+            cursor.execute("SELECT track_id FROM track_cache")
+            track_ids = [row[0] for row in cursor.fetchall()]
+            
+            # Get all unique artist IDs from artists_json
+            cursor.execute("SELECT DISTINCT artists_json FROM track_cache WHERE artists_json IS NOT NULL")
+            artist_ids = set()
+            for row in cursor.fetchall():
+                try:
+                    artists = json.loads(row[0])
+                    for artist in artists:
+                        if isinstance(artist, dict) and artist.get('id'):
+                            artist_ids.add(artist['id'])
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            
+            artist_ids = list(artist_ids)
+            
+        return {
+            "artist_ids": artist_ids,
+            "track_ids": track_ids,
+            "artist_count": len(artist_ids),
+            "track_count": len(track_ids)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get enrichment IDs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get enrichment IDs")
+
+
+class EnrichArtistsRequest(BaseModel):
+    """Request model for enriching artist metadata."""
+    artist_ids: List[str]
+
+
+class EnrichArtistsResponse(BaseModel):
+    """Response model for artist enrichment."""
+    requested: int
+    cached: int
+    fetched: int
+    message: str
+
+
+@router.post("/enrich/artists", response_model=EnrichArtistsResponse)
+async def enrich_artists(
+    body: EnrichArtistsRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service),
+):
+    """
+    Enrich artist metadata (genres, popularity, followers).
+    
+    Checks cache first, fetches missing artists from Spotify API,
+    and stores them in artist_cache.
+    
+    Args:
+        body: Request with artist IDs to enrich
+        session_mgr: Session manager from auth dependency
+        spotify: Spotify service instance
+    
+    Returns:
+        dict: Enrichment statistics
+        
+    Example Response:
+        {
+            "requested": 50,
+            "cached": 30,
+            "fetched": 20,
+            "message": "Enriched 20 artists (30 from cache)"
+        }
+    """
+    try:
+        if not body.artist_ids:
+            raise HTTPException(status_code=400, detail="No artist IDs provided")
+        
+        session_id = session_mgr.session_id
+        
+        # Check cache first
+        cached_artists, missing_ids = CacheService.get_artists(
+            body.artist_ids,
+            session_id=session_id
+        )
+        
+        # Fetch missing artists from Spotify
+        fetched_count = 0
+        if missing_ids:
+            artists_data = spotify.get_artists(list(missing_ids))
+            if artists_data:
+                fetched_count = CacheService.set_artists(artists_data, session_id)
+        
+        return {
+            "requested": len(body.artist_ids),
+            "cached": len(cached_artists),
+            "fetched": fetched_count,
+            "message": f"Enriched {fetched_count} artists ({len(cached_artists)} from cache)"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to enrich artists: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enrich artist metadata")
+
+
+class EnrichAudioFeaturesRequest(BaseModel):
+    """Request model for enriching audio features."""
+    track_ids: List[str]
+
+
+class EnrichAudioFeaturesResponse(BaseModel):
+    """Response model for audio features enrichment."""
+    requested: int
+    cached: int
+    fetched: int
+    message: str
+
+
+@router.post("/enrich/audio-features", response_model=EnrichAudioFeaturesResponse)
+async def enrich_audio_features(
+    body: EnrichAudioFeaturesRequest,
+    session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service),
+):
+    """
+    Enrich audio features (tempo, energy, danceability, etc.).
+    
+    Checks cache first, fetches missing features from Spotify API,
+    and stores them in audio_features_cache.
+    
+    Args:
+        body: Request with track IDs to enrich
+        session_mgr: Session manager from auth dependency
+        spotify: Spotify service instance
+    
+    Returns:
+        dict: Enrichment statistics
+        
+    Example Response:
+        {
+            "requested": 100,
+            "cached": 60,
+            "fetched": 40,
+            "message": "Enriched 40 tracks (60 from cache)"
+        }
+    """
+    try:
+        if not body.track_ids:
+            raise HTTPException(status_code=400, detail="No track IDs provided")
+        
+        # Check cache first
+        cached_features, missing_ids = CacheService.get_audio_features(
+            body.track_ids
+        )
+        
+        # Fetch missing features from Spotify
+        fetched_count = 0
+        if missing_ids:
+            features_data = spotify.get_audio_features(list(missing_ids))
+            if features_data:
+                fetched_count = CacheService.set_audio_features(features_data)
+        
+        return {
+            "requested": len(body.track_ids),
+            "cached": len(cached_features),
+            "fetched": fetched_count,
+            "message": f"Enriched {fetched_count} tracks ({len(cached_features)} from cache)"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to enrich audio features: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enrich audio features")

@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from typing import List, Optional, Dict, Any, Literal
 import logging
 from spotipy.exceptions import SpotifyException
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -47,6 +48,10 @@ from app.services.cache_service import CacheService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/playlists", tags=["playlists"])
+
+CACHE_REFRESH_COOLDOWN_SECONDS = 30
+_cache_refresh_lock = threading.Lock()
+_cache_refresh_last_request: Dict[str, float] = {}
 
 
 class PlaylistArtistEntry(BaseModel):
@@ -101,8 +106,16 @@ def _queue_cache_refresh(session_mgr: SessionManager, playlist_id: str, source: 
     user_id = session_mgr.get_user_id()
     if not session_id or not user_id:
         return
+    now = time.monotonic()
+    with _cache_refresh_lock:
+        last_request = _cache_refresh_last_request.get(playlist_id)
+        if last_request is not None and (now - last_request) < CACHE_REFRESH_COOLDOWN_SECONDS:
+            logger.info("Skipping cache refresh for playlist %s (cooldown)", playlist_id)
+            return
     try:
         start_cache_warm_job(user_id, session_id, [playlist_id], meta={"source": source})
+        with _cache_refresh_lock:
+            _cache_refresh_last_request[playlist_id] = now
     except Exception as exc:
         logger.warning("Failed to queue cache refresh for playlist %s: %s", playlist_id, exc)
 
@@ -312,6 +325,7 @@ async def get_playlist_tracks_paginated(
         if user_id:
             should_warm_cache = preference_store.should_warm_playlist_cache(user_id, playlist_id)
 
+        facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
         cached = _get_cached_playlist_tracks_page(
             spotify=spotify,
             playlist_id=playlist_id,
@@ -319,21 +333,15 @@ async def get_playlist_tracks_paginated(
             limit=limit,
             session_id=session_mgr.get_session_id(),
             should_warm_cache=should_warm_cache,
+            allow_dirty=True,
+            facts=facts,
         )
         if cached:
+            if facts and facts.get("is_dirty") == 1:
+                _queue_cache_refresh(session_mgr, playlist_id, "tracks_paginated_dirty")
             return cached
-
-        _ensure_playlist_cache(spotify, session_mgr, playlist_id)
-        cached = _get_cached_playlist_tracks_page(
-            spotify=spotify,
-            playlist_id=playlist_id,
-            offset=offset,
-            limit=limit,
-            session_id=session_mgr.get_session_id(),
-            should_warm_cache=should_warm_cache,
-        )
-        if cached:
-            return cached
+        if should_warm_cache:
+            _queue_cache_refresh(session_mgr, playlist_id, "tracks_paginated_miss")
 
         tracks, total, cache_hits, cache_misses, cache_warmed = spotify.get_playlist_tracks_paginated(
             playlist_id,
@@ -1143,9 +1151,13 @@ def _get_cached_playlist_tracks_page(
     limit: int,
     session_id: Optional[str],
     should_warm_cache: bool,
+    allow_dirty: bool = False,
+    facts: Optional[Dict[str, Any]] = None,
 ) -> Optional[PaginatedTracks]:
-    facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
-    if not facts or facts.get("is_dirty") == 1:
+    facts = facts or playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
+    if not facts:
+        return None
+    if facts.get("is_dirty") == 1 and not allow_dirty:
         return None
 
     total = int(facts.get("track_count_cached") or 0)

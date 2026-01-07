@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { cacheAPI, preferencesAPI, playlistAPI } from '../services/api';
+import { cacheAPI, playlistAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
+
+const REFRESH_STATUSES = new Set(['running', 'enriching_artists', 'enriching_audio_features']);
 
 const CachePage = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -14,15 +16,17 @@ const CachePage = ({ user, onLogout }) => {
   const [actionMessage, setActionMessage] = useState(null);
   const [cacheSchedule, setCacheSchedule] = useState(null);
   const [refreshAllStatus, setRefreshAllStatus] = useState(null);
-  const [showCacheModal, setShowCacheModal] = useState(false);
-  const [cacheModalLoading, setCacheModalLoading] = useState(false);
-  const [cacheModalError, setCacheModalError] = useState(null);
-  const [cacheScope, setCacheScope] = useState('all');
-  const [cacheSelectedIds, setCacheSelectedIds] = useState([]);
-  const [cacheAutoIncludeNew, setCacheAutoIncludeNew] = useState(true);
-  const [cacheRunInitial, setCacheRunInitial] = useState(true);
-  const [playlistSearch, setPlaylistSearch] = useState('');
-  const [playlistOptions, setPlaylistOptions] = useState([]);
+  const isRefreshInProgress = REFRESH_STATUSES.has(refreshAllStatus?.status);
+
+  const getRefreshStatusLabel = (status) => {
+    if (status === 'enriching_artists') {
+      return 'Enriching artist metadata...';
+    }
+    if (status === 'enriching_audio_features') {
+      return 'Enriching audio features...';
+    }
+    return 'Refreshing playlists...';
+  };
 
   // Load cache stats
   const loadStats = async () => {
@@ -54,114 +58,6 @@ const CachePage = ({ user, onLogout }) => {
     loadCacheSchedule();
   }, []);
 
-  const visiblePlaylists = useMemo(() => {
-    const query = playlistSearch.trim().toLowerCase();
-    if (!query) {
-      return playlistOptions;
-    }
-    return playlistOptions.filter((playlist) => {
-      const name = playlist.name?.toLowerCase() || '';
-      const owner = playlist.owner?.display_name?.toLowerCase() || playlist.owner?.id?.toLowerCase() || '';
-      return name.includes(query) || owner.includes(query);
-    });
-  }, [playlistOptions, playlistSearch]);
-
-  const allVisibleSelected = useMemo(() => {
-    if (!visiblePlaylists.length) {
-      return false;
-    }
-    const selected = new Set(cacheSelectedIds);
-    return visiblePlaylists.every((playlist) => selected.has(playlist.id));
-  }, [visiblePlaylists, cacheSelectedIds]);
-
-  const openCacheModal = async () => {
-    setShowCacheModal(true);
-    setCacheModalLoading(true);
-    setCacheModalError(null);
-    setPlaylistSearch('');
-
-    try {
-      const [prefs, playlists] = await Promise.all([
-        preferencesAPI.getPreferences(),
-        playlistAPI.getPlaylists(),
-      ]);
-      setPlaylistOptions(playlists || []);
-      setCacheScope(prefs?.cache_playlist_scope || 'all');
-      setCacheSelectedIds(prefs?.cache_selected_playlist_ids || []);
-      setCacheAutoIncludeNew(prefs?.cache_auto_include_new ?? true);
-      setCacheRunInitial(true);
-    } catch (err) {
-      console.error('Failed to load cache preferences:', err);
-      setCacheModalError(err.message || 'Failed to load caching preferences');
-    } finally {
-      setCacheModalLoading(false);
-    }
-  };
-
-  const closeCacheModal = () => {
-    if (cacheModalLoading) {
-      return;
-    }
-    setShowCacheModal(false);
-    setCacheModalError(null);
-  };
-
-  const togglePlaylistSelection = (playlistId) => {
-    setCacheSelectedIds((prev) => {
-      if (prev.includes(playlistId)) {
-        return prev.filter((id) => id !== playlistId);
-      }
-      return [...prev, playlistId];
-    });
-  };
-
-  const toggleSelectAllVisible = () => {
-    const visibleIds = visiblePlaylists.map((playlist) => playlist.id);
-    if (!visibleIds.length) {
-      return;
-    }
-    setCacheSelectedIds((prev) => {
-      const prevSet = new Set(prev);
-      if (allVisibleSelected) {
-        return prev.filter((id) => !visibleIds.includes(id));
-      }
-      visibleIds.forEach((id) => prevSet.add(id));
-      return Array.from(prevSet);
-    });
-  };
-
-  const handleSaveCacheSettings = async () => {
-    setCacheModalLoading(true);
-    setCacheModalError(null);
-
-    try {
-      const payload = {
-        cache_playlist_scope: cacheScope,
-        cache_selected_playlist_ids: cacheSelectedIds,
-        cache_auto_include_new: cacheAutoIncludeNew,
-      };
-      await preferencesAPI.updatePreferences(payload);
-
-      if (cacheRunInitial) {
-        let playlistIds = [];
-        if (cacheScope === 'all') {
-          playlistIds = playlistOptions.map((playlist) => playlist.id);
-        } else if (cacheScope === 'selected' || cacheScope === 'manual') {
-          playlistIds = cacheSelectedIds;
-        }
-        if (playlistIds.length > 0) {
-          await cacheAPI.warmPlaylists(playlistIds, { source: 'manual', mode: 'initial' });
-        }
-      }
-
-      setShowCacheModal(false);
-    } catch (err) {
-      console.error('Failed to save caching preferences:', err);
-      setCacheModalError(err.message || 'Failed to save caching preferences');
-    } finally {
-      setCacheModalLoading(false);
-    }
-  };
 
   // Refresh user cache
   const handleClearUserCache = async () => {
@@ -229,7 +125,7 @@ const CachePage = ({ user, onLogout }) => {
       status = { ...status, total: expectedTotal };
     }
     setRefreshAllStatus(status);
-    while (status?.status === 'running') {
+    while (REFRESH_STATUSES.has(status?.status)) {
       if (Date.now() - startedAtMs > 30 * 60 * 1000) {
         throw new Error('Playlist cache refresh timed out.');
       }
@@ -435,36 +331,20 @@ const CachePage = ({ user, onLogout }) => {
             <div className="bg-spotify-gray-dark/40 rounded-lg p-6 border border-spotify-gray-mid/60 space-y-4">
         <h2 className="text-xl font-semibold text-white mb-4">Cache Management</h2>
 
-        {/* Playlist Cache Settings */}
+        {/* Refresh Changed Playlists */}
         <div className="flex items-center justify-between p-4 bg-spotify-gray-mid/40 rounded-lg">
           <div>
-            <div className="text-white font-medium">Manage playlist caching</div>
+            <div className="text-white font-medium">Refresh changed playlists</div>
             <div className="text-sm text-spotify-gray-light">
-              Choose which playlists are cached locally for faster browsing
-            </div>
-          </div>
-          <button
-            onClick={openCacheModal}
-            className="px-4 py-2 bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold rounded-lg transition-colors"
-          >
-            Manage
-          </button>
-        </div>
-
-        {/* Refresh All Playlists */}
-        <div className="flex items-center justify-between p-4 bg-spotify-gray-mid/40 rounded-lg">
-          <div>
-            <div className="text-white font-medium">Refresh All Playlists</div>
-            <div className="text-sm text-spotify-gray-light">
-              Warm the cache only for playlists that have changed
+              Warm the cache for changed playlists and enrich metadata (artists, audio features)
             </div>
             <div className="text-xs text-spotify-gray-light mt-1">
               This may take several minutes for large libraries.
             </div>
-            {refreshAllStatus?.status === 'running' && (
+            {isRefreshInProgress && (
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between text-xs text-spotify-gray-light">
-                  <span>Refreshing playlists...</span>
+                  <span>{getRefreshStatusLabel(refreshAllStatus?.status)}</span>
                   <span>
                     {refreshAllStatus.total
                       ? `${refreshAllStatus.completed || 0}/${refreshAllStatus.total}`
@@ -489,7 +369,7 @@ const CachePage = ({ user, onLogout }) => {
             disabled={actionLoading}
             className="px-4 py-2 bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {refreshAllStatus?.status === 'running' ? 'Refreshing...' : 'Refresh all'}
+            {isRefreshInProgress ? 'Refreshing...' : 'Refresh changed'}
           </button>
         </div>
 
@@ -498,7 +378,7 @@ const CachePage = ({ user, onLogout }) => {
           <div>
             <div className="text-white font-medium">Refresh Your Cache</div>
             <div className="text-sm text-spotify-gray-light">
-              Clear and rebuild your cache for every playlist
+              Clear and rebuild your cache for every playlist, including metadata enrichment
             </div>
           </div>
           <button
@@ -506,7 +386,7 @@ const CachePage = ({ user, onLogout }) => {
             disabled={actionLoading}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Refresh
+            Rebuild cache
           </button>
         </div>
 
@@ -527,207 +407,23 @@ const CachePage = ({ user, onLogout }) => {
             </div>
           )}
 
-          {showCacheModal && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-              <div className="bg-spotify-gray-dark rounded-2xl border border-spotify-gray-mid/60 shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden">
-                <div className="flex items-start justify-between p-6 border-b border-spotify-gray-mid/60">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Cache Management</p>
-                    <h3 className="text-2xl font-bold text-white">Playlist caching</h3>
-                  </div>
-                  <button
-                    onClick={closeCacheModal}
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-spotify-gray-light hover:bg-spotify-gray-mid/60 transition-colors"
-                    aria-label="Close playlist caching"
-                  >
-                    <span className="icon text-lg">close</span>
-                  </button>
-                </div>
-
-                <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-140px)]">
-                  <p className="text-sm text-spotify-gray-light">
-                    Playlist caching keeps a local copy of your chosen playlists so they open faster and stay ready
-                    when you return.
-                  </p>
-
-                  {cacheModalError && (
-                    <div className="rounded-lg p-3 border border-red-700/40 bg-red-900/30 text-red-300 text-sm">
-                      {cacheModalError}
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
-                    <p className="text-sm font-semibold text-white">Caching scope</p>
-                    <div className="space-y-2">
-                      <label className="flex items-start gap-3 text-sm text-spotify-gray-light">
-                        <input
-                          type="radio"
-                          name="cache-scope"
-                          value="all"
-                          checked={cacheScope === 'all'}
-                          onChange={() => setCacheScope('all')}
-                          className="mt-1 accent-spotify-green"
-                        />
-                        <span>
-                          <span className="text-white font-medium">Cache all current playlists</span>
-                          <span className="block text-xs text-spotify-gray-light">
-                            Keep all playlists you see today ready for faster access.
-                          </span>
-                        </span>
-                      </label>
-                      <label className="flex items-start gap-3 text-sm text-spotify-gray-light">
-                        <input
-                          type="radio"
-                          name="cache-scope"
-                          value="selected"
-                          checked={cacheScope === 'selected'}
-                          onChange={() => setCacheScope('selected')}
-                          className="mt-1 accent-spotify-green"
-                        />
-                        <span>
-                          <span className="text-white font-medium">Cache selected playlists</span>
-                          <span className="block text-xs text-spotify-gray-light">
-                            Choose only the playlists you want kept locally.
-                          </span>
-                        </span>
-                      </label>
-                      <label className="flex items-start gap-3 text-sm text-spotify-gray-light">
-                        <input
-                          type="radio"
-                          name="cache-scope"
-                          value="manual"
-                          checked={cacheScope === 'manual'}
-                          onChange={() => setCacheScope('manual')}
-                          className="mt-1 accent-spotify-green"
-                        />
-                        <span>
-                          <span className="text-white font-medium">Manual caching only</span>
-                          <span className="block text-xs text-spotify-gray-light">
-                            Only cache playlists when you trigger it here.
-                          </span>
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {cacheScope === 'all' && (
-                    <label className="flex items-start gap-3 text-sm text-spotify-gray-light bg-spotify-gray-mid/40 p-3 rounded-lg border border-spotify-gray-mid/60">
-                      <input
-                        type="checkbox"
-                        checked={cacheAutoIncludeNew}
-                        onChange={(event) => setCacheAutoIncludeNew(event.target.checked)}
-                        className="mt-1 accent-spotify-green"
-                      />
-                      <span>
-                        <span className="text-white font-medium">
-                          Automatically cache playlists I create or follow in the future
-                        </span>
-                        <span className="block text-xs text-spotify-gray-light">
-                          New playlists will follow the same caching rules without extra setup.
-                        </span>
-                      </span>
-                    </label>
-                  )}
-
-                  {(cacheScope === 'selected' || cacheScope === 'manual') && (
-                    <div className="space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white">Select playlists</p>
-                          <p className="text-xs text-spotify-gray-light">
-                            {cacheSelectedIds.length} selected
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={toggleSelectAllVisible}
-                            className="px-3 py-1.5 text-xs rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors"
-                          >
-                            {allVisibleSelected ? 'Clear visible' : 'Select visible'}
-                          </button>
-                        </div>
-                      </div>
-                      <input
-                        type="text"
-                        value={playlistSearch}
-                        onChange={(event) => setPlaylistSearch(event.target.value)}
-                        placeholder="Search playlists"
-                        className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-                      />
-                      <div className="max-h-56 overflow-y-auto divide-y divide-spotify-gray-mid/60 border border-spotify-gray-mid/60 rounded-lg">
-                        {cacheModalLoading ? (
-                          <div className="p-4 text-sm text-spotify-gray-light">Loading playlists...</div>
-                        ) : visiblePlaylists.length === 0 ? (
-                          <div className="p-4 text-sm text-spotify-gray-light">No playlists match your search.</div>
-                        ) : (
-                          visiblePlaylists.map((playlist) => {
-                            const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
-                            const trackTotal = playlist.tracks?.total || 0;
-                            const isSelected = cacheSelectedIds.includes(playlist.id);
-                            return (
-                              <label
-                                key={playlist.id}
-                                className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-spotify-gray-light hover:bg-spotify-gray-mid/40 cursor-pointer"
-                              >
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => togglePlaylistSelection(playlist.id)}
-                                    className="accent-spotify-green"
-                                  />
-                                  <div className="min-w-0">
-                                    <div className="text-white font-medium truncate">{playlist.name}</div>
-                                    <div className="text-xs text-spotify-gray-light truncate">
-                                      {ownerName} • {trackTotal} {trackTotal === 1 ? 'track' : 'tracks'}
-                                    </div>
-                                  </div>
-                                </div>
-                              </label>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="bg-spotify-gray-mid/40 rounded-lg p-4 text-xs text-spotify-gray-light leading-relaxed border border-spotify-gray-mid/60">
-                    <p className="text-white font-semibold mb-1">How playlist caching works</p>
-                    <p>
-                      Cached playlists load faster because we keep a local copy. Over time, the app refreshes cached
-                      playlists so they stay current without any extra steps from you.
-                    </p>
-                  </div>
-
-                  <label className="flex items-center gap-3 text-sm text-spotify-gray-light">
-                    <input
-                      type="checkbox"
-                      checked={cacheRunInitial}
-                      onChange={(event) => setCacheRunInitial(event.target.checked)}
-                      className="accent-spotify-green"
-                    />
-                    <span>Warm selected playlists now</span>
-                  </label>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 p-6 border-t border-spotify-gray-mid/60">
-                  <button
-                    type="button"
-                    onClick={closeCacheModal}
-                    className="px-4 py-2 rounded-lg border border-spotify-gray-light bg-spotify-gray-dark/60 text-white hover:bg-spotify-gray-mid/60 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveCacheSettings}
-                    disabled={cacheModalLoading}
-                    className="px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Save caching settings
-                  </button>
-                </div>
+          {/* Metadata Info */}
+          {!loading && !error && stats && stats.total_cached > 0 && (
+            <div className="bg-spotify-gray-dark/40 rounded-lg p-6 border border-spotify-gray-mid/60">
+              <h2 className="text-xl font-semibold text-white mb-4">Metadata Enrichment</h2>
+              <div className="p-4 bg-blue-900/20 border border-blue-700/40 rounded-lg">
+                <p className="text-sm text-blue-300 leading-relaxed">
+                  <strong className="text-white">ℹ️ Automatic enrichment enabled</strong><br/>
+                  When you refresh your cache, the system automatically enriches tracks with:
+                </p>
+                <ul className="mt-3 space-y-2 text-sm text-blue-300">
+                  <li>• <strong>Artist metadata:</strong> Genres, popularity, followers</li>
+                  <li>• <strong>Audio features:</strong> Tempo, energy, danceability, valence</li>
+                </ul>
+                <p className="mt-3 text-xs text-spotify-gray-light">
+                  This enables advanced features like smart playlists (90s rock, workout mixes), 
+                  genre filtering, mood-based sorting, and enhanced duplicate detection.
+                </p>
               </div>
             </div>
           )}
@@ -738,13 +434,13 @@ const CachePage = ({ user, onLogout }) => {
               <div className="bg-spotify-gray-dark/95 rounded-2xl p-8 border border-spotify-gray-mid/60 shadow-2xl">
                 <LoadingSpinner />
                 <p className="text-white text-center mt-4">Processing...</p>
-                {refreshAllStatus?.status === 'running' && (
+                {isRefreshInProgress && (
                   <div className="mt-4 w-64 space-y-2">
                     <p className="text-xs text-spotify-gray-light text-center">
                       This may take several minutes for large libraries.
                     </p>
                     <div className="flex items-center justify-between text-xs text-spotify-gray-light">
-                      <span>Refreshing playlists...</span>
+                      <span>{getRefreshStatusLabel(refreshAllStatus?.status)}</span>
                       <span>
                         {refreshAllStatus.total
                           ? `${refreshAllStatus.completed || 0}/${refreshAllStatus.total}`

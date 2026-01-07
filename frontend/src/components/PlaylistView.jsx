@@ -602,32 +602,33 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   };
 
+  const applyPlaylistState = useCallback((nextPlaylist) => {
+    setCurrentPlaylist(nextPlaylist);
+    if (nextPlaylist?.tracks) {
+      console.log('[Infinite Scroll] Playlist load:', {
+        tracksReceived: nextPlaylist.tracks.length,
+        totalTracks: nextPlaylist.total_tracks,
+        willLoadMore: nextPlaylist.tracks.length >= PLAYLIST_PAGE_SIZE
+      });
+      setAllTracks(nextPlaylist.tracks);
+      setTotalTrackCount(nextPlaylist.total_tracks || nextPlaylist.tracks.length);
+      const shouldLoadMore = nextPlaylist.total_tracks
+        ? nextPlaylist.tracks.length < nextPlaylist.total_tracks
+        : nextPlaylist.tracks.length >= PLAYLIST_PAGE_SIZE;
+      setHasMoreTracks(shouldLoadMore);
+    }
+  }, []);
+
   useEffect(() => {
-    setCurrentPlaylist(playlist);
+    applyPlaylistState(playlist);
     setEditForm({
       name: playlist?.name || '',
       description: playlist?.description || ''
     });
-    // Initialize tracks from the initial playlist load
-    if (playlist?.tracks) {
-      console.log('[Infinite Scroll] Initial playlist load:', {
-        tracksReceived: playlist.tracks.length,
-        totalTracks: playlist.total_tracks,
-        willLoadMore: playlist.tracks.length >= PLAYLIST_PAGE_SIZE
-      });
-      
-      setAllTracks(playlist.tracks);
-      setTotalTrackCount(playlist.total_tracks || playlist.tracks.length);
-      // Check if we need to load more (if initial load has exactly the page size, there might be more)
-      const shouldLoadMore = playlist.total_tracks 
-        ? playlist.tracks.length < playlist.total_tracks
-        : playlist.tracks.length >= PLAYLIST_PAGE_SIZE;
-      setHasMoreTracks(shouldLoadMore);
-    }
     // fetch history for this playlist
     fetchHistory(playlist?.id);
     fetchSchedules(playlist?.id);
-  }, [playlist]);
+  }, [applyPlaylistState, playlist]);
 
   useEffect(() => {
     let active = true;
@@ -1060,6 +1061,40 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       || (trackLinkedId && currentLinkedId && trackLinkedId === currentLinkedId);
   }, [player?.currentTrack]);
 
+  const applyLocalTrackRemoval = useCallback((positions) => {
+    if (!positions.length) return;
+    const positionsSet = new Set(positions);
+    setAllTracks((prev) => prev.filter((_, idx) => !positionsSet.has(idx)));
+    setTotalTrackCount((prev) => Math.max(prev - positionsSet.size, 0));
+    setCurrentPlaylist((prev) => {
+      if (!prev) return prev;
+      const nextTracks = (prev.tracks || []).filter((_, idx) => !positionsSet.has(idx));
+      const nextTotal = prev.total_tracks != null
+        ? Math.max(prev.total_tracks - positionsSet.size, 0)
+        : prev.total_tracks;
+      return {
+        ...prev,
+        tracks: nextTracks,
+        total_tracks: nextTotal,
+      };
+    });
+  }, []);
+
+  const snapshotPlaylistState = useCallback(() => ({
+    allTracks,
+    totalTrackCount,
+    currentPlaylist,
+    selectedTrackKeys,
+  }), [allTracks, currentPlaylist, selectedTrackKeys, totalTrackCount]);
+
+  const restorePlaylistState = useCallback((snapshot) => {
+    if (!snapshot) return;
+    setAllTracks(snapshot.allTracks || []);
+    setTotalTrackCount(snapshot.totalTrackCount || 0);
+    setCurrentPlaylist(snapshot.currentPlaylist || null);
+    setSelectedTrackKeys(snapshot.selectedTrackKeys || []);
+  }, []);
+
   // Sort indicator component
   const SortIndicator = ({ column }) => {
     if (sortBy !== column) {
@@ -1455,7 +1490,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     setRefreshing(true);
     try {
       const updated = await playlistAPI.getPlaylistDetails(playlist.id);
-      setCurrentPlaylist(updated);
+      applyPlaylistState(updated);
     } catch (err) {
       // non-blocking; leave UI state unchanged
     } finally {
@@ -1569,6 +1604,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       },
     ];
 
+    const smartPlaylistSource = currentPlaylist?.id || playlist?.id;
     const automationItems = [
       {
         key: 'schedules',
@@ -1599,6 +1635,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         disabled: cacheRefreshLoading,
         groupKey: 'automation',
       },
+      ...(smartPlaylistSource ? [{
+        key: 'smart-playlist',
+        label: 'Create smart playlist',
+        icon: 'auto_awesome',
+        onClick: () => navigate(`/smart-playlists/new?source_playlist_id=${encodeURIComponent(smartPlaylistSource)}`),
+        groupKey: 'automation',
+      }] : []),
     ];
 
     return [
@@ -2426,11 +2469,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           .filter((track) => Number.isFinite(track.playlistIndex))
           .map((track) => ({ uri: track.uri, position: track.playlistIndex }));
         if (items.length > 0) {
-          await playlistAPI.removeTracks(currentPlaylist.id, { 
-            items,
-            snapshot_id: currentPlaylist.snapshot_id 
-          });
-          await refreshPlaylistDetails();
+          const snapshot = snapshotPlaylistState();
+          applyLocalTrackRemoval(items.map((item) => item.position));
+          setSelectedTrackKeys([]);
+          try {
+            await playlistAPI.removeTracks(currentPlaylist.id, { 
+              items,
+              snapshot_id: currentPlaylist.snapshot_id 
+            });
+          } catch (err) {
+            restorePlaylistState(snapshot);
+            throw err;
+          }
         }
       }
       setTrackActionOpen(false);
@@ -2466,13 +2516,19 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       });
       
       if (items.length) {
-        await playlistAPI.removeTracks(currentPlaylist.id, { 
-          items,
-          snapshot_id: currentPlaylist.snapshot_id 
-        });
-        await refreshPlaylistDetails();
+        const snapshot = snapshotPlaylistState();
+        applyLocalTrackRemoval(items.map((item) => item.position));
+        setSelectedTrackKeys([]);
+        try {
+          await playlistAPI.removeTracks(currentPlaylist.id, { 
+            items,
+            snapshot_id: currentPlaylist.snapshot_id 
+          });
+        } catch (err) {
+          restorePlaylistState(snapshot);
+          throw err;
+        }
       }
-      setSelectedTrackKeys([]);
     } catch (err) {
       setTrackActionError(err.message || 'Failed to remove tracks.');
     } finally {
@@ -3981,7 +4037,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               {/* Follow Status */}
               <div className="hidden md:flex col-span-1 items-center">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${followStatusClass}`}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${followStatusClass}`}
                   title={primaryArtist?.name ? `${primaryArtist.name}: ${followStatusLabel}` : followStatusLabel}
                 >
                   {followStatusLabel}
