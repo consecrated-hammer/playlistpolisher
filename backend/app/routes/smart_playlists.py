@@ -646,9 +646,12 @@ async def get_smart_playlist_preview(
         )
 
         total_matches = len(matches)
-        limit = max(1, min(body.limit, 500))
         offset = max(0, body.offset)
-        page = matches[offset:offset + limit]
+        if body.limit <= 0:
+            page = matches[offset:]
+        else:
+            limit = max(1, body.limit)
+            page = matches[offset:offset + limit]
 
         preview_tracks = []
         for item in page:

@@ -180,7 +180,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const [previewSearch, setPreviewSearch] = useState('');
   const [previewSort, setPreviewSort] = useState('default');
   const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
-  const [previewLimit, setPreviewLimit] = useState(250);
+  const [previewLimitInput, setPreviewLimitInput] = useState('250');
   const [activeFiltersExpanded, setActiveFiltersExpanded] = useState(true);
 
   const [playlistName, setPlaylistName] = useState('');
@@ -376,7 +376,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       artist_ids: selectedArtists,
       title_contains: titleFilters,
       album_contains: albumFilters,
-      limit: previewLimit,
+      limit: previewLimitValue,
       offset: 0,
     };
 
@@ -403,7 +403,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
     sourceIds,
     titleFilters,
     albumFilters,
-    previewLimit,
+    previewLimitValue,
   ]);
 
   useEffect(() => {
@@ -752,6 +752,10 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
 
   const previewTracks = useMemo(() => preview?.tracks || [], [preview]);
   const previewSearchValue = previewSearch.trim().toLowerCase();
+  const previewLimitValue = useMemo(() => {
+    const parsed = Number.parseInt(previewLimitInput, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }, [previewLimitInput]);
   const filteredPreviewTracks = useMemo(() => {
     if (!previewSearchValue) {
       return previewTracks;
@@ -1023,15 +1027,20 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
 
       <label className="text-xs text-spotify-gray-light flex flex-col gap-2">
         Preview cap
-        <select
-          value={previewLimit}
-          onChange={(event) => setPreviewLimit(Number(event.target.value))}
+        <input
+          type="number"
+          min="0"
+          inputMode="numeric"
+          value={previewLimitInput}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            if (nextValue === '' || /^\d+$/.test(nextValue)) {
+              setPreviewLimitInput(nextValue);
+            }
+          }}
           className="bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-        >
-          <option value={100}>100 tracks</option>
-          <option value={250}>250 tracks</option>
-          <option value={500}>500 tracks</option>
-        </select>
+        />
+        <span className="text-[11px] text-spotify-gray-light">0 = unlimited, default 250.</span>
       </label>
     </div>
   );
