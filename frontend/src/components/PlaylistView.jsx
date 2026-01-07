@@ -3989,7 +3989,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               {/* Follow Status */}
               <div className="hidden md:flex col-span-1 items-center">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${followStatusClass}`}
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${followStatusClass}`}
                   title={primaryArtist?.name ? `${primaryArtist.name}: ${followStatusLabel}` : followStatusLabel}
                 >
                   {followStatusLabel}
