@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai-playlists", tags=["ai-playlists"])
 
 MAX_AI_TRACKS = 200
+OPENAI_TIMEOUT_SECONDS = 60
 
 
 def get_session_manager(request: Request) -> SessionManager:
@@ -124,7 +125,7 @@ def _call_openai(messages: List[Dict[str, str]]) -> Dict[str, Any]:
                 settings.openai_base_url,
                 headers=headers,
                 json=payload,
-                timeout=30,
+                timeout=OPENAI_TIMEOUT_SECONDS,
             )
             if response.status_code == 400 and "response_format" in response.text:
                 payload.pop("response_format", None)
@@ -132,7 +133,7 @@ def _call_openai(messages: List[Dict[str, str]]) -> Dict[str, Any]:
                     settings.openai_base_url,
                     headers=headers,
                     json=payload,
-                    timeout=30,
+                    timeout=OPENAI_TIMEOUT_SECONDS,
                 )
             if response.status_code >= 400:
                 errors.append(f"{model}: {response.status_code}")
