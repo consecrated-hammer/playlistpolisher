@@ -189,6 +189,11 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const [createMessage, setCreateMessage] = useState(null);
   const [createError, setCreateError] = useState(null);
 
+  const previewLimitValue = useMemo(() => {
+    const parsed = Number.parseInt(previewLimitInput, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }, [previewLimitInput]);
+
   useEffect(() => {
     if (!filtersOpen) {
       document.body.style.overflow = '';
@@ -752,10 +757,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
 
   const previewTracks = useMemo(() => preview?.tracks || [], [preview]);
   const previewSearchValue = previewSearch.trim().toLowerCase();
-  const previewLimitValue = useMemo(() => {
-    const parsed = Number.parseInt(previewLimitInput, 10);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }, [previewLimitInput]);
   const filteredPreviewTracks = useMemo(() => {
     if (!previewSearchValue) {
       return previewTracks;
