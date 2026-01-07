@@ -7,6 +7,12 @@
 - Cache: avoid blocking infinite scroll during background refresh; coalesce refresh jobs and keep stale cache usable.
 - Playlist view: apply optimistic track removal for instant feedback; prevent follow badge wrapping.
 
+## v1.4.5 - 2026-01-05
+**Playlist action navigation**
+- Playlist view: replace the action strip with grouped dropdowns on desktop and accordions on mobile.
+- Context links: add playlist-scoped navigation controls for schedules/history/backups pages.
+- Stability: fix playlist view crash caused by action menu initialization order.
+
 ## v1.4.4 - 2026-01-05
 **Artist follow availability**
 - Cache: rehydrate legacy track cache entries missing artist IDs to restore follow status on playlist load.
