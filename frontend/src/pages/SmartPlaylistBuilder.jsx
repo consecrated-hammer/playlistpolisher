@@ -147,7 +147,7 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const [facetsLoading, setFacetsLoading] = useState(false);
   const [facetsError, setFacetsError] = useState(null);
 
-  const [matchMode, setMatchMode] = useState('any');
+  const [matchMode, setMatchMode] = useState('all');
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [selectedDecades, setSelectedDecades] = useState([]);
   const [selectedYears, setSelectedYears] = useState([]);
@@ -1003,17 +1003,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setMatchMode('any')}
-            className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
-              matchMode === 'any'
-                ? 'border-spotify-green bg-spotify-green text-black'
-                : 'border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light'
-            }`}
-          >
-            Match any
-          </button>
-          <button
-            type="button"
             onClick={() => setMatchMode('all')}
             className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
               matchMode === 'all'
@@ -1022,6 +1011,17 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
             }`}
           >
             Match all
+          </button>
+          <button
+            type="button"
+            onClick={() => setMatchMode('any')}
+            className={`px-4 py-2 rounded-lg border text-sm transition-colors ${
+              matchMode === 'any'
+                ? 'border-spotify-green bg-spotify-green text-black'
+                : 'border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light'
+            }`}
+          >
+            Match any
           </button>
         </div>
       </CollapsibleSection>
