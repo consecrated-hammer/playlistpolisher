@@ -81,7 +81,7 @@ def _build_prompt(body: AiPlaylistPreviewRequest, size: int) -> str:
         "You are a Spotify playlist curator. Return a JSON object only (no markdown). "
         "Schema: {\"name\": \"...\", \"tracks\": [{\"title\": \"...\", \"artist\": \"...\"}]}. "
         f"Provide exactly {size} tracks with known Spotify catalog entries. "
-        "Avoid duplicates and use a concise name prefixed with \"Auto:\" based on the criteria. "
+        "Avoid duplicates and use a concise name prefixed with \"AI playlist:\" based on the criteria. "
         f"{criteria}"
     )
 
@@ -304,7 +304,7 @@ async def preview_ai_playlist(
     raw_tracks = payload.get("tracks", [])
     suggestions = _normalize_suggestions(raw_tracks)
 
-    name = payload.get("name") or "Auto: AI playlist"
+    name = payload.get("name") or "AI playlist: discovery"
     suggestions = suggestions[:size]
 
     user_id = session_mgr.get_user_id()
