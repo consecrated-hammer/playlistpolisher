@@ -796,6 +796,21 @@ export const smartPlaylistAPI = {
 };
 
 /**
+ * AI Playlist API - Spotify catalog suggestions
+ */
+export const aiPlaylistAPI = {
+  /**
+   * Generate AI playlist suggestions and preview tracks
+   * @param {object} payload
+   * @returns {Promise<object>} Preview payload
+   */
+  preview: async (payload) => {
+    const response = await api.post('/ai-playlists/preview', payload);
+    return response.data;
+  },
+};
+
+/**
  * Utility function to format total playlist duration
  * @param {number} ms - Total duration in milliseconds
  * @returns {string} Formatted duration (H:MM:SS or MM:SS)

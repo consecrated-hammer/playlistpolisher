@@ -24,6 +24,7 @@ import IgnoredTracksPage from './pages/IgnoredTracksPage';
 import CachePage from './pages/CachePage';
 import SettingsPage from './pages/SettingsPage';
 import SmartPlaylistBuilder from './pages/SmartPlaylistBuilder';
+import AiPlaylistBuilder from './pages/AiPlaylistBuilder';
 import BackupsLibraryPage from './pages/BackupsLibraryPage';
 import BackupDetailPage from './pages/BackupDetailPage';
 import RoadmapPage from './pages/RoadmapPage';
@@ -514,6 +515,8 @@ const PlaylistsPage = ({ user, onLogout }) => {
   const [cacheFacts, setCacheFacts] = useState({});
   const [cacheFactsSummary, setCacheFactsSummary] = useState({ coverage_ratio: 0, facts_count: 0, total_playlists: 0 });
   const [cacheScope, setCacheScope] = useState(null);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const createMenuRef = useRef(null);
   const scrollPositionRef = useRef(0);
   const restoreScrollRef = useRef(false);
   const navigate = useNavigate();
@@ -523,6 +526,17 @@ const PlaylistsPage = ({ user, onLogout }) => {
   useEffect(() => {
     loadPlaylists();
   }, []);
+
+  useEffect(() => {
+    if (!createMenuOpen) return;
+    const handleClick = (event) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(event.target)) {
+        setCreateMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [createMenuOpen]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -739,14 +753,53 @@ const PlaylistsPage = ({ user, onLogout }) => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
             <h2 className="text-2xl font-bold text-white">Your Playlists ({sortedPlaylists.length})</h2>
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-              <button
-                type="button"
-                onClick={() => navigate('/smart-playlists/new')}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
-              >
-                <span className="icon text-base">auto_awesome</span>
-                Create smart playlist
-              </button>
+              <div className="relative" ref={createMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setCreateMenuOpen((prev) => !prev)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold transition-colors"
+                  aria-haspopup="menu"
+                  aria-expanded={createMenuOpen}
+                >
+                  <span className="icon text-base">auto_awesome</span>
+                  Create playlist
+                  <span className={`icon text-base transition-transform ${createMenuOpen ? 'rotate-180' : ''}`}>
+                    expand_more
+                  </span>
+                </button>
+                {createMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-72 bg-spotify-gray-dark border border-spotify-gray-mid/60 rounded-xl shadow-2xl z-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate('/smart-playlists/new');
+                        setCreateMenuOpen(false);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg text-left text-sm flex items-start gap-2 transition-colors text-white hover:bg-spotify-gray-mid/60"
+                    >
+                      <span className="icon text-base mt-0.5">auto_awesome</span>
+                      <span className="min-w-0">
+                        <span className="block">Smart playlist from your songs</span>
+                        <span className="block text-xs text-spotify-gray-light">Use your cached tracks and metadata.</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate('/ai-playlists/new');
+                        setCreateMenuOpen(false);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg text-left text-sm flex items-start gap-2 transition-colors text-white hover:bg-spotify-gray-mid/60"
+                    >
+                      <span className="icon text-base mt-0.5">psychology</span>
+                      <span className="min-w-0">
+                        <span className="block">AI playlist discovery</span>
+                        <span className="block text-xs text-spotify-gray-light">Find new tracks from Spotify.</span>
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <label htmlFor="playlist-filter" className="text-sm text-spotify-gray-light">
                   Filter:
@@ -1115,6 +1168,11 @@ function App() {
         <Route path="/smart-playlists/new" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
             <SmartPlaylistBuilder user={user} onLogout={handleLogout} />
+          </ProtectedRoute>
+        } />
+        <Route path="/ai-playlists/new" element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
+            <AiPlaylistBuilder user={user} onLogout={handleLogout} />
           </ProtectedRoute>
         } />
         <Route path="/cache" element={
