@@ -136,14 +136,14 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
   const [genreSearch, setGenreSearch] = useState('');
   const [artistSearch, setArtistSearch] = useState('');
   const [sectionOpen, setSectionOpen] = useState({
-    sources: true,
-    matchLogic: true,
-    constraints: true,
-    genres: true,
-    dates: true,
-    artists: true,
-    title: true,
-    album: true,
+    sources: false,
+    matchLogic: false,
+    constraints: false,
+    genres: false,
+    dates: false,
+    artists: false,
+    title: false,
+    album: false,
   });
   const [openDecades, setOpenDecades] = useState({});
   const [openGenreGroups, setOpenGenreGroups] = useState({});
@@ -975,100 +975,6 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Genres"
-        description="Auto-grouped by genre families with counts."
-        open={sectionOpen.genres}
-        onToggle={() => toggleSection('genres')}
-        onClear={clearGenres}
-      >
-        {selectedGenres.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {selectedGenres.map((term) => (
-              <FilterChip
-                key={term}
-                label={term}
-                onRemove={() => toggleGenre(term)}
-              />
-            ))}
-          </div>
-        )}
-
-        <input
-          type="text"
-          value={genreSearch}
-          onChange={(event) => setGenreSearch(event.target.value)}
-          placeholder="Search genres"
-          className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
-        />
-
-        {facetsLoading && (
-          <div className="text-xs text-spotify-gray-light">Loading genre tags...</div>
-        )}
-        {facetsError && (
-          <div className="text-xs text-red-400">{facetsError}</div>
-        )}
-        {!facetsLoading && genreGroups.length === 0 && genreSearch && facets?.genre_groups?.length > 0 && (
-          <div className="text-xs text-spotify-gray-light">No genres match your search.</div>
-        )}
-        {!facetsLoading && genreGroups.length === 0 && (!genreSearch || !facets?.genre_groups?.length) && (
-          <div className="text-xs text-spotify-gray-light">
-            No genre tags in cache yet. Refresh the cache to enrich artists.
-          </div>
-        )}
-
-        <div className="space-y-2">
-          {genreGroups.map((group) => (
-            <div
-              key={group.group}
-              className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 px-3 py-2"
-            >
-              <div className="flex items-center justify-between text-sm text-white">
-                <button
-                  type="button"
-                  onClick={() => toggleGenreGroup(group.group)}
-                  className="flex items-center gap-2 text-left"
-                >
-                  <span
-                    className={`icon text-base text-spotify-gray-light transition-transform ${
-                      genreSearch || openGenreGroups[group.group] ? 'rotate-180' : ''
-                    }`}
-                  >
-                    expand_more
-                  </span>
-                  <span>{group.group}</span>
-                </button>
-                <span className="text-xs text-spotify-gray-light">{group.count}</span>
-              </div>
-              {(genreSearch || openGenreGroups[group.group]) && (
-                <div className="mt-2 space-y-2 border-l border-spotify-gray-mid/60 pl-4">
-                  {group.tags.map((tag) => {
-                    const checked = selectedGenres.includes(tag.name);
-                    return (
-                      <label
-                        key={tag.name}
-                        className="flex items-center justify-between text-sm text-spotify-gray-light"
-                      >
-                        <span className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleGenre(tag.name)}
-                            className="accent-spotify-green"
-                          />
-                          <span>{tag.name}</span>
-                        </span>
-                        <span className="text-xs text-spotify-gray-light">{tag.count}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </CollapsibleSection>
-
-      <CollapsibleSection
         title="Release dates"
         description="Pick decades or drill down to specific years."
         open={sectionOpen.dates}
@@ -1140,8 +1046,8 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
                     </div>
                     <span className="text-xs text-spotify-gray-light">{decade.count}</span>
                   </div>
-                  {isOpen && (
-                    <div className="mt-2 space-y-2 border-l border-spotify-gray-mid/60 pl-4">
+                {isOpen && (
+                    <div className="mt-2 space-y-2 border-l border-spotify-gray-mid/60 pl-6 ml-3">
                       {yearList.map((year) => (
                         <label
                           key={year.year}
@@ -1168,6 +1074,100 @@ const SmartPlaylistBuilder = ({ user, onLogout }) => {
         ) : (
           <div className="text-xs text-spotify-gray-light">No release date tags available yet.</div>
         )}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Genres"
+        description="Auto-grouped by genre families with counts."
+        open={sectionOpen.genres}
+        onToggle={() => toggleSection('genres')}
+        onClear={clearGenres}
+      >
+        {selectedGenres.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {selectedGenres.map((term) => (
+              <FilterChip
+                key={term}
+                label={term}
+                onRemove={() => toggleGenre(term)}
+              />
+            ))}
+          </div>
+        )}
+
+        <input
+          type="text"
+          value={genreSearch}
+          onChange={(event) => setGenreSearch(event.target.value)}
+          placeholder="Search genres"
+          className="w-full bg-spotify-gray-mid/60 text-white text-sm rounded-lg px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+        />
+
+        {facetsLoading && (
+          <div className="text-xs text-spotify-gray-light">Loading genre tags...</div>
+        )}
+        {facetsError && (
+          <div className="text-xs text-red-400">{facetsError}</div>
+        )}
+        {!facetsLoading && genreGroups.length === 0 && genreSearch && facets?.genre_groups?.length > 0 && (
+          <div className="text-xs text-spotify-gray-light">No genres match your search.</div>
+        )}
+        {!facetsLoading && genreGroups.length === 0 && (!genreSearch || !facets?.genre_groups?.length) && (
+          <div className="text-xs text-spotify-gray-light">
+            No genre tags in cache yet. Refresh the cache to enrich artists.
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {genreGroups.map((group) => (
+            <div
+              key={group.group}
+              className="rounded-lg border border-spotify-gray-mid/60 bg-spotify-gray-mid/30 px-3 py-2"
+            >
+              <div className="flex items-center justify-between text-sm text-white">
+                <button
+                  type="button"
+                  onClick={() => toggleGenreGroup(group.group)}
+                  className="flex items-center gap-2 text-left"
+                >
+                  <span
+                    className={`icon text-base text-spotify-gray-light transition-transform ${
+                      genreSearch || openGenreGroups[group.group] ? 'rotate-180' : ''
+                    }`}
+                  >
+                    expand_more
+                  </span>
+                  <span>{group.group}</span>
+                </button>
+                <span className="text-xs text-spotify-gray-light">{group.count}</span>
+              </div>
+              {(genreSearch || openGenreGroups[group.group]) && (
+                <div className="mt-2 space-y-2 border-l border-spotify-gray-mid/60 pl-6 ml-3">
+                  {group.tags.map((tag) => {
+                    const checked = selectedGenres.includes(tag.name);
+                    return (
+                      <label
+                        key={tag.name}
+                        className="flex items-center justify-between text-sm text-spotify-gray-light"
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleGenre(tag.name)}
+                            className="accent-spotify-green"
+                          />
+                          <span>{tag.name}</span>
+                        </span>
+                        <span className="text-xs text-spotify-gray-light">{tag.count}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </CollapsibleSection>
 
       <CollapsibleSection
