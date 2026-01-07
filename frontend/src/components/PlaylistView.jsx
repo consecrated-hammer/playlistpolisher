@@ -1080,6 +1080,21 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     });
   }, []);
 
+  const snapshotPlaylistState = useCallback(() => ({
+    allTracks,
+    totalTrackCount,
+    currentPlaylist,
+    selectedTrackKeys,
+  }), [allTracks, currentPlaylist, selectedTrackKeys, totalTrackCount]);
+
+  const restorePlaylistState = useCallback((snapshot) => {
+    if (!snapshot) return;
+    setAllTracks(snapshot.allTracks || []);
+    setTotalTrackCount(snapshot.totalTrackCount || 0);
+    setCurrentPlaylist(snapshot.currentPlaylist || null);
+    setSelectedTrackKeys(snapshot.selectedTrackKeys || []);
+  }, []);
+
   // Sort indicator component
   const SortIndicator = ({ column }) => {
     if (sortBy !== column) {
@@ -2454,11 +2469,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           .filter((track) => Number.isFinite(track.playlistIndex))
           .map((track) => ({ uri: track.uri, position: track.playlistIndex }));
         if (items.length > 0) {
-          await playlistAPI.removeTracks(currentPlaylist.id, { 
-            items,
-            snapshot_id: currentPlaylist.snapshot_id 
-          });
+          const snapshot = snapshotPlaylistState();
           applyLocalTrackRemoval(items.map((item) => item.position));
+          setSelectedTrackKeys([]);
+          try {
+            await playlistAPI.removeTracks(currentPlaylist.id, { 
+              items,
+              snapshot_id: currentPlaylist.snapshot_id 
+            });
+          } catch (err) {
+            restorePlaylistState(snapshot);
+            throw err;
+          }
         }
       }
       setTrackActionOpen(false);
@@ -2494,13 +2516,19 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       });
       
       if (items.length) {
-        await playlistAPI.removeTracks(currentPlaylist.id, { 
-          items,
-          snapshot_id: currentPlaylist.snapshot_id 
-        });
+        const snapshot = snapshotPlaylistState();
         applyLocalTrackRemoval(items.map((item) => item.position));
+        setSelectedTrackKeys([]);
+        try {
+          await playlistAPI.removeTracks(currentPlaylist.id, { 
+            items,
+            snapshot_id: currentPlaylist.snapshot_id 
+          });
+        } catch (err) {
+          restorePlaylistState(snapshot);
+          throw err;
+        }
       }
-      setSelectedTrackKeys([]);
     } catch (err) {
       setTrackActionError(err.message || 'Failed to remove tracks.');
     } finally {
