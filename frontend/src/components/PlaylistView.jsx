@@ -2909,7 +2909,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
       {/* Duplicates Modal */}
       {showDuplicatesModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[80] px-4">
           <div className="bg-spotify-gray-dark rounded-2xl shadow-2xl max-w-4xl w-full border border-spotify-gray-mid/60 max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-start justify-between p-6 pb-4 border-b border-spotify-gray-mid/50">
               <div>
