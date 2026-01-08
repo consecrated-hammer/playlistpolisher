@@ -741,7 +741,7 @@ class PlaylistRestoreRequest(BaseModel):
 
 
 class PlaylistCacheMatchTrack(BaseModel):
-    client_key: str
+    client_key: Optional[str] = None
     track_id: Optional[str] = None
     name: Optional[str] = None
     artists: List[str] = Field(default_factory=list)
@@ -2520,7 +2520,8 @@ def _get_cached_match(
     exact_count = 0
     similar_count = 0
     matches: List[Dict[str, Optional[str]]] = []
-    for track in tracks:
+    for index, track in enumerate(tracks):
+        client_key = track.client_key or track.track_id or f"track-{index}"
         status = None
         if track.track_id and track.track_id in cached_set:
             status = "exact"
@@ -2536,7 +2537,7 @@ def _get_cached_match(
                         similar_count += 1
                         break
         if include_matches:
-            matches.append({"client_key": track.client_key, "status": status})
+            matches.append({"client_key": client_key, "status": status})
 
     result = {
         "cached": True,

@@ -1963,8 +1963,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       try {
         const payload = {
           playlist_ids: playlistIds,
-          tracks: selectedTracksSorted.map((track) => ({
-            client_key: track.selectionKey,
+          tracks: selectedTracksSorted.map((track, index) => ({
+            client_key: track.selectionKey || track.id || track.uri || `track-${index}`,
             track_id: track.id || null,
             name: track.name || null,
             artists: (track.artists || []).map((artist) => artist.name).filter(Boolean),
@@ -2054,8 +2054,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setTargetPlaylistMatchError(null);
       try {
         const payload = {
-          tracks: selectedTracksSorted.map((track) => ({
-            client_key: track.selectionKey,
+          tracks: selectedTracksSorted.map((track, index) => ({
+            client_key: track.selectionKey || track.id || track.uri || `track-${index}`,
             track_id: track.id || null,
             name: track.name || null,
             artists: (track.artists || []).map((artist) => artist.name).filter(Boolean),
