@@ -2438,10 +2438,14 @@ else:
     handler.setFormatter(AdelaideFormatter("%(asctime)s - uvicorn.access - %(levelname)s - %(message)s"))
     uvicorn_access_logger.addHandler(handler)
 uvicorn_access_logger.propagate = False
-def _normalize_title(title: str) -> str:
+def _normalize_title(title: Any) -> str:
     """Normalize track title for similarity detection."""
     if not title:
         return ''
+    if isinstance(title, dict):
+        title = title.get("name") or title.get("title") or title.get("value") or ""
+    if not isinstance(title, str):
+        title = str(title)
     title = title.lower()
     # Remove parenthetical/bracketed content
     import re
@@ -2453,9 +2457,13 @@ def _normalize_title(title: str) -> str:
     return " ".join(title.split())
 
 
-def _normalize_artist(name: str) -> str:
+def _normalize_artist(name: Any) -> str:
     if not name:
         return ''
+    if isinstance(name, dict):
+        name = name.get("name") or name.get("value") or name.get("id") or ""
+    if not isinstance(name, str):
+        name = str(name)
     name = name.lower()
     if " feat" in name:
         name = name.split(" feat")[0]
