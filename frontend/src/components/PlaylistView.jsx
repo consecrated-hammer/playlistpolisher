@@ -215,6 +215,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [selectedTrackKeys, setSelectedTrackKeys] = useState([]);
   const [expandedTrackKeys, setExpandedTrackKeys] = useState([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
+  const [selectAllLoading, setSelectAllLoading] = useState(false);
+  const [selectAllRequested, setSelectAllRequested] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [trackActionMode, setTrackActionMode] = useState(null);
@@ -795,6 +797,55 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   }, [loadingMore, hasMoreTracks, currentPlaylist?.id, allTracks.length, searchLoading]);
 
+  const needsFullLoad = useMemo(() => {
+    if (Number.isFinite(totalTrackCount)) {
+      return allTracks.length < totalTrackCount;
+    }
+    return hasMoreTracks;
+  }, [allTracks.length, hasMoreTracks, totalTrackCount]);
+
+  const loadAllTracksForSelection = useCallback(async () => {
+    if (selectAllLoading || !currentPlaylist?.id) return false;
+    setSelectAllLoading(true);
+    try {
+      let offset = allTracks.length;
+      let hasMore = hasMoreTracks || (Number.isFinite(totalTrackCount) && offset < totalTrackCount);
+      while (hasMore) {
+        const response = await playlistAPI.getPlaylistTracksPaginated(
+          currentPlaylist.id,
+          offset,
+          PLAYLIST_PAGE_SIZE
+        );
+        const incoming = response?.tracks || [];
+        if (!incoming.length) {
+          hasMore = false;
+          setHasMoreTracks(false);
+          break;
+        }
+        setAllTracks((prev) => {
+          const existingIds = new Set(prev.map((track, idx) => `${track.id}-${idx}`));
+          const newTracks = incoming.filter((track, idx) => {
+            const key = `${track.id}-${offset + idx}`;
+            return !existingIds.has(key);
+          });
+          return [...prev, ...newTracks];
+        });
+        offset += incoming.length;
+        hasMore = Boolean(response?.has_more);
+        setHasMoreTracks(hasMore);
+        if (Number.isFinite(response?.total)) {
+          setTotalTrackCount(response.total);
+        }
+      }
+      return true;
+    } catch (err) {
+      console.warn('[Select All] Failed to load full playlist:', err);
+      return false;
+    } finally {
+      setSelectAllLoading(false);
+    }
+  }, [allTracks.length, currentPlaylist?.id, hasMoreTracks, selectAllLoading, totalTrackCount]);
+
   // Set up infinite scroll - trigger at 20% from bottom (80% scrolled)
   useInfiniteScroll(loadMoreTracks, hasMoreTracks, loadingMore || searchLoading, 0.2);
 
@@ -1013,6 +1064,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   }, [selectedTracks]);
 
   const selectedTrackCount = selectedTracks.length;
+  const allTracksSelected = useMemo(() => {
+    if (!selectedTrackCount) return false;
+    if (Number.isFinite(totalTrackCount)) {
+      return selectedTrackCount >= totalTrackCount;
+    }
+    return !hasMoreTracks && selectedTrackCount >= tracksSource.length;
+  }, [hasMoreTracks, selectedTrackCount, totalTrackCount, tracksSource.length]);
 
 
   const playlistTrackLookup = useMemo(() => {
@@ -1662,9 +1720,9 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     playlist?.id,
   ]);
 
-  const isInteractiveTarget = (event) => {
+  const isInteractiveTarget = useCallback((event) => {
     return Boolean(event.target.closest('a, button, input, textarea, select, [data-no-select]'));
-  };
+  }, []);
 
   const handleTrackRowSelect = (event, track, visibleIndex) => {
     if (event.button !== 0) return;
@@ -1733,6 +1791,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     setLastSelectedIndex(visibleIndex);
   };
 
+  const handleSelectAllTracks = useCallback(async () => {
+    setTrackActionError(null);
+    setSelectAllRequested(true);
+    if (searchLoading || loadingMore) return;
+    if (needsFullLoad) {
+      await loadAllTracksForSelection();
+    }
+  }, [loadAllTracksForSelection, loadingMore, needsFullLoad, searchLoading]);
+
   const toggleTrackExpanded = (trackKey) => {
     setExpandedTrackKeys((prev) => {
       const next = new Set(prev);
@@ -1744,6 +1811,35 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       return Array.from(next);
     });
   };
+
+  useEffect(() => {
+    if (!selectAllRequested) return;
+    if (selectAllLoading || searchLoading || loadingMore) return;
+    if (needsFullLoad) return;
+    const keys = tracksSource.map((track) => track.selectionKey);
+    setSelectedTrackKeys(keys);
+    setLastSelectedIndex(keys.length ? keys.length - 1 : null);
+    setSelectAllRequested(false);
+  }, [
+    loadingMore,
+    needsFullLoad,
+    searchLoading,
+    selectAllLoading,
+    selectAllRequested,
+    tracksSource,
+  ]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      const isSelectAll = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a';
+      if (!isSelectAll) return;
+      if (isInteractiveTarget(event)) return;
+      event.preventDefault();
+      handleSelectAllTracks();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSelectAllTracks, isInteractiveTarget]);
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
@@ -1963,8 +2059,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       try {
         const payload = {
           playlist_ids: playlistIds,
-          tracks: selectedTracksSorted.map((track) => ({
-            client_key: track.selectionKey,
+          tracks: selectedTracksSorted.map((track, index) => ({
+            client_key: track.selectionKey || track.id || track.uri || `track-${index}`,
             track_id: track.id || null,
             name: track.name || null,
             artists: (track.artists || []).map((artist) => artist.name).filter(Boolean),
@@ -2054,8 +2150,8 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setTargetPlaylistMatchError(null);
       try {
         const payload = {
-          tracks: selectedTracksSorted.map((track) => ({
-            client_key: track.selectionKey,
+          tracks: selectedTracksSorted.map((track, index) => ({
+            client_key: track.selectionKey || track.id || track.uri || `track-${index}`,
             track_id: track.id || null,
             name: track.name || null,
             artists: (track.artists || []).map((artist) => artist.name).filter(Boolean),
@@ -3778,9 +3874,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <span className="text-white font-semibold">{selectedTrackCount} selected</span>
                 <button
                   type="button"
+                  onClick={handleSelectAllTracks}
+                  disabled={selectAllLoading || allTracksSelected}
+                  className="px-2 py-0.5 rounded-full border border-spotify-gray-mid/60 text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {selectAllLoading ? 'Selecting…' : allTracksSelected ? 'All selected' : 'Select all'}
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setSelectedTrackKeys([]);
                     setTrackActionError(null);
+                    setSelectAllRequested(false);
                   }}
                   className="w-5 h-5 rounded-full flex items-center justify-center text-spotify-gray-light hover:text-white hover:bg-spotify-gray-mid/60"
                   aria-label="Clear selection"
@@ -3790,7 +3895,14 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 </button>
               </div>
             ) : (
-              '#'
+              <button
+                type="button"
+                onClick={handleSelectAllTracks}
+                disabled={selectAllLoading}
+                className="px-2 py-0.5 rounded-full border border-spotify-gray-mid/60 text-[11px] text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {selectAllLoading ? 'Selecting…' : 'Select all'}
+              </button>
             )}
           </div>
           

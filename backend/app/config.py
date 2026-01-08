@@ -87,6 +87,13 @@ class Settings(BaseSettings):
     
     # Pagination Configuration
     playlist_page_size: int = 100
+
+    # OpenAI Configuration
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4o-mini"
+    openai_fallback_models: str = ""
+    openai_autosuggest_model: str = ""
+    openai_base_url: str = "https://api.openai.com/v1/chat/completions"
     
     model_config = SettingsConfigDict(
         env_file="../.env",

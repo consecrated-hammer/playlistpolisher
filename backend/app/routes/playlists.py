@@ -741,7 +741,7 @@ class PlaylistRestoreRequest(BaseModel):
 
 
 class PlaylistCacheMatchTrack(BaseModel):
-    client_key: str
+    client_key: Optional[str] = None
     track_id: Optional[str] = None
     name: Optional[str] = None
     artists: List[str] = Field(default_factory=list)
@@ -2438,10 +2438,14 @@ else:
     handler.setFormatter(AdelaideFormatter("%(asctime)s - uvicorn.access - %(levelname)s - %(message)s"))
     uvicorn_access_logger.addHandler(handler)
 uvicorn_access_logger.propagate = False
-def _normalize_title(title: str) -> str:
+def _normalize_title(title: Any) -> str:
     """Normalize track title for similarity detection."""
     if not title:
         return ''
+    if isinstance(title, dict):
+        title = title.get("name") or title.get("title") or title.get("value") or ""
+    if not isinstance(title, str):
+        title = str(title)
     title = title.lower()
     # Remove parenthetical/bracketed content
     import re
@@ -2453,9 +2457,13 @@ def _normalize_title(title: str) -> str:
     return " ".join(title.split())
 
 
-def _normalize_artist(name: str) -> str:
+def _normalize_artist(name: Any) -> str:
     if not name:
         return ''
+    if isinstance(name, dict):
+        name = name.get("name") or name.get("value") or name.get("id") or ""
+    if not isinstance(name, str):
+        name = str(name)
     name = name.lower()
     if " feat" in name:
         name = name.split(" feat")[0]
@@ -2520,7 +2528,8 @@ def _get_cached_match(
     exact_count = 0
     similar_count = 0
     matches: List[Dict[str, Optional[str]]] = []
-    for track in tracks:
+    for index, track in enumerate(tracks):
+        client_key = track.client_key or track.track_id or f"track-{index}"
         status = None
         if track.track_id and track.track_id in cached_set:
             status = "exact"
@@ -2536,7 +2545,7 @@ def _get_cached_match(
                         similar_count += 1
                         break
         if include_matches:
-            matches.append({"client_key": track.client_key, "status": status})
+            matches.append({"client_key": client_key, "status": status})
 
     result = {
         "cached": True,
