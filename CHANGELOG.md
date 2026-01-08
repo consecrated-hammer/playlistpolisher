@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.3 - 2026-01-08
+**Release alignment**
+- Release: bump version after branch cleanup.
+
 ## v1.5.2 - 2026-01-08
 **Release alignment**
 - Release: bump version to reflect the latest main commit after a premature release.
