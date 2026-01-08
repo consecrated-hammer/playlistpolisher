@@ -276,6 +276,125 @@ def get_cached_playlist_items_page(playlist_id: str, offset: int, limit: int) ->
         return [dict(row) for row in cur.fetchall()]
 
 
+def _resolve_snapshot_id(playlist_id: str, snapshot_id: Optional[str]) -> Optional[str]:
+    if snapshot_id:
+        return snapshot_id
+    facts = get_facts_for_playlists([playlist_id]).get(playlist_id)
+    if not facts:
+        return None
+    return facts.get("last_snapshot_id")
+
+
+def _replace_items_with_facts(
+    playlist_id: str,
+    items: List[Dict],
+    snapshot_id: Optional[str] = None,
+) -> None:
+    now = _now_iso()
+    resolved_snapshot = _resolve_snapshot_id(playlist_id, snapshot_id)
+    replace_playlist_items(playlist_id, items, now, snapshot_id=resolved_snapshot)
+
+    added_values = [item.get("added_at") for item in items if item.get("added_at")]
+    last_added = max(added_values) if added_values else None
+    track_count = len(items)
+
+    upsert_cache_facts(
+        playlist_id=playlist_id,
+        last_track_added_at_utc=last_added,
+        track_count_cached=track_count,
+        last_cached_at_utc=now,
+        updated_at_utc=now,
+        is_dirty=0,
+        last_snapshot_id=resolved_snapshot,
+    )
+
+
+def apply_track_additions(
+    playlist_id: str,
+    track_ids: List[str],
+    position: Optional[int] = None,
+    snapshot_id: Optional[str] = None,
+) -> bool:
+    if not playlist_id:
+        return False
+    clean_ids = [track_id for track_id in track_ids if track_id]
+    if not clean_ids:
+        return False
+    items = get_cached_playlist_items(playlist_id)
+    if not items:
+        facts = get_facts_for_playlists([playlist_id]).get(playlist_id)
+        if not facts:
+            return False
+    insert_at = position if position is not None else len(items)
+    insert_at = max(0, min(insert_at, len(items)))
+    added_at = _now_iso()
+
+    new_items: List[Dict] = []
+    for idx, item in enumerate(items):
+        if idx == insert_at:
+            for track_id in clean_ids:
+                new_items.append({"position": len(new_items), "track_id": track_id, "added_at": added_at})
+        new_items.append({
+            "position": len(new_items),
+            "track_id": item.get("track_id"),
+            "added_at": item.get("added_at"),
+        })
+    if insert_at >= len(items):
+        for track_id in clean_ids:
+            new_items.append({"position": len(new_items), "track_id": track_id, "added_at": added_at})
+
+    _replace_items_with_facts(playlist_id, new_items, snapshot_id=snapshot_id)
+    return True
+
+
+def apply_track_removals_by_positions(
+    playlist_id: str,
+    positions: Iterable[int],
+    snapshot_id: Optional[str] = None,
+) -> bool:
+    if not playlist_id:
+        return False
+    remove_positions = {int(pos) for pos in positions if pos is not None}
+    if not remove_positions:
+        return False
+    items = get_cached_playlist_items(playlist_id)
+    if not items:
+        return False
+    new_items = [item for item in items if item.get("position") not in remove_positions]
+    if len(new_items) == len(items):
+        return False
+    rebuilt = [
+        {"position": idx, "track_id": item.get("track_id"), "added_at": item.get("added_at")}
+        for idx, item in enumerate(new_items)
+    ]
+    _replace_items_with_facts(playlist_id, rebuilt, snapshot_id=snapshot_id)
+    return True
+
+
+def apply_track_removals_by_track_ids(
+    playlist_id: str,
+    track_ids: Iterable[str],
+    snapshot_id: Optional[str] = None,
+) -> bool:
+    if not playlist_id:
+        return False
+    remove_ids = {track_id for track_id in track_ids if track_id}
+    if not remove_ids:
+        return False
+    items = get_cached_playlist_items(playlist_id)
+    if not items:
+        return False
+    new_items = [item for item in items if item.get("track_id") not in remove_ids]
+    if len(new_items) == len(items):
+        return False
+    rebuilt = [
+        {"position": idx, "track_id": item.get("track_id"), "added_at": item.get("added_at")}
+        for idx, item in enumerate(new_items)
+    ]
+    _replace_items_with_facts(playlist_id, rebuilt, snapshot_id=snapshot_id)
+    return True
+
+
 def get_cached_playlist_tracks(playlist_id: str, cutoff_iso: Optional[str] = None) -> List[Dict]:
     if not playlist_id:
         return []
