@@ -1547,6 +1547,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
     setRefreshing(true);
     try {
+      await handleCacheRefresh();
       const updated = await playlistAPI.getPlaylistDetails(playlist.id);
       applyPlaylistState(updated);
     } catch (err) {
