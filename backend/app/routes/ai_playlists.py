@@ -83,6 +83,8 @@ def _build_prompt(body: AiPlaylistPreviewRequest, size: int) -> str:
         "Schema: {\"name\": \"...\", \"tracks\": [{\"title\": \"...\", \"artist\": \"...\"}]}. "
         f"Provide exactly {size} tracks with known Spotify catalog entries. "
         "Avoid duplicates and use a concise name prefixed with \"AI playlist:\" based on the criteria. "
+        "Prefer original studio versions and avoid remixes, covers, live versions, or \"by other artists\" reworks. "
+        "Prefer tracks from original studio albums and avoid compilation albums or themed collections (e.g., summer hits). "
         f"{criteria}"
     )
 
