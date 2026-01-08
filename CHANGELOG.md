@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.2 - 2026-01-08
+**Release alignment**
+- Release: bump version to reflect the latest main commit after a premature release.
+
 ## v1.5.1 - 2026-01-08
 **Selection + cache match fixes**
 - Tracks: add select-all (Ctrl/Cmd+A) for full playlist selection.
