@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.4 - 2026-01-08
+**Cache responsiveness**
+- Cache: update playlist cache immediately after add/remove/duplicate operations to keep UI in sync.
+- Cache: avoid blocking playlist summary loads with a full cache refresh.
+
 ## v1.5.3 - 2026-01-08
 **Release alignment**
 - Release: bump version after branch cleanup.

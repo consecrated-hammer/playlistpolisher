@@ -126,6 +126,52 @@ def _spotify_external_url(entity_type: str, entity_id: Optional[str]) -> Optiona
     return f"https://open.spotify.com/{entity_type}/{entity_id}"
 
 
+def _parse_track_id_from_uri(uri: Optional[str]) -> Optional[str]:
+    if not uri:
+        return None
+    if uri.startswith("spotify:track:"):
+        return uri.split(":")[-1] or None
+    marker = "open.spotify.com/track/"
+    if marker in uri:
+        value = uri.split(marker, 1)[-1]
+        return value.split("?", 1)[0] or None
+    return None
+
+
+def _extract_snapshot_id(result: Any, fallback: Optional[str] = None) -> Optional[str]:
+    if isinstance(result, dict):
+        return result.get("snapshot_id") or fallback
+    if isinstance(result, str):
+        return result or fallback
+    return fallback
+
+
+def _queue_cache_refresh_if_needed(
+    spotify: SpotifyService,
+    session_mgr: SessionManager,
+    playlist_id: str,
+    source: str,
+) -> PlaylistContextMeta:
+    meta = spotify.get_playlist_context_meta(playlist_id)
+    facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
+    last_snapshot_id = facts.get("last_snapshot_id") if facts else None
+    cached_track_count = int(facts.get("track_count_cached") or 0) if facts else 0
+    is_dirty = bool(facts.get("is_dirty")) if facts else True
+    current_snapshot_id = meta.snapshot_id
+    current_track_count = meta.total_tracks or 0
+
+    snapshot_mismatch = bool(last_snapshot_id) and bool(current_snapshot_id) and last_snapshot_id != current_snapshot_id
+    count_mismatch = cached_track_count != current_track_count
+    missing_cache = not facts or not last_snapshot_id
+    needs_refresh = missing_cache or is_dirty or snapshot_mismatch or count_mismatch
+
+    if needs_refresh:
+        if facts and (snapshot_mismatch or count_mismatch):
+            playlist_cache_store.mark_dirty(playlist_id)
+        _queue_cache_refresh(session_mgr, playlist_id, source)
+    return meta
+
+
 @router.get("/", response_model=List[PlaylistSimple])
 async def get_playlists(
     session_mgr: SessionManager = Depends(require_auth),
@@ -265,7 +311,7 @@ async def get_playlist_summary(
 ):
     """Get lightweight playlist metadata without loading tracks."""
     try:
-        meta = _ensure_playlist_cache(spotify, session_mgr, playlist_id)
+        meta = _queue_cache_refresh_if_needed(spotify, session_mgr, playlist_id, "summary_meta")
         return meta
     except ValueError as e:
         logger.error(f"Authentication error: {e}")
@@ -1285,15 +1331,25 @@ async def add_tracks_to_playlist(
     try:
         position = body.position
         inserted = 0
+        last_snapshot_id: Optional[str] = None
         for i in range(0, len(track_uris), 100):
             batch = track_uris[i:i + 100]
             if position is not None:
-                sp.playlist_add_items(playlist_id, batch, position=position + inserted)
+                result = sp.playlist_add_items(playlist_id, batch, position=position + inserted)
                 inserted += len(batch)
             else:
-                sp.playlist_add_items(playlist_id, batch)
-        playlist_cache_store.mark_dirty(playlist_id)
-        _queue_cache_refresh(session_mgr, playlist_id, "tracks_add")
+                result = sp.playlist_add_items(playlist_id, batch)
+            last_snapshot_id = _extract_snapshot_id(result, last_snapshot_id)
+        track_ids = [_parse_track_id_from_uri(uri) for uri in track_uris]
+        cache_updated = playlist_cache_store.apply_track_additions(
+            playlist_id,
+            track_ids,
+            position=position,
+            snapshot_id=last_snapshot_id,
+        )
+        if not cache_updated:
+            playlist_cache_store.mark_dirty(playlist_id)
+            _queue_cache_refresh(session_mgr, playlist_id, "tracks_add")
         return {"message": "Tracks added", "added": len(track_uris)}
     except Exception as e:
         logger.error("Failed to add tracks to playlist %s: %s", playlist_id, e)
@@ -1321,6 +1377,7 @@ async def remove_tracks_from_playlist(
     )
 
     try:
+        new_snapshot_id: Optional[str] = None
         # Fetch current playlist snapshot
         current_snapshot = sp.playlist(playlist_id, fields="snapshot_id").get("snapshot_id")
         if body.snapshot_id and body.snapshot_id != current_snapshot:
@@ -1412,6 +1469,7 @@ async def remove_tracks_from_playlist(
                 )
                 remove_payload = {"positions": positions_to_remove, "snapshot_id": current_snapshot}
                 remove_result = sp._delete(f"playlists/{playlist_id}/tracks", payload=remove_payload)
+                new_snapshot_id = _extract_snapshot_id(remove_result, new_snapshot_id)
                 logger.info(
                     "Removal response for playlist %s: %s",
                     playlist_id,
@@ -1434,15 +1492,32 @@ async def remove_tracks_from_playlist(
             uris = list({item.uri for item in body.items if item.uri})
             if not uris:
                 return {"message": "No tracks selected", "removed": 0}
-            sp.playlist_remove_all_occurrences_of_items(
+            remove_result = sp.playlist_remove_all_occurrences_of_items(
                 playlist_id,
                 uris,
                 snapshot_id=current_snapshot
             )
+            new_snapshot_id = _extract_snapshot_id(remove_result, new_snapshot_id)
             removed_count = len(uris)
 
-        playlist_cache_store.mark_dirty(playlist_id)
-        _queue_cache_refresh(session_mgr, playlist_id, "tracks_remove")
+        cache_updated = False
+        if removed_count > 0:
+            if items_with_positions and positions_to_remove:
+                cache_updated = playlist_cache_store.apply_track_removals_by_positions(
+                    playlist_id,
+                    positions_to_remove,
+                    snapshot_id=new_snapshot_id,
+                )
+            else:
+                track_ids = [_parse_track_id_from_uri(uri) for uri in uris]
+                cache_updated = playlist_cache_store.apply_track_removals_by_track_ids(
+                    playlist_id,
+                    track_ids,
+                    snapshot_id=new_snapshot_id,
+                )
+        if not cache_updated:
+            playlist_cache_store.mark_dirty(playlist_id)
+            _queue_cache_refresh(session_mgr, playlist_id, "tracks_remove")
         return {"message": "Tracks removed", "removed": removed_count}
     except Exception as e:
         logger.error("Failed to remove tracks from playlist %s: %s", playlist_id, e)
@@ -2111,8 +2186,16 @@ async def remove_duplicates(
             len(current_items),
             len(after_items),
         )
-        playlist_cache_store.mark_dirty(playlist_id)
-        _queue_cache_refresh(session_mgr, playlist_id, "duplicates_remove")
+        cache_updated = False
+        if removed_count > 0:
+            cache_updated = playlist_cache_store.apply_track_removals_by_positions(
+                playlist_id,
+                positions_to_remove,
+                snapshot_id=after_snapshot,
+            )
+        if not cache_updated:
+            playlist_cache_store.mark_dirty(playlist_id)
+            _queue_cache_refresh(session_mgr, playlist_id, "duplicates_remove")
         return {"message": "Duplicates removed", "removed": removed_count}
     except Exception as e:
         logger.error("Failed to remove duplicates for playlist %s: %s", playlist_id, e)
