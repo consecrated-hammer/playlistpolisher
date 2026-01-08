@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.1 - 2026-01-08
+**Selection + cache match fixes**
+- Tracks: add select-all (Ctrl/Cmd+A) for full playlist selection.
+- Cache check: harden playlist cache matching normalization for mixed payloads.
+
 ## v1.5.0 - 2026-01-08
 **AI playlist discovery**
 - Playlists: replace the single smart-playlist button with a create playlist dropdown (smart vs AI).
