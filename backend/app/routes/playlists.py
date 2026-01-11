@@ -2221,7 +2221,6 @@ async def remove_duplicates(
             )
         if not cache_updated:
             playlist_cache_store.mark_dirty(playlist_id)
-            _queue_cache_refresh(session_mgr, playlist_id, "duplicates_remove")
         return {"message": "Duplicates removed", "removed": removed_count}
     except Exception as e:
         logger.error("Failed to remove duplicates for playlist %s: %s", playlist_id, e)
@@ -2282,7 +2281,6 @@ async def undo_last_operation(
                 len(removed_items),
             )
             playlist_cache_store.mark_dirty(playlist_id)
-            _queue_cache_refresh(session_mgr, playlist_id, "undo_duplicates")
             return {
                 "message": f"Restored {len(removed_items)} tracks",
                 "snapshot_id": new_snapshot,
@@ -2316,7 +2314,6 @@ async def undo_last_operation(
                     len(original_order),
                 )
                 playlist_cache_store.mark_dirty(playlist_id)
-                _queue_cache_refresh(session_mgr, playlist_id, "undo_sort")
                 return {
                     "message": f"Restored previous order ({len(original_order)} tracks)",
                     "snapshot_id": new_snapshot,

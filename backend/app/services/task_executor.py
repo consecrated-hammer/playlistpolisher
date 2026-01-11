@@ -22,7 +22,6 @@ from app.services.sort_service import (
     estimate_sort_time,
     get_sort_key_function,
 )
-from app.services.cache_warm_service import start_cache_warm_job
 from app.db import operations as op_store
 from app.db import playlist_cache as playlist_cache_store
 
@@ -245,20 +244,6 @@ def _run_sort_job(
                 )
                 if changes_made:
                     playlist_cache_store.mark_dirty(playlist_id)
-                    if session_id:
-                        try:
-                            start_cache_warm_job(
-                                user_id,
-                                session_id,
-                                [playlist_id],
-                                meta={"source": "sort_complete"},
-                            )
-                        except Exception as cache_err:
-                            logger.warning(
-                                "Failed to queue cache refresh after sort for %s: %s",
-                                playlist_id,
-                                cache_err,
-                            )
             except Exception as log_err:
                 logger.warning("Failed to persist sort undo record for job %s: %s", job_id, log_err)
         
