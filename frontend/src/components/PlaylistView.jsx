@@ -279,21 +279,21 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   }, [duplicatesSelection]);
   // Use global job state if it matches this playlist, otherwise use local
   const job = globalJob?.playlist_id === playlist.id ? globalJob : null;
-  const setJob = (newJob) => {
+  const setJob = useCallback((newJob) => {
     if (newJob) {
       setGlobalJob({ ...newJob, playlist_id: playlist.id, playlist_name: currentPlaylist.name });
     } else {
       setGlobalJob(null);
     }
-  };
+  }, [currentPlaylist.name, playlist.id, setGlobalJob]);
   const jobStatus = globalJobStatus?.playlist_id === playlist.id ? globalJobStatus : null;
-  const setJobStatus = (newStatus) => {
+  const setJobStatus = useCallback((newStatus) => {
     if (newStatus) {
       setGlobalJobStatus({ ...newStatus, playlist_id: playlist.id, playlist_name: currentPlaylist.name });
     } else if (globalJobStatus?.playlist_id === playlist.id) {
       setGlobalJobStatus(null);
     }
-  };
+  }, [currentPlaylist.name, globalJobStatus?.playlist_id, playlist.id, setGlobalJobStatus]);
   const [jobError, setJobError] = useState(null);
   const [editMessage, setEditMessage] = useState(null);
   const [editError, setEditError] = useState(null);
@@ -450,6 +450,20 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }, 6000);
     return () => clearTimeout(timer);
   }, [cacheRefreshMessage, cacheRefreshError]);
+
+  useEffect(() => {
+    if (!showSortModal || jobStatus?.status !== 'completed') {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setShowSortModal(false);
+      setAnalysis(null);
+      setJob(null);
+      setJobStatus(null);
+      setJobError(null);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [jobStatus?.status, setJob, setJobStatus, showSortModal]);
 
   useEffect(() => {
     if (showDuplicatesModal) {
@@ -5083,10 +5097,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       {jobStatus.status}
                     </span>
                   </p>
-                  {jobStatus.progress !== undefined && jobStatus.total !== undefined && (
+                  {jobStatus.progress !== undefined && jobStatus.total > 0 && (
                     <p><span className="text-spotify-gray-light">Progress:</span> {jobStatus.progress}/{jobStatus.total}</p>
                   )}
                   {jobStatus.message && <p className="text-spotify-gray-light">{jobStatus.message}</p>}
+                  {jobStatus.status === 'completed' && jobStatus.total === 0 && sortForm.sort_by === 'date_added' && (
+                    <p className="text-spotify-gray-light">
+                      All tracks share the same Date added. Try a different sort field.
+                    </p>
+                  )}
                   {jobStatus.error && <p className="text-red-400">{jobStatus.error}</p>}
                   {(jobStatus.status === 'completed' || jobStatus.status === 'failed' || jobStatus.status === 'cancelled') && (
                     <div className="pt-2 flex items-center justify-between gap-3">

@@ -99,6 +99,7 @@ async def analyze_sort(
         
         # Fetch playlist tracks
         tracks = []
+        total_tracks = None
         offset = 0
         limit = 100
         
@@ -109,6 +110,8 @@ async def analyze_sort(
                 offset=offset,
                 fields='items(track(id,name,uri,artists(name),album(name),duration_ms),added_at),total'
             )
+            if total_tracks is None:
+                total_tracks = result.get("total", 0)
             
             for item in result['items']:
                 if item and item.get('track'):
@@ -121,6 +124,8 @@ async def analyze_sort(
             
             offset += limit
         
+        total_tracks = total_tracks if total_tracks is not None else len(tracks)
+
         # Calculate moves needed
         key_func, reverse = get_sort_key_function(request.sort_by, request.direction)
         tracks_to_move = calculate_moves_needed(tracks, key_func, reverse)
@@ -131,11 +136,22 @@ async def analyze_sort(
         
         # Warning for fast method
         warning = None
+        if not tracks and total_tracks:
+            warning = "Tracks are still syncing from Spotify. Try again in a moment."
+        elif tracks:
+            key_values = [key_func(track) for track in tracks]
+            if key_values and len(set(key_values)) == 1:
+                sort_label = request.sort_by.replace("_", " ")
+                warning = (
+                    f"All tracks share the same {sort_label}. Sorting won't change the order "
+                    "(common right after cloning)."
+                )
         if request.method == 'fast':
-            warning = "⚠️ Fast method will reset the 'Date Added' field for all tracks"
+            fast_warning = "⚠️ Fast method will reset the 'Date Added' field for all tracks"
+            warning = f"{warning} {fast_warning}".strip() if warning else fast_warning
         
         return SortAnalysisResponse(
-            total_tracks=len(tracks),
+            total_tracks=total_tracks,
             tracks_to_move=tracks_to_move,
             estimated_time_seconds=int(estimated_time),
             method=request.method,
