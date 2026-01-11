@@ -637,6 +637,28 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   }, []);
 
+  const loadPlaylistSnapshot = useCallback(async (playlistId) => {
+    const summary = await playlistAPI.getPlaylistSummary(playlistId);
+    const firstPage = await playlistAPI.getPlaylistTracksPaginated(playlistId, 0, PLAYLIST_PAGE_SIZE);
+    const data = {
+      ...summary,
+      tracks: firstPage.tracks,
+      total_tracks: firstPage.total,
+      cache_info: firstPage.cache_info || { hits: 0, misses: 0, warmed: 0 }
+    };
+    applyPlaylistState(data);
+    return data;
+  }, [applyPlaylistState]);
+
+  const runLiveRefresh = useCallback(async (playlistId) => {
+    setLiveSyncing(true);
+    try {
+      return await loadPlaylistSnapshot(playlistId);
+    } finally {
+      setLiveSyncing(false);
+    }
+  }, [loadPlaylistSnapshot]);
+
   useEffect(() => {
     applyPlaylistState(playlist);
     setEditForm({
@@ -1553,28 +1575,6 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       window.open(trackUrl, '_blank', 'noopener,noreferrer');
     }
   };
-
-  const loadPlaylistSnapshot = useCallback(async (playlistId) => {
-    const summary = await playlistAPI.getPlaylistSummary(playlistId);
-    const firstPage = await playlistAPI.getPlaylistTracksPaginated(playlistId, 0, PLAYLIST_PAGE_SIZE);
-    const data = {
-      ...summary,
-      tracks: firstPage.tracks,
-      total_tracks: firstPage.total,
-      cache_info: firstPage.cache_info || { hits: 0, misses: 0, warmed: 0 }
-    };
-    applyPlaylistState(data);
-    return data;
-  }, [applyPlaylistState]);
-
-  const runLiveRefresh = useCallback(async (playlistId) => {
-    setLiveSyncing(true);
-    try {
-      return await loadPlaylistSnapshot(playlistId);
-    } finally {
-      setLiveSyncing(false);
-    }
-  }, [loadPlaylistSnapshot]);
 
   const refreshPlaylistDetails = async ({ resetSort = false } = {}) => {
     if (resetSort) {
