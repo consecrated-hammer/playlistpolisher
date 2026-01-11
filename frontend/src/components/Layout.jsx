@@ -63,6 +63,7 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
   const imageTag = import.meta.env.VITE_IMAGE_TAG;
   const isDevBuild = (imageTag && imageTag !== 'main' && imageTag !== 'latest' && !imageTag.startsWith('v')) || IS_DEV_BUILD;
   const versionLabel = shortCommit ? `commit ${shortCommit}` : 'local';
+  const cacheIndicatorTop = isDevBuild ? 'top-14 sm:top-16' : 'top-4 sm:top-6';
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-spotify-black via-spotify-gray-dark to-spotify-gray-mid flex flex-col ${showPlayerBar ? 'pb-32' : ''}`}>
@@ -107,16 +108,6 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
 
             {/* Job Status Indicator */}
             <div className="flex items-center gap-2">
-              <ActivityIndicator
-                active={cacheWarmStatus?.status === 'running'}
-                label="Caching playlists"
-                detail={
-                  cacheWarmStatus?.total
-                    ? `${cacheWarmStatus.completed || 0}/${cacheWarmStatus.total} playlists`
-                    : 'Working in the background'
-                }
-                icon="cloud_sync"
-              />
               <ActivityIndicator
                 active={dedupeStatus?.active}
                 label="Removing duplicates"
@@ -229,6 +220,21 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
          </div>
        </div>
      </header>
+
+      {cacheWarmStatus?.status === 'running' && (
+        <div className={`fixed right-4 ${cacheIndicatorTop} z-[90] pointer-events-none`}>
+          <ActivityIndicator
+            active
+            label="Caching playlists"
+            detail={
+              cacheWarmStatus?.total
+                ? `${cacheWarmStatus.completed || 0}/${cacheWarmStatus.total} playlists`
+                : 'Working in the background'
+            }
+            icon="cloud_sync"
+          />
+        </div>
+      )}
 
       {/* Main Content */}
       <main className={`container mx-auto px-4 py-8 flex-grow overflow-x-hidden md:overflow-x-visible ${showPlayerBar ? 'pb-32' : ''}`}>
