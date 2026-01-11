@@ -5175,8 +5175,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                         name: editForm.name,
                         description: editForm.description
                       });
-                        const updated = await playlistAPI.getPlaylistDetails(currentPlaylist.id);
-                        setCurrentPlaylist(updated);
+                        await loadPlaylistSnapshot(currentPlaylist.id);
                         setEditMessage('Playlist updated');
                         setShowEditModal(false);
                       } catch (err) {
