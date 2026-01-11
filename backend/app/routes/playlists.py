@@ -151,6 +151,7 @@ def _queue_cache_refresh_if_needed(
     session_mgr: SessionManager,
     playlist_id: str,
     source: str,
+    queue_refresh: bool = True,
 ) -> PlaylistContextMeta:
     meta = spotify.get_playlist_context_meta(playlist_id)
     facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
@@ -168,7 +169,8 @@ def _queue_cache_refresh_if_needed(
     if needs_refresh:
         if facts and (snapshot_mismatch or count_mismatch):
             playlist_cache_store.mark_dirty(playlist_id)
-        _queue_cache_refresh(session_mgr, playlist_id, source)
+        if queue_refresh:
+            _queue_cache_refresh(session_mgr, playlist_id, source)
     return meta
 
 
@@ -311,7 +313,13 @@ async def get_playlist_summary(
 ):
     """Get lightweight playlist metadata without loading tracks."""
     try:
-        meta = _queue_cache_refresh_if_needed(spotify, session_mgr, playlist_id, "summary_meta")
+        meta = _queue_cache_refresh_if_needed(
+            spotify,
+            session_mgr,
+            playlist_id,
+            "summary_meta",
+            queue_refresh=False,
+        )
         return meta
     except ValueError as e:
         logger.error(f"Authentication error: {e}")
