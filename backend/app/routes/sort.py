@@ -142,10 +142,16 @@ async def analyze_sort(
             key_values = [key_func(track) for track in tracks]
             if key_values and len(set(key_values)) == 1:
                 sort_label = request.sort_by.replace("_", " ")
-                warning = (
-                    f"All tracks share the same {sort_label}. Sorting won't change the order "
-                    "(common right after cloning)."
-                )
+                if request.direction == 'desc':
+                    warning = (
+                        f"All tracks share the same {sort_label}. Sorting will reverse the current order "
+                        "(common right after cloning)."
+                    )
+                else:
+                    warning = (
+                        f"All tracks share the same {sort_label}. Sorting won't change the order "
+                        "(common right after cloning)."
+                    )
         if request.method == 'fast':
             fast_warning = "⚠️ Fast method will reset the 'Date Added' field for all tracks"
             warning = f"{warning} {fast_warning}".strip() if warning else fast_warning
