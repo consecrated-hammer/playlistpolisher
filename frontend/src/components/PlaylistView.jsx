@@ -2582,11 +2582,17 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setTrackActionError('All selected tracks already exist in the target playlist.');
       return;
     }
+    const currentPlaylistId = currentPlaylist?.id;
+    const isCurrentTarget = currentPlaylistId && targetPlaylistId === currentPlaylistId;
+    let shouldRefreshCurrent = false;
     setTrackActionLoading(true);
     setTrackActionError(null);
     try {
       if (uris.length) {
         await playlistAPI.addTracks(targetPlaylistId, { track_uris: uris });
+        if (trackActionMode === 'add' && isCurrentTarget) {
+          shouldRefreshCurrent = true;
+        }
       }
       if (trackActionMode === 'move') {
         const items = selectedTracksSorted
@@ -2601,6 +2607,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               items,
               snapshot_id: currentPlaylist.snapshot_id 
             });
+            shouldRefreshCurrent = true;
           } catch (err) {
             restorePlaylistState(snapshot);
             throw err;
@@ -2609,6 +2616,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       }
       setTrackActionOpen(false);
       setSelectedTrackKeys([]);
+      if (shouldRefreshCurrent && currentPlaylistId) {
+        try {
+          await loadPlaylistSnapshot(currentPlaylistId);
+        } catch (err) {
+          // Non-blocking; keep optimistic view on refresh failure.
+        }
+      }
     } catch (err) {
       setTrackActionError(err.message || 'Action failed.');
     } finally {
@@ -2651,6 +2665,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         } catch (err) {
           restorePlaylistState(snapshot);
           throw err;
+        }
+      }
+      if (items.length && currentPlaylist?.id) {
+        try {
+          await loadPlaylistSnapshot(currentPlaylist.id);
+        } catch (err) {
+          // Non-blocking; keep optimistic view on refresh failure.
         }
       }
     } catch (err) {
