@@ -1249,9 +1249,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
           setRefreshing(true);
           Promise.all([
-            playlistAPI.getPlaylistDetails(playlist.id)
-              .then((updated) => setCurrentPlaylist(updated))
-              .catch(() => {/* ignore refresh errors */}),
+            loadPlaylistSnapshot(playlist.id).catch(() => {/* ignore refresh errors */}),
             fetchHistory(playlist.id)
           ]).finally(() => setRefreshing(false));
           clearInterval(interval);
@@ -1263,7 +1261,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }, 2000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job, playlist.id, currentPlaylist?.tracks?.length, currentPlaylist?.total_tracks]);
+  }, [job, playlist.id, currentPlaylist?.tracks?.length, currentPlaylist?.total_tracks, loadPlaylistSnapshot]);
 
   const handleAnalyzeSort = async () => {
     setJobError(null);
@@ -1554,6 +1552,19 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   };
 
+  const loadPlaylistSnapshot = useCallback(async (playlistId) => {
+    const summary = await playlistAPI.getPlaylistSummary(playlistId);
+    const firstPage = await playlistAPI.getPlaylistTracksPaginated(playlistId, 0, PLAYLIST_PAGE_SIZE);
+    const data = {
+      ...summary,
+      tracks: firstPage.tracks,
+      total_tracks: firstPage.total,
+      cache_info: firstPage.cache_info || { hits: 0, misses: 0, warmed: 0 }
+    };
+    applyPlaylistState(data);
+    return data;
+  }, [applyPlaylistState]);
+
   const refreshPlaylistDetails = async ({ resetSort = false } = {}) => {
     if (resetSort) {
       setSortBy(null);
@@ -1561,9 +1572,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
     setRefreshing(true);
     try {
-      await handleCacheRefresh();
-      const updated = await playlistAPI.getPlaylistDetails(playlist.id);
-      applyPlaylistState(updated);
+      await loadPlaylistSnapshot(playlist.id);
     } catch (err) {
       // non-blocking; leave UI state unchanged
     } finally {
@@ -2896,8 +2905,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         return;
       }
       await playlistAPI.removeDuplicates(playlist.id, items, duplicates?.snapshot_id);
-      const updated = await playlistAPI.getPlaylistDetails(playlist.id);
-      setCurrentPlaylist(updated);
+      await loadPlaylistSnapshot(playlist.id);
       setShowDuplicatesModal(false);
       setDuplicates(null);
       setDuplicatesSelection({});
