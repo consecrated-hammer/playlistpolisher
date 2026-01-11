@@ -15,6 +15,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { getBestImage, formatDuration, sortAPI, playlistAPI, ignoreAPI, preferencesAPI, cacheAPI, playerAPI } from '../services/api';
 import LoadingSpinner from './LoadingSpinner';
+import ActivityIndicator from './ActivityIndicator';
 import usePlayerContext from '../context/usePlayerContext';
 import useInfiniteScroll from '../hooks/useInfiniteScroll';
 import { PLAYLIST_PAGE_SIZE } from '../config';
@@ -395,6 +396,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [liveSyncing, setLiveSyncing] = useState(false);
   const [cacheRefreshLoading, setCacheRefreshLoading] = useState(false);
   const [cacheRefreshMessage, setCacheRefreshMessage] = useState(null);
   const [cacheRefreshError, setCacheRefreshError] = useState(null);
@@ -1565,6 +1567,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     return data;
   }, [applyPlaylistState]);
 
+  const runLiveRefresh = useCallback(async (playlistId) => {
+    setLiveSyncing(true);
+    try {
+      return await loadPlaylistSnapshot(playlistId);
+    } finally {
+      setLiveSyncing(false);
+    }
+  }, [loadPlaylistSnapshot]);
+
   const refreshPlaylistDetails = async ({ resetSort = false } = {}) => {
     if (resetSort) {
       setSortBy(null);
@@ -2618,7 +2629,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setSelectedTrackKeys([]);
       if (shouldRefreshCurrent && currentPlaylistId) {
         try {
-          await loadPlaylistSnapshot(currentPlaylistId);
+          await runLiveRefresh(currentPlaylistId);
         } catch (err) {
           // Non-blocking; keep optimistic view on refresh failure.
         }
@@ -2669,7 +2680,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       }
       if (items.length && currentPlaylist?.id) {
         try {
-          await loadPlaylistSnapshot(currentPlaylist.id);
+          await runLiveRefresh(currentPlaylist.id);
         } catch (err) {
           // Non-blocking; keep optimistic view on refresh failure.
         }
@@ -2926,7 +2937,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         return;
       }
       await playlistAPI.removeDuplicates(playlist.id, items, duplicates?.snapshot_id);
-      await loadPlaylistSnapshot(playlist.id);
+      await runLiveRefresh(playlist.id);
       setShowDuplicatesModal(false);
       setDuplicates(null);
       setDuplicatesSelection({});
@@ -2952,6 +2963,16 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {refreshing && (
         <div className="absolute inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-lg">
           <LoadingSpinner text="Refreshing playlist..." />
+        </div>
+      )}
+      {liveSyncing && (
+        <div className="fixed right-4 top-24 sm:top-28 z-[95] pointer-events-none">
+          <ActivityIndicator
+            active
+            label="Syncing with Spotify"
+            detail="Updating playlist view"
+            icon="sync"
+          />
         </div>
       )}
 
@@ -5196,7 +5217,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                         name: editForm.name,
                         description: editForm.description
                       });
-                        await loadPlaylistSnapshot(currentPlaylist.id);
+                        await runLiveRefresh(currentPlaylist.id);
                         setEditMessage('Playlist updated');
                         setShowEditModal(false);
                       } catch (err) {

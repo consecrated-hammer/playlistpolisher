@@ -1364,7 +1364,6 @@ async def add_tracks_to_playlist(
         )
         if not cache_updated:
             playlist_cache_store.mark_dirty(playlist_id)
-            _queue_cache_refresh(session_mgr, playlist_id, "tracks_add")
         return {"message": "Tracks added", "added": len(track_uris)}
     except Exception as e:
         logger.error("Failed to add tracks to playlist %s: %s", playlist_id, e)
@@ -1532,7 +1531,6 @@ async def remove_tracks_from_playlist(
                 )
         if removed_count > 0 and not cache_updated:
             playlist_cache_store.mark_dirty(playlist_id)
-            _queue_cache_refresh(session_mgr, playlist_id, "tracks_remove")
         return {"message": "Tracks removed", "removed": removed_count}
     except Exception as e:
         logger.error("Failed to remove tracks from playlist %s: %s", playlist_id, e)
