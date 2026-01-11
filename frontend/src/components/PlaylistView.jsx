@@ -2194,6 +2194,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     const fresh = Math.max(total - exact - similar, 0);
     return { total, exact, similar, fresh };
   }, [selectedTrackCount, targetPlaylistMatch]);
+  const targetPlaylistMatchReady = Boolean(
+    targetPlaylistMatch?.cached || targetPlaylistMatch?.source === 'live'
+  );
+  const targetPlaylistMatchSource = targetPlaylistMatch?.source || (targetPlaylistMatch?.cached ? 'cache' : null);
 
   const targetCacheSortEnabled = targetPlaylistFactsSummary.coverage_ratio >= 0.8
     && targetPlaylistFactsSummary.facts_count > 0;
@@ -2543,7 +2547,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setTrackActionError('No playable tracks selected.');
       return;
     }
-    const shouldSkip = skipExistingTracks && targetPlaylistMatch?.cached;
+    const shouldSkip = skipExistingTracks && targetPlaylistMatchReady;
     const tracksToAdd = shouldSkip
       ? selectedTracksSorted.filter((track) => {
         const status = targetPlaylistMatchMap.get(track.selectionKey);
@@ -3564,10 +3568,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <button
                   type="button"
                   onClick={() => navigate('/cache')}
-                  className={`w-9 h-9 rounded-full border transition-colors flex items-center justify-center ${
+                  className={`w-9 h-9 flex items-center justify-center transition-colors ${
                     userCachedTracks > 0
-                      ? 'border-spotify-green text-spotify-green bg-spotify-green/10 hover:bg-spotify-green/20'
-                      : 'border-amber-400 text-amber-200 bg-amber-500/10 hover:bg-amber-500/20'
+                      ? 'text-spotify-green hover:text-spotify-green-dark'
+                      : 'text-amber-200 hover:text-amber-100'
                   }`}
                   aria-label={userCachedTracks > 0 ? 'Cache active' : 'Cache empty'}
                 >
@@ -4546,7 +4550,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <div className="border-t border-spotify-gray-mid/60 pt-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs uppercase tracking-wide text-spotify-gray-light">Already in playlist</div>
-                    {targetPlaylistMatch?.cached && selectedTrackCount > 0 && (
+                    {targetPlaylistMatchReady && selectedTrackCount > 0 && (
                       <button
                         type="button"
                         onClick={handleToggleMatchDetails}
@@ -4557,21 +4561,26 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     )}
                   </div>
                   {targetPlaylistMatchLoading && (
-                    <div className="text-spotify-gray-light text-sm">Checking cache…</div>
+                    <div className="text-spotify-gray-light text-sm">Checking matches…</div>
                   )}
                   {!targetPlaylistMatchLoading && targetPlaylistMatchError && (
                     <div className="text-red-400 text-sm">{targetPlaylistMatchError}</div>
                   )}
-                  {!targetPlaylistMatchLoading && !targetPlaylistMatchError && !targetPlaylistMatch?.cached && (
+                  {!targetPlaylistMatchLoading && !targetPlaylistMatchError && !targetPlaylistMatchReady && (
                     <div className="text-spotify-gray-light text-sm">
-                      Cache not ready for this playlist yet. Open it once to warm the cache.
+                      Match data not ready yet. Open the playlist once to warm the cache.
                     </div>
                   )}
-                  {!targetPlaylistMatchLoading && !targetPlaylistMatchError && targetPlaylistMatch?.cached && (
+                  {!targetPlaylistMatchLoading && !targetPlaylistMatchError && targetPlaylistMatchReady && (
                     <div className="space-y-2">
                       <div className="text-sm text-spotify-gray-light">
                         Exact: {targetPlaylistMatchSummary.exact} • Similar: {targetPlaylistMatchSummary.similar} • New: {targetPlaylistMatchSummary.fresh}
                       </div>
+                      {targetPlaylistMatchSource === 'live' && (
+                        <div className="text-xs text-spotify-gray-light">
+                          Live check (cache refresh queued in background).
+                        </div>
+                      )}
                       {showMatchDetails && (
                         <div className="max-h-40 overflow-y-auto space-y-2">
                           {selectedTracksSorted.map((track) => {
@@ -4602,13 +4611,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       type="checkbox"
                       checked={skipExistingTracks}
                       onChange={(event) => setSkipExistingTracks(event.target.checked)}
-                      disabled={!targetPlaylistMatch?.cached || targetPlaylistMatchLoading}
+                      disabled={!targetPlaylistMatchReady || targetPlaylistMatchLoading}
                       className="w-4 h-4 rounded border-spotify-gray-mid text-spotify-green focus:ring-spotify-green"
                     />
                     Auto-skip tracks already in this playlist
                   </label>
-                  {!targetPlaylistMatchLoading && !targetPlaylistMatch?.cached && (
-                    <div className="text-xs text-spotify-gray-light">Cache is required to auto-skip.</div>
+                  {!targetPlaylistMatchLoading && !targetPlaylistMatchReady && (
+                    <div className="text-xs text-spotify-gray-light">Match data is required to auto-skip.</div>
                   )}
                 </div>
               )}

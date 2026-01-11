@@ -917,14 +917,14 @@ const PlaylistDetailPage = ({ user, onLogout, globalJob, setGlobalJob, globalJob
 
   const loadPlaylistDetails = async () => {
     setLoading(true);
-    setLoadingMessage('Checking playlist cache...');
+    setLoadingMessage('Loading playlist summary...');
     setError(null);
     
     try {
       // Load playlist summary (metadata only)
       const summary = await playlistAPI.getPlaylistSummary(playlistId);
       
-      setLoadingMessage('Loading playlist details...');
+      setLoadingMessage('Loading playlist tracks...');
       // Load first page of tracks (100 by default)
       const firstPage = await playlistAPI.getPlaylistTracksPaginated(playlistId, 0, 100);
       
