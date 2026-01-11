@@ -1530,7 +1530,7 @@ async def remove_tracks_from_playlist(
                     track_ids,
                     snapshot_id=new_snapshot_id,
                 )
-        if not cache_updated:
+        if removed_count > 0 and not cache_updated:
             playlist_cache_store.mark_dirty(playlist_id)
             _queue_cache_refresh(session_mgr, playlist_id, "tracks_remove")
         return {"message": "Tracks removed", "removed": removed_count}
@@ -2227,7 +2227,7 @@ async def remove_duplicates(
                 positions_to_remove,
                 snapshot_id=after_snapshot,
             )
-        if not cache_updated:
+        if removed_count > 0 and not cache_updated:
             playlist_cache_store.mark_dirty(playlist_id)
         return {"message": "Duplicates removed", "removed": removed_count}
     except Exception as e:
