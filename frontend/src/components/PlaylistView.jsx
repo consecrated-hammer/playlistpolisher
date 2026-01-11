@@ -4802,6 +4802,22 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
             </div>
 
             <div className="space-y-4">
+              {(artistActionMessage || artistActionError) && (
+                <div className="space-y-2">
+                  {artistActionMessage && (
+                    <div className="flex items-start gap-2 rounded-lg border border-spotify-green/40 bg-spotify-green/15 px-3 py-2 text-sm text-white">
+                      <span className="icon text-base text-spotify-green">check_circle</span>
+                      <span className="font-semibold">{artistActionMessage}</span>
+                    </div>
+                  )}
+                  {artistActionError && (
+                    <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                      <span className="icon text-base">error</span>
+                      <span className="font-semibold">{artistActionError}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                 <div className="text-sm text-spotify-gray-light">
                   {playlistArtistsLoading ? 'Loading artists…' : `${playlistArtists.length} artist${playlistArtists.length === 1 ? '' : 's'}`}
@@ -4962,13 +4978,6 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     })
                   )}
                 </div>
-              )}
-
-              {artistActionMessage && (
-                <div className="text-spotify-green text-sm">{artistActionMessage}</div>
-              )}
-              {artistActionError && (
-                <div className="text-red-400 text-sm">{artistActionError}</div>
               )}
 
               <div className="flex flex-col sm:flex-row gap-3 justify-end">
