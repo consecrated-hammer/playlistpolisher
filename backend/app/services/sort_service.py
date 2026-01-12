@@ -13,6 +13,19 @@ from spotipy import Spotify
 logger = logging.getLogger(__name__)
 
 
+def _build_sorted_indexed(
+    tracks: List[Dict[str, Any]],
+    key_func: Callable,
+    reverse: bool,
+) -> List[Tuple[int, Dict[str, Any], Any]]:
+    indexed_tracks = [(i, track, key_func(track)) for i, track in enumerate(tracks)]
+    keys = [item[2] for item in indexed_tracks]
+    if keys and len(set(keys)) == 1:
+        # When all keys match, descending should still reverse the order.
+        return sorted(indexed_tracks, key=lambda x: (x[2], x[0]), reverse=reverse)
+    return sorted(indexed_tracks, key=lambda x: x[2], reverse=reverse)
+
+
 def get_sort_key_function(sort_by: str, direction: str) -> Callable:
     """
     Get the sort key function for a given sort criterion.
@@ -75,8 +88,7 @@ def calculate_moves_needed(
         return 0
 
     if key_func:
-        indexed_tracks = [(i, track, key_func(track)) for i, track in enumerate(tracks)]
-        sorted_indexed = sorted(indexed_tracks, key=lambda x: x[2], reverse=reverse)
+        sorted_indexed = _build_sorted_indexed(tracks, key_func, reverse)
         return sum(1 for i, (orig_idx, _, _) in enumerate(sorted_indexed) if orig_idx != i)
 
     return 0
@@ -107,7 +119,8 @@ async def sort_playlist_fast(
     
     # Sort tracks
     key_func, reverse = get_sort_key_function(sort_by, direction)
-    sorted_tracks = sorted(tracks, key=key_func, reverse=reverse)
+    sorted_indexed = _build_sorted_indexed(tracks, key_func, reverse)
+    sorted_tracks = [track for _, track, _ in sorted_indexed]
     
     # Extract URIs
     track_uris = [track['uri'] for track in sorted_tracks]
@@ -164,10 +177,7 @@ async def sort_playlist_preserve_dates(
     key_func, reverse = get_sort_key_function(sort_by, direction)
     
     # Create list of (index, track, sort_key) tuples
-    indexed_tracks = [(i, track, key_func(track)) for i, track in enumerate(tracks)]
-    
-    # Sort by key to get target order
-    sorted_indexed = sorted(indexed_tracks, key=lambda x: x[2], reverse=reverse)
+    sorted_indexed = _build_sorted_indexed(tracks, key_func, reverse)
     
     # Calculate moves needed
     moves_needed = sum(1 for i, (orig_idx, _, _) in enumerate(sorted_indexed) if orig_idx != i)

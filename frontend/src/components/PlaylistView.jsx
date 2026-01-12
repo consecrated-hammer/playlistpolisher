@@ -15,6 +15,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { getBestImage, formatDuration, sortAPI, playlistAPI, ignoreAPI, preferencesAPI, cacheAPI, playerAPI } from '../services/api';
 import LoadingSpinner from './LoadingSpinner';
+import ActivityIndicator from './ActivityIndicator';
 import usePlayerContext from '../context/usePlayerContext';
 import useInfiniteScroll from '../hooks/useInfiniteScroll';
 import { PLAYLIST_PAGE_SIZE } from '../config';
@@ -279,21 +280,21 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   }, [duplicatesSelection]);
   // Use global job state if it matches this playlist, otherwise use local
   const job = globalJob?.playlist_id === playlist.id ? globalJob : null;
-  const setJob = (newJob) => {
+  const setJob = useCallback((newJob) => {
     if (newJob) {
       setGlobalJob({ ...newJob, playlist_id: playlist.id, playlist_name: currentPlaylist.name });
     } else {
       setGlobalJob(null);
     }
-  };
+  }, [currentPlaylist.name, playlist.id, setGlobalJob]);
   const jobStatus = globalJobStatus?.playlist_id === playlist.id ? globalJobStatus : null;
-  const setJobStatus = (newStatus) => {
+  const setJobStatus = useCallback((newStatus) => {
     if (newStatus) {
       setGlobalJobStatus({ ...newStatus, playlist_id: playlist.id, playlist_name: currentPlaylist.name });
     } else if (globalJobStatus?.playlist_id === playlist.id) {
       setGlobalJobStatus(null);
     }
-  };
+  }, [currentPlaylist.name, globalJobStatus?.playlist_id, playlist.id, setGlobalJobStatus]);
   const [jobError, setJobError] = useState(null);
   const [editMessage, setEditMessage] = useState(null);
   const [editError, setEditError] = useState(null);
@@ -395,6 +396,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [analyzing, setAnalyzing] = useState(false);
   const [startingSort, setStartingSort] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [liveSyncing, setLiveSyncing] = useState(false);
   const [cacheRefreshLoading, setCacheRefreshLoading] = useState(false);
   const [cacheRefreshMessage, setCacheRefreshMessage] = useState(null);
   const [cacheRefreshError, setCacheRefreshError] = useState(null);
@@ -450,6 +452,20 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }, 6000);
     return () => clearTimeout(timer);
   }, [cacheRefreshMessage, cacheRefreshError]);
+
+  useEffect(() => {
+    if (!showSortModal || jobStatus?.status !== 'completed') {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setShowSortModal(false);
+      setAnalysis(null);
+      setJob(null);
+      setJobStatus(null);
+      setJobError(null);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [jobStatus?.status, setJob, setJobStatus, showSortModal]);
 
   useEffect(() => {
     if (showDuplicatesModal) {
@@ -620,6 +636,28 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setHasMoreTracks(shouldLoadMore);
     }
   }, []);
+
+  const loadPlaylistSnapshot = useCallback(async (playlistId) => {
+    const summary = await playlistAPI.getPlaylistSummary(playlistId);
+    const firstPage = await playlistAPI.getPlaylistTracksPaginated(playlistId, 0, PLAYLIST_PAGE_SIZE);
+    const data = {
+      ...summary,
+      tracks: firstPage.tracks,
+      total_tracks: firstPage.total,
+      cache_info: firstPage.cache_info || { hits: 0, misses: 0, warmed: 0 }
+    };
+    applyPlaylistState(data);
+    return data;
+  }, [applyPlaylistState]);
+
+  const runLiveRefresh = useCallback(async (playlistId) => {
+    setLiveSyncing(true);
+    try {
+      return await loadPlaylistSnapshot(playlistId);
+    } finally {
+      setLiveSyncing(false);
+    }
+  }, [loadPlaylistSnapshot]);
 
   useEffect(() => {
     applyPlaylistState(playlist);
@@ -1235,9 +1273,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
           setRefreshing(true);
           Promise.all([
-            playlistAPI.getPlaylistDetails(playlist.id)
-              .then((updated) => setCurrentPlaylist(updated))
-              .catch(() => {/* ignore refresh errors */}),
+            loadPlaylistSnapshot(playlist.id).catch(() => {/* ignore refresh errors */}),
             fetchHistory(playlist.id)
           ]).finally(() => setRefreshing(false));
           clearInterval(interval);
@@ -1249,7 +1285,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }, 2000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job, playlist.id, currentPlaylist?.tracks?.length, currentPlaylist?.total_tracks]);
+  }, [job, playlist.id, currentPlaylist?.tracks?.length, currentPlaylist?.total_tracks, loadPlaylistSnapshot]);
 
   const handleAnalyzeSort = async () => {
     setJobError(null);
@@ -1547,9 +1583,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
     setRefreshing(true);
     try {
-      await handleCacheRefresh();
-      const updated = await playlistAPI.getPlaylistDetails(playlist.id);
-      applyPlaylistState(updated);
+      await loadPlaylistSnapshot(playlist.id);
     } catch (err) {
       // non-blocking; leave UI state unchanged
     } finally {
@@ -2194,6 +2228,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     const fresh = Math.max(total - exact - similar, 0);
     return { total, exact, similar, fresh };
   }, [selectedTrackCount, targetPlaylistMatch]);
+  const targetPlaylistMatchReady = Boolean(
+    targetPlaylistMatch?.cached || targetPlaylistMatch?.source === 'live'
+  );
+  const targetPlaylistMatchSource = targetPlaylistMatch?.source || (targetPlaylistMatch?.cached ? 'cache' : null);
 
   const targetCacheSortEnabled = targetPlaylistFactsSummary.coverage_ratio >= 0.8
     && targetPlaylistFactsSummary.facts_count > 0;
@@ -2543,7 +2581,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setTrackActionError('No playable tracks selected.');
       return;
     }
-    const shouldSkip = skipExistingTracks && targetPlaylistMatch?.cached;
+    const shouldSkip = skipExistingTracks && targetPlaylistMatchReady;
     const tracksToAdd = shouldSkip
       ? selectedTracksSorted.filter((track) => {
         const status = targetPlaylistMatchMap.get(track.selectionKey);
@@ -2555,11 +2593,17 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setTrackActionError('All selected tracks already exist in the target playlist.');
       return;
     }
+    const currentPlaylistId = currentPlaylist?.id;
+    const isCurrentTarget = currentPlaylistId && targetPlaylistId === currentPlaylistId;
+    let shouldRefreshCurrent = false;
     setTrackActionLoading(true);
     setTrackActionError(null);
     try {
       if (uris.length) {
         await playlistAPI.addTracks(targetPlaylistId, { track_uris: uris });
+        if (trackActionMode === 'add' && isCurrentTarget) {
+          shouldRefreshCurrent = true;
+        }
       }
       if (trackActionMode === 'move') {
         const items = selectedTracksSorted
@@ -2574,6 +2618,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
               items,
               snapshot_id: currentPlaylist.snapshot_id 
             });
+            shouldRefreshCurrent = true;
           } catch (err) {
             restorePlaylistState(snapshot);
             throw err;
@@ -2582,6 +2627,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       }
       setTrackActionOpen(false);
       setSelectedTrackKeys([]);
+      if (shouldRefreshCurrent && currentPlaylistId) {
+        try {
+          await runLiveRefresh(currentPlaylistId);
+        } catch (err) {
+          // Non-blocking; keep optimistic view on refresh failure.
+        }
+      }
     } catch (err) {
       setTrackActionError(err.message || 'Action failed.');
     } finally {
@@ -2624,6 +2676,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         } catch (err) {
           restorePlaylistState(snapshot);
           throw err;
+        }
+      }
+      if (items.length && currentPlaylist?.id) {
+        try {
+          await runLiveRefresh(currentPlaylist.id);
+        } catch (err) {
+          // Non-blocking; keep optimistic view on refresh failure.
         }
       }
     } catch (err) {
@@ -2878,8 +2937,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         return;
       }
       await playlistAPI.removeDuplicates(playlist.id, items, duplicates?.snapshot_id);
-      const updated = await playlistAPI.getPlaylistDetails(playlist.id);
-      setCurrentPlaylist(updated);
+      await runLiveRefresh(playlist.id);
       setShowDuplicatesModal(false);
       setDuplicates(null);
       setDuplicatesSelection({});
@@ -2905,6 +2963,16 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {refreshing && (
         <div className="absolute inset-0 z-40 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-lg">
           <LoadingSpinner text="Refreshing playlist..." />
+        </div>
+      )}
+      {liveSyncing && (
+        <div className="fixed right-4 top-24 sm:top-28 z-[95] pointer-events-none">
+          <ActivityIndicator
+            active
+            label="Syncing with Spotify"
+            detail="Updating playlist view"
+            icon="sync"
+          />
         </div>
       )}
 
@@ -3564,10 +3632,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <button
                   type="button"
                   onClick={() => navigate('/cache')}
-                  className={`w-9 h-9 rounded-full border transition-colors flex items-center justify-center ${
+                  className={`w-9 h-9 flex items-center justify-center transition-colors ${
                     userCachedTracks > 0
-                      ? 'border-spotify-green text-spotify-green bg-spotify-green/10 hover:bg-spotify-green/20'
-                      : 'border-amber-400 text-amber-200 bg-amber-500/10 hover:bg-amber-500/20'
+                      ? 'text-spotify-green hover:text-spotify-green-dark'
+                      : 'text-amber-200 hover:text-amber-100'
                   }`}
                   aria-label={userCachedTracks > 0 ? 'Cache active' : 'Cache empty'}
                 >
@@ -4546,7 +4614,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                 <div className="border-t border-spotify-gray-mid/60 pt-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-xs uppercase tracking-wide text-spotify-gray-light">Already in playlist</div>
-                    {targetPlaylistMatch?.cached && selectedTrackCount > 0 && (
+                    {targetPlaylistMatchReady && selectedTrackCount > 0 && (
                       <button
                         type="button"
                         onClick={handleToggleMatchDetails}
@@ -4557,21 +4625,26 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     )}
                   </div>
                   {targetPlaylistMatchLoading && (
-                    <div className="text-spotify-gray-light text-sm">Checking cache…</div>
+                    <div className="text-spotify-gray-light text-sm">Checking matches…</div>
                   )}
                   {!targetPlaylistMatchLoading && targetPlaylistMatchError && (
                     <div className="text-red-400 text-sm">{targetPlaylistMatchError}</div>
                   )}
-                  {!targetPlaylistMatchLoading && !targetPlaylistMatchError && !targetPlaylistMatch?.cached && (
+                  {!targetPlaylistMatchLoading && !targetPlaylistMatchError && !targetPlaylistMatchReady && (
                     <div className="text-spotify-gray-light text-sm">
-                      Cache not ready for this playlist yet. Open it once to warm the cache.
+                      Match data not ready yet. Open the playlist once to warm the cache.
                     </div>
                   )}
-                  {!targetPlaylistMatchLoading && !targetPlaylistMatchError && targetPlaylistMatch?.cached && (
+                  {!targetPlaylistMatchLoading && !targetPlaylistMatchError && targetPlaylistMatchReady && (
                     <div className="space-y-2">
                       <div className="text-sm text-spotify-gray-light">
                         Exact: {targetPlaylistMatchSummary.exact} • Similar: {targetPlaylistMatchSummary.similar} • New: {targetPlaylistMatchSummary.fresh}
                       </div>
+                      {targetPlaylistMatchSource === 'live' && (
+                        <div className="text-xs text-spotify-gray-light">
+                          Live check (cache refresh queued in background).
+                        </div>
+                      )}
                       {showMatchDetails && (
                         <div className="max-h-40 overflow-y-auto space-y-2">
                           {selectedTracksSorted.map((track) => {
@@ -4602,13 +4675,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       type="checkbox"
                       checked={skipExistingTracks}
                       onChange={(event) => setSkipExistingTracks(event.target.checked)}
-                      disabled={!targetPlaylistMatch?.cached || targetPlaylistMatchLoading}
+                      disabled={!targetPlaylistMatchReady || targetPlaylistMatchLoading}
                       className="w-4 h-4 rounded border-spotify-gray-mid text-spotify-green focus:ring-spotify-green"
                     />
                     Auto-skip tracks already in this playlist
                   </label>
-                  {!targetPlaylistMatchLoading && !targetPlaylistMatch?.cached && (
-                    <div className="text-xs text-spotify-gray-light">Cache is required to auto-skip.</div>
+                  {!targetPlaylistMatchLoading && !targetPlaylistMatchReady && (
+                    <div className="text-xs text-spotify-gray-light">Match data is required to auto-skip.</div>
                   )}
                 </div>
               )}
@@ -4729,6 +4802,22 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
             </div>
 
             <div className="space-y-4">
+              {(artistActionMessage || artistActionError) && (
+                <div className="space-y-2">
+                  {artistActionMessage && (
+                    <div className="flex items-start gap-2 rounded-lg border border-spotify-green/40 bg-spotify-green/15 px-3 py-2 text-sm text-white">
+                      <span className="icon text-base text-spotify-green">check_circle</span>
+                      <span className="font-semibold">{artistActionMessage}</span>
+                    </div>
+                  )}
+                  {artistActionError && (
+                    <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                      <span className="icon text-base">error</span>
+                      <span className="font-semibold">{artistActionError}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                 <div className="text-sm text-spotify-gray-light">
                   {playlistArtistsLoading ? 'Loading artists…' : `${playlistArtists.length} artist${playlistArtists.length === 1 ? '' : 's'}`}
@@ -4889,13 +4978,6 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     })
                   )}
                 </div>
-              )}
-
-              {artistActionMessage && (
-                <div className="text-spotify-green text-sm">{artistActionMessage}</div>
-              )}
-              {artistActionError && (
-                <div className="text-red-400 text-sm">{artistActionError}</div>
               )}
 
               <div className="flex flex-col sm:flex-row gap-3 justify-end">
@@ -5074,10 +5156,15 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       {jobStatus.status}
                     </span>
                   </p>
-                  {jobStatus.progress !== undefined && jobStatus.total !== undefined && (
+                  {jobStatus.progress !== undefined && jobStatus.total > 0 && (
                     <p><span className="text-spotify-gray-light">Progress:</span> {jobStatus.progress}/{jobStatus.total}</p>
                   )}
                   {jobStatus.message && <p className="text-spotify-gray-light">{jobStatus.message}</p>}
+                  {jobStatus.status === 'completed' && jobStatus.total === 0 && sortForm.sort_by === 'date_added' && (
+                    <p className="text-spotify-gray-light">
+                      All tracks share the same Date added. Try a different sort field.
+                    </p>
+                  )}
                   {jobStatus.error && <p className="text-red-400">{jobStatus.error}</p>}
                   {(jobStatus.status === 'completed' || jobStatus.status === 'failed' || jobStatus.status === 'cancelled') && (
                     <div className="pt-2 flex items-center justify-between gap-3">
@@ -5139,8 +5226,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                         name: editForm.name,
                         description: editForm.description
                       });
-                        const updated = await playlistAPI.getPlaylistDetails(currentPlaylist.id);
-                        setCurrentPlaylist(updated);
+                        await runLiveRefresh(currentPlaylist.id);
                         setEditMessage('Playlist updated');
                         setShowEditModal(false);
                       } catch (err) {

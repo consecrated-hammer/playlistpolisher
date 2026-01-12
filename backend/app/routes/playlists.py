@@ -151,6 +151,7 @@ def _queue_cache_refresh_if_needed(
     session_mgr: SessionManager,
     playlist_id: str,
     source: str,
+    queue_refresh: bool = True,
 ) -> PlaylistContextMeta:
     meta = spotify.get_playlist_context_meta(playlist_id)
     facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
@@ -168,7 +169,8 @@ def _queue_cache_refresh_if_needed(
     if needs_refresh:
         if facts and (snapshot_mismatch or count_mismatch):
             playlist_cache_store.mark_dirty(playlist_id)
-        _queue_cache_refresh(session_mgr, playlist_id, source)
+        if queue_refresh:
+            _queue_cache_refresh(session_mgr, playlist_id, source)
     return meta
 
 
@@ -311,7 +313,13 @@ async def get_playlist_summary(
 ):
     """Get lightweight playlist metadata without loading tracks."""
     try:
-        meta = _queue_cache_refresh_if_needed(spotify, session_mgr, playlist_id, "summary_meta")
+        meta = _queue_cache_refresh_if_needed(
+            spotify,
+            session_mgr,
+            playlist_id,
+            "summary_meta",
+            queue_refresh=False,
+        )
         return meta
     except ValueError as e:
         logger.error(f"Authentication error: {e}")
@@ -372,29 +380,34 @@ async def get_playlist_tracks_paginated(
             should_warm_cache = preference_store.should_warm_playlist_cache(user_id, playlist_id)
 
         facts = playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
-        cached = _get_cached_playlist_tracks_page(
-            spotify=spotify,
-            playlist_id=playlist_id,
-            offset=offset,
-            limit=limit,
-            session_id=session_mgr.get_session_id(),
-            should_warm_cache=should_warm_cache,
-            allow_dirty=True,
-            facts=facts,
-        )
-        if cached:
-            if facts and facts.get("is_dirty") == 1:
-                _queue_cache_refresh(session_mgr, playlist_id, "tracks_paginated_dirty")
-            return cached
-        if should_warm_cache:
-            _queue_cache_refresh(session_mgr, playlist_id, "tracks_paginated_miss")
+        try:
+            tracks, total, cache_hits, cache_misses, cache_warmed = spotify.get_playlist_tracks_paginated(
+                playlist_id,
+                offset=offset,
+                limit=limit,
+                should_warm_cache=should_warm_cache
+            )
+        except Exception as exc:
+            cached = _get_cached_playlist_tracks_page(
+                spotify=spotify,
+                playlist_id=playlist_id,
+                offset=offset,
+                limit=limit,
+                session_id=session_mgr.get_session_id(),
+                should_warm_cache=should_warm_cache,
+                allow_dirty=True,
+                facts=facts,
+                fetch_missing=False,
+            )
+            if cached:
+                logger.warning("Live playlist fetch failed; falling back to cache for %s: %s", playlist_id, exc)
+                if should_warm_cache and facts and facts.get("is_dirty") == 1:
+                    _queue_cache_refresh(session_mgr, playlist_id, "tracks_paginated_dirty")
+                return cached
+            raise
 
-        tracks, total, cache_hits, cache_misses, cache_warmed = spotify.get_playlist_tracks_paginated(
-            playlist_id,
-            offset=offset,
-            limit=limit,
-            should_warm_cache=should_warm_cache
-        )
+        if should_warm_cache and offset == 0 and (not facts or facts.get("is_dirty") == 1):
+            _queue_cache_refresh(session_mgr, playlist_id, "tracks_paginated_live")
         
         has_more = (offset + len(tracks)) < total
         
@@ -805,6 +818,7 @@ class PlaylistCacheMatchEntry(BaseModel):
 
 class PlaylistCacheMatchResponse(BaseModel):
     cached: bool
+    source: Optional[str] = None
     exact_count: int
     similar_count: int
     total: int
@@ -1199,6 +1213,7 @@ def _get_cached_playlist_tracks_page(
     should_warm_cache: bool,
     allow_dirty: bool = False,
     facts: Optional[Dict[str, Any]] = None,
+    fetch_missing: bool = True,
 ) -> Optional[PaginatedTracks]:
     facts = facts or playlist_cache_store.get_facts_for_playlists([playlist_id]).get(playlist_id)
     if not facts:
@@ -1229,7 +1244,7 @@ def _get_cached_playlist_tracks_page(
     cache_misses = len(missing_ids)
     cache_warmed = 0
 
-    if missing_ids:
+    if missing_ids and fetch_missing:
         fetched_tracks = _fetch_tracks_from_spotify(spotify, list(missing_ids))
         if fetched_tracks:
             cache_warmed = CacheService.set_tracks(fetched_tracks, session_id)
@@ -1349,7 +1364,6 @@ async def add_tracks_to_playlist(
         )
         if not cache_updated:
             playlist_cache_store.mark_dirty(playlist_id)
-            _queue_cache_refresh(session_mgr, playlist_id, "tracks_add")
         return {"message": "Tracks added", "added": len(track_uris)}
     except Exception as e:
         logger.error("Failed to add tracks to playlist %s: %s", playlist_id, e)
@@ -1515,9 +1529,8 @@ async def remove_tracks_from_playlist(
                     track_ids,
                     snapshot_id=new_snapshot_id,
                 )
-        if not cache_updated:
+        if removed_count > 0 and not cache_updated:
             playlist_cache_store.mark_dirty(playlist_id)
-            _queue_cache_refresh(session_mgr, playlist_id, "tracks_remove")
         return {"message": "Tracks removed", "removed": removed_count}
     except Exception as e:
         logger.error("Failed to remove tracks from playlist %s: %s", playlist_id, e)
@@ -1894,10 +1907,29 @@ async def get_playlist_cache_matches(
     playlist_id: str,
     body: PlaylistCacheMatchRequest,
     session_mgr: SessionManager = Depends(require_auth),
+    spotify: SpotifyService = Depends(get_spotify_service),
 ):
-    """Return cache-only match status for tracks against a cached playlist."""
+    """Return cached match status for tracks against a playlist (live fallback)."""
     tracks = body.tracks or []
-    return _get_cached_match(playlist_id, tracks, include_matches=True)
+    cached_result = _get_cached_match(playlist_id, tracks, include_matches=True)
+    if cached_result.get("cached") or not tracks:
+        return cached_result
+
+    user_id = session_mgr.get_user_id()
+    sp = spotify.get_spotify_client(user_id)
+    if not sp:
+        return cached_result
+    try:
+        live_result = _get_live_match(sp, playlist_id, tracks, include_matches=True)
+        should_warm_cache = True
+        if user_id:
+            should_warm_cache = preference_store.should_warm_playlist_cache(user_id, playlist_id)
+        if should_warm_cache:
+            _queue_cache_refresh(session_mgr, playlist_id, "match_live_fallback")
+        return live_result
+    except Exception as exc:
+        logger.warning("Live match fallback failed for playlist %s: %s", playlist_id, exc)
+        return cached_result
 
 
 @router.post("/cache/matches", response_model=PlaylistCacheMatchBatchResponse)
@@ -2193,9 +2225,8 @@ async def remove_duplicates(
                 positions_to_remove,
                 snapshot_id=after_snapshot,
             )
-        if not cache_updated:
+        if removed_count > 0 and not cache_updated:
             playlist_cache_store.mark_dirty(playlist_id)
-            _queue_cache_refresh(session_mgr, playlist_id, "duplicates_remove")
         return {"message": "Duplicates removed", "removed": removed_count}
     except Exception as e:
         logger.error("Failed to remove duplicates for playlist %s: %s", playlist_id, e)
@@ -2256,7 +2287,6 @@ async def undo_last_operation(
                 len(removed_items),
             )
             playlist_cache_store.mark_dirty(playlist_id)
-            _queue_cache_refresh(session_mgr, playlist_id, "undo_duplicates")
             return {
                 "message": f"Restored {len(removed_items)} tracks",
                 "snapshot_id": new_snapshot,
@@ -2290,7 +2320,6 @@ async def undo_last_operation(
                     len(original_order),
                 )
                 playlist_cache_store.mark_dirty(playlist_id)
-                _queue_cache_refresh(session_mgr, playlist_id, "undo_sort")
                 return {
                     "message": f"Restored previous order ({len(original_order)} tracks)",
                     "snapshot_id": new_snapshot,
@@ -2575,6 +2604,7 @@ def _get_cached_match(
         cached_flag = bool(facts.get(playlist_id))
         result: Dict[str, Any] = {
             "cached": cached_flag,
+            "source": "cache" if cached_flag else None,
             "exact_count": 0,
             "similar_count": 0,
             "total": total,
@@ -2632,6 +2662,62 @@ def _get_cached_match(
 
     result = {
         "cached": True,
+        "source": "cache",
+        "exact_count": exact_count,
+        "similar_count": similar_count,
+        "total": total,
+    }
+    if include_matches:
+        result["matches"] = matches
+    return result
+
+
+def _get_live_match(
+    sp: Any,
+    playlist_id: str,
+    tracks: List[PlaylistCacheMatchTrack],
+    include_matches: bool,
+) -> Dict[str, Any]:
+    items = _fetch_playlist_items(sp, playlist_id)
+    track_ids = set()
+    similar_map: Dict[str, List[int]] = {}
+    for item in items:
+        track = item.get("track") or {}
+        track_id = track.get("id")
+        if track_id:
+            track_ids.add(track_id)
+        artists = track.get("artists") or []
+        artist_name = artists[0].get("name") if artists else ""
+        key = _build_similarity_key(track.get("name") or "", artist_name or "")
+        if key:
+            similar_map.setdefault(key, []).append(track.get("duration_ms") or 0)
+
+    total = len(tracks)
+    exact_count = 0
+    similar_count = 0
+    matches: List[Dict[str, Optional[str]]] = []
+    for index, track in enumerate(tracks):
+        client_key = track.client_key or track.track_id or f"track-{index}"
+        status = None
+        if track.track_id and track.track_id in track_ids:
+            status = "exact"
+            exact_count += 1
+        else:
+            artist_name = (track.artists or [None])[0] if track.artists else None
+            key = _build_similarity_key(track.name or "", artist_name or "")
+            durations = similar_map.get(key) if key else None
+            if durations and track.duration_ms is not None:
+                for duration in durations:
+                    if abs(track.duration_ms - duration) < 2000:
+                        status = "similar"
+                        similar_count += 1
+                        break
+        if include_matches:
+            matches.append({"client_key": client_key, "status": status})
+
+    result = {
+        "cached": False,
+        "source": "live",
         "exact_count": exact_count,
         "similar_count": similar_count,
         "total": total,
