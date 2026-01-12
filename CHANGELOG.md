@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.5 - 2026-01-12
+**Live-first playlists**
+- Playlists: refresh live snapshot after sort/dedupe/add/remove/move/edit so the view matches Spotify.
+- Cache: reduce auto-warm/refresh triggers (summary + add/remove) and use live-first tracks with cache fallback.
+- UI: move cache activity pill above modals, add visible artist follow confirmation, fix playlist view init crash.
+
 ## v1.5.4 - 2026-01-08
 **Cache responsiveness**
 - Cache: update playlist cache immediately after add/remove/duplicate operations to keep UI in sync.
