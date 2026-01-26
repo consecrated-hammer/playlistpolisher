@@ -6,7 +6,7 @@ python-dotenv==1.0.0
 spotipy==2.25.2
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.18
+python-multipart==0.0.22
 pydantic==2.5.0
 pydantic-settings==2.1.0
 httpx==0.25.2
