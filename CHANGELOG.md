@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.7 - 2026-02-06
+**Explicit tools + playlist table upgrades**
+- Playlists: add explicit column sorting and a bulk explicit-removal modal with previews.
+- Playlists: improve table view with visibility + duration columns and sortable headers.
+- Cache: expose cached playlist duration to surface totals in the playlist table.
+
 ## v1.5.6 - 2026-02-06
 **Backup detail stability**
 - Backups: normalize cached artist data so backup detail/preview pages load reliably.
