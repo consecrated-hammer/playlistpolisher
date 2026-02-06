@@ -1677,6 +1677,93 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   }, [currentPlaylist?.id, navigate, setDeleting, setEditError, setEditMessage]);
 
+  const openExplicitModal = useCallback(async () => {
+    setExplicitError(null);
+    setExplicitMessage(null);
+    setExplicitSelection({});
+    setExplicitSeeded(false);
+    setShowExplicitModal(true);
+    if (needsFullLoad) {
+      setExplicitLoading(true);
+      const loaded = await loadAllTracksForSelection();
+      if (!loaded) {
+        setExplicitError('Failed to load the full playlist. Showing available tracks only.');
+      }
+      setExplicitLoading(false);
+    }
+  }, [loadAllTracksForSelection, needsFullLoad]);
+
+  const closeExplicitModal = useCallback(() => {
+    setShowExplicitModal(false);
+    setExplicitError(null);
+    setExplicitMessage(null);
+    setExplicitSelection({});
+    setExplicitSeeded(false);
+  }, []);
+
+  useEffect(() => {
+    if (!showExplicitModal || explicitLoading || explicitSeeded) return;
+    const selection = {};
+    explicitSelectableTracks.forEach((track) => {
+      selection[track.selectionKey] = true;
+    });
+    setExplicitSelection(selection);
+    setExplicitSeeded(true);
+  }, [explicitLoading, explicitSeeded, explicitSelectableTracks, showExplicitModal]);
+
+  const toggleExplicitSelection = (trackKey) => {
+    setExplicitSelection((prev) => ({
+      ...prev,
+      [trackKey]: !prev[trackKey],
+    }));
+  };
+
+  const setAllExplicitSelection = (nextValue) => {
+    const selection = {};
+    explicitSelectableTracks.forEach((track) => {
+      selection[track.selectionKey] = nextValue;
+    });
+    setExplicitSelection(selection);
+  };
+
+  const handleRemoveExplicitTracks = async () => {
+    if (!currentPlaylist?.id) return;
+    setExplicitError(null);
+    setExplicitMessage(null);
+    if (explicitSelectedTracks.length === 0) {
+      setExplicitError('Select at least one explicit track to remove.');
+      return;
+    }
+    const items = explicitSelectedTracks
+      .filter((track) => Number.isFinite(track.playlistIndex))
+      .map((track) => ({ uri: track.uri, position: track.playlistIndex }));
+    if (!items.length) {
+      setExplicitError('No removable tracks found in the selection.');
+      return;
+    }
+    setExplicitRemoving(true);
+    const snapshot = snapshotPlaylistState();
+    applyLocalTrackRemoval(items.map((item) => item.position));
+    try {
+      await playlistAPI.removeTracks(currentPlaylist.id, {
+        items,
+        snapshot_id: currentPlaylist.snapshot_id,
+      });
+      setExplicitMessage(`Removed ${items.length} explicit track${items.length === 1 ? '' : 's'}.`);
+      setShowExplicitModal(false);
+      try {
+        await runLiveRefresh(currentPlaylist.id);
+      } catch (err) {
+        // Non-blocking; keep optimistic view on refresh failure.
+      }
+    } catch (err) {
+      restorePlaylistState(snapshot);
+      setExplicitError(err.message || 'Failed to remove explicit tracks.');
+    } finally {
+      setExplicitRemoving(false);
+    }
+  };
+
   const playlistActionGroups = useMemo(() => {
     const playlistId = currentPlaylist?.id || playlist?.id;
     const historyLink = playlistId ? `/history?playlistId=${playlistId}` : '/history';
@@ -2991,93 +3078,6 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       setDuplicatesError(err.message || 'Failed to remove duplicates');
     } finally {
       setRemovingDuplicates(false);
-    }
-  };
-
-  const openExplicitModal = useCallback(async () => {
-    setExplicitError(null);
-    setExplicitMessage(null);
-    setExplicitSelection({});
-    setExplicitSeeded(false);
-    setShowExplicitModal(true);
-    if (needsFullLoad) {
-      setExplicitLoading(true);
-      const loaded = await loadAllTracksForSelection();
-      if (!loaded) {
-        setExplicitError('Failed to load the full playlist. Showing available tracks only.');
-      }
-      setExplicitLoading(false);
-    }
-  }, [loadAllTracksForSelection, needsFullLoad]);
-
-  const closeExplicitModal = useCallback(() => {
-    setShowExplicitModal(false);
-    setExplicitError(null);
-    setExplicitMessage(null);
-    setExplicitSelection({});
-    setExplicitSeeded(false);
-  }, []);
-
-  useEffect(() => {
-    if (!showExplicitModal || explicitLoading || explicitSeeded) return;
-    const selection = {};
-    explicitSelectableTracks.forEach((track) => {
-      selection[track.selectionKey] = true;
-    });
-    setExplicitSelection(selection);
-    setExplicitSeeded(true);
-  }, [explicitLoading, explicitSeeded, explicitSelectableTracks, showExplicitModal]);
-
-  const toggleExplicitSelection = (trackKey) => {
-    setExplicitSelection((prev) => ({
-      ...prev,
-      [trackKey]: !prev[trackKey],
-    }));
-  };
-
-  const setAllExplicitSelection = (nextValue) => {
-    const selection = {};
-    explicitSelectableTracks.forEach((track) => {
-      selection[track.selectionKey] = nextValue;
-    });
-    setExplicitSelection(selection);
-  };
-
-  const handleRemoveExplicitTracks = async () => {
-    if (!currentPlaylist?.id) return;
-    setExplicitError(null);
-    setExplicitMessage(null);
-    if (explicitSelectedTracks.length === 0) {
-      setExplicitError('Select at least one explicit track to remove.');
-      return;
-    }
-    const items = explicitSelectedTracks
-      .filter((track) => Number.isFinite(track.playlistIndex))
-      .map((track) => ({ uri: track.uri, position: track.playlistIndex }));
-    if (!items.length) {
-      setExplicitError('No removable tracks found in the selection.');
-      return;
-    }
-    setExplicitRemoving(true);
-    const snapshot = snapshotPlaylistState();
-    applyLocalTrackRemoval(items.map((item) => item.position));
-    try {
-      await playlistAPI.removeTracks(currentPlaylist.id, {
-        items,
-        snapshot_id: currentPlaylist.snapshot_id,
-      });
-      setExplicitMessage(`Removed ${items.length} explicit track${items.length === 1 ? '' : 's'}.`);
-      setShowExplicitModal(false);
-      try {
-        await runLiveRefresh(currentPlaylist.id);
-      } catch (err) {
-        // Non-blocking; keep optimistic view on refresh failure.
-      }
-    } catch (err) {
-      restorePlaylistState(snapshot);
-      setExplicitError(err.message || 'Failed to remove explicit tracks.');
-    } finally {
-      setExplicitRemoving(false);
     }
   };
 

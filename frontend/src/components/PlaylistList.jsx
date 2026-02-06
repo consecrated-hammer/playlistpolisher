@@ -169,6 +169,8 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
       name: { asc: 'name-asc', desc: 'name-desc' },
       owner: { asc: 'owner-asc', desc: 'owner-desc' },
       tracks: { asc: 'tracks-asc', desc: 'tracks-desc' },
+      visibility: { asc: 'visibility-asc', desc: 'visibility-desc' },
+      duration: { asc: 'duration-asc', desc: 'duration-desc' },
     };
 
     const getNextSort = (key) => {
@@ -211,7 +213,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
           <thead>
             <tr className="text-xs uppercase tracking-wide text-spotify-gray-light">
               <th className="px-1 py-1 font-semibold">
-                <span className="hidden sm:inline">Artwork</span>
+                <span className="sr-only">Artwork</span>
               </th>
               <th className="px-1 py-1 font-semibold">
                 <button
@@ -234,10 +236,24 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                 </button>
               </th>
               <th className="px-1 py-1 font-semibold hidden md:table-cell">
-                Visibility
+                <button
+                  type="button"
+                  onClick={() => onSortChange?.(getNextSort('visibility'))}
+                  className="inline-flex items-center hover:text-white transition-colors"
+                >
+                  Visibility
+                  {renderSortIcon('visibility')}
+                </button>
               </th>
               <th className="px-1 py-1 font-semibold hidden md:table-cell text-right">
-                Duration
+                <button
+                  type="button"
+                  onClick={() => onSortChange?.(getNextSort('duration'))}
+                  className="w-full inline-flex items-center justify-end hover:text-white transition-colors"
+                >
+                  Duration
+                  {renderSortIcon('duration', 'ml-0.5')}
+                </button>
               </th>
               <th className="px-1 py-1 font-semibold">
                 <button
