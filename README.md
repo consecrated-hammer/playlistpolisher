@@ -40,19 +40,6 @@ Sort, clean, backup, and organize your Spotify playlists with advanced automatio
 - **Spotify-Themed Design** - Beautiful, familiar interface matching Spotify's aesthetic
 - **Settings & Preferences** - Customize cache TTL, backup retention, and automation behavior
 
-## Recent Updates
-
-**v1.4.5** (Jan 2026) - Playlist action navigation with grouped dropdowns and context links  
-**v1.4.4** (Jan 2026) - Artist follow cache rehydration for legacy entries  
-**v1.4.3** (Jan 2026) - Cache-first playlist entry with snapshot validation  
-**v1.4.2** (Jan 2026) - Playlist browsing fixes and artist follow caching  
-**v1.4.1** (Jan 2026) - Commit-based build identifiers  
-**v1.4.0** (Jan 2026) - Artist following with batch operations and modal UI  
-**v1.3.0** (Jan 2026) - Backups library with restore, settings page  
-**v1.2.x** (Jan 2026) - Mobile UI optimization and polish  
-**v1.1.0** (Jan 2026) - Cache enhancements and freshness checks  
-**v1.0.0** (Dec 2025) - Initial public release
-
 See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
 ## Quick Start

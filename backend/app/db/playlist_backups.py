@@ -9,6 +9,35 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _normalize_artists(artists_json: Optional[str]) -> List[str]:
+    if not artists_json:
+        return []
+    try:
+        payload = json.loads(artists_json)
+    except json.JSONDecodeError:
+        return []
+
+    if isinstance(payload, dict):
+        name = payload.get("name") or payload.get("id")
+        return [name] if name else []
+
+    if not isinstance(payload, list):
+        return []
+
+    normalized: List[str] = []
+    for item in payload:
+        if isinstance(item, str):
+            name = item.strip()
+            if name:
+                normalized.append(name)
+            continue
+        if isinstance(item, dict):
+            name = item.get("name") or item.get("id")
+            if name:
+                normalized.append(name)
+    return normalized
+
+
 def create_backup_from_cache(
     playlist_id: str,
     user_id: str,
@@ -199,13 +228,7 @@ def get_backup_preview(backup_id: int, limit: int = 50) -> List[Dict]:
 
     preview = []
     for row in rows:
-        artists = []
-        artists_json = row["artists_json"] if row["artists_json"] is not None else None
-        if artists_json:
-            try:
-                artists = json.loads(artists_json)
-            except json.JSONDecodeError:
-                artists = []
+        artists = _normalize_artists(row["artists_json"])
         preview.append(
             {
                 "track_id": row["track_id"],
@@ -239,13 +262,7 @@ def get_backup_tracks(backup_id: int) -> List[Dict]:
 
     tracks = []
     for row in rows:
-        artists = []
-        artists_json = row["artists_json"] if row["artists_json"] is not None else None
-        if artists_json:
-            try:
-                artists = json.loads(artists_json)
-            except json.JSONDecodeError:
-                artists = []
+        artists = _normalize_artists(row["artists_json"])
         tracks.append(
             {
                 "track_id": row["track_id"],
