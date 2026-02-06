@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.6 - 2026-02-06
+**Backup detail stability**
+- Backups: normalize cached artist data so backup detail/preview pages load reliably.
+- Docs: tidy README content.
+
 ## v1.5.5 - 2026-01-12
 **Live-first playlists**
 - Playlists: refresh live snapshot after sort/dedupe/add/remove/move/edit so the view matches Spotify.
