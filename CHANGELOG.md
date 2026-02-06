@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.5.7 - 2026-02-06
+## v1.6.6 - 2026-02-06
 **Explicit tools + playlist table upgrades**
 - Playlists: add explicit column sorting and a bulk explicit-removal modal with previews.
 - Playlists: improve table view with visibility + duration columns and sortable headers.

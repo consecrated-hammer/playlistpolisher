@@ -1,7 +1,7 @@
 {
   "name": "playlist-polisher-frontend",
   "private": true,
-  "version": "1.5.7",
+  "version": "1.6.6",
   "type": "module",
   "description": "Modern React frontend for Playlist Polisher",
   "scripts": {
