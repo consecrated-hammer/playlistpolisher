@@ -98,6 +98,7 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
       playlist?.total_duration_ms,
       playlist?.duration_ms,
       playlist?.total_duration,
+      cacheFacts?.[playlist?.id]?.total_duration_ms,
     ];
     for (const candidate of candidates) {
       const numeric = Number(candidate);

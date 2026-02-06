@@ -718,6 +718,7 @@ const PlaylistsPage = ({ user, onLogout }) => {
       playlist?.total_duration_ms,
       playlist?.duration_ms,
       playlist?.total_duration,
+      cacheFacts?.[playlist?.id]?.total_duration_ms,
     ];
     for (const candidate of candidates) {
       const value = Number(candidate);
@@ -726,7 +727,7 @@ const PlaylistsPage = ({ user, onLogout }) => {
       }
     }
     return null;
-  }, []);
+  }, [cacheFacts]);
 
   const sortedPlaylists = useMemo(() => {
     const copy = [...filteredPlaylists];

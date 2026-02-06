@@ -5275,7 +5275,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                           />
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm text-white font-semibold truncate">{track.name || 'Unknown title'}</p>
+                          <p className="text-sm text-white font-semibold truncate">
+                            {track.name || 'Unknown title'}
+                            <span className="ml-2 text-[10px] bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
+                          </p>
                           <p className="text-xs text-spotify-gray-light truncate">{artistLabel}</p>
                           {!isSelectable && (
                             <p className="text-[11px] text-spotify-gray-light">Unavailable for removal</p>
