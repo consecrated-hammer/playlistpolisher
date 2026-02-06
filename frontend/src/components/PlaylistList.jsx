@@ -14,7 +14,7 @@
  */
 
 import React from 'react';
-import { getBestImage } from '../services/api';
+import { formatTotalDuration, getBestImage } from '../services/api';
 
 const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOption, onSortChange, cacheFacts = {} }) => {
   if (!playlists || playlists.length === 0) {
@@ -79,6 +79,35 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
     if (!Number.isFinite(total)) return '—';
     return `${total} ${total === 1 ? 'track' : 'tracks'}`;
   };
+  const resolveVisibility = (playlist) => {
+    if (playlist?.collaborative) {
+      return { label: 'Collaborative', className: 'bg-spotify-green/15 text-spotify-green' };
+    }
+    if (playlist?.public === true) {
+      return { label: 'Public', className: 'bg-spotify-green/15 text-spotify-green' };
+    }
+    if (playlist?.public === false) {
+      return { label: 'Private', className: 'bg-spotify-gray-mid/60 text-spotify-gray-light' };
+    }
+    return { label: 'Unknown', className: 'bg-spotify-gray-mid/60 text-spotify-gray-light' };
+  };
+  const resolveDurationLabel = (playlist) => {
+    const formatted = playlist?.total_duration_formatted || playlist?.duration_formatted;
+    if (formatted) return formatted;
+    const candidates = [
+      playlist?.total_duration_ms,
+      playlist?.duration_ms,
+      playlist?.total_duration,
+      cacheFacts?.[playlist?.id]?.total_duration_ms,
+    ];
+    for (const candidate of candidates) {
+      const numeric = Number(candidate);
+      if (Number.isFinite(numeric)) {
+        return formatTotalDuration(numeric);
+      }
+    }
+    return '—';
+  };
 
   if (viewMode === 'list') {
     return (
@@ -141,6 +170,8 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
       name: { asc: 'name-asc', desc: 'name-desc' },
       owner: { asc: 'owner-asc', desc: 'owner-desc' },
       tracks: { asc: 'tracks-asc', desc: 'tracks-desc' },
+      visibility: { asc: 'visibility-asc', desc: 'visibility-desc' },
+      duration: { asc: 'duration-asc', desc: 'duration-desc' },
     };
 
     const getNextSort = (key) => {
@@ -174,14 +205,16 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
         <table className="min-w-0 sm:min-w-[560px] w-full table-fixed border-separate border-spacing-y-1 text-left">
           <colgroup>
             <col className="w-12" />
-            <col className="w-[46%] sm:w-auto" />
-            <col className="w-[30%] sm:w-auto" />
+            <col className="w-[40%] sm:w-auto" />
+            <col className="w-[24%] sm:w-auto" />
+            <col className="w-[16%] sm:w-28" />
+            <col className="w-[16%] sm:w-28" />
             <col className="w-[12%] sm:w-20" />
           </colgroup>
           <thead>
             <tr className="text-xs uppercase tracking-wide text-spotify-gray-light">
               <th className="px-1 py-1 font-semibold">
-                <span className="hidden sm:inline">Artwork</span>
+                <span className="sr-only">Artwork</span>
               </th>
               <th className="px-1 py-1 font-semibold">
                 <button
@@ -203,6 +236,26 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   {renderSortIcon('owner')}
                 </button>
               </th>
+              <th className="px-1 py-1 font-semibold hidden md:table-cell">
+                <button
+                  type="button"
+                  onClick={() => onSortChange?.(getNextSort('visibility'))}
+                  className="inline-flex items-center hover:text-white transition-colors"
+                >
+                  Visibility
+                  {renderSortIcon('visibility')}
+                </button>
+              </th>
+              <th className="px-1 py-1 font-semibold hidden md:table-cell text-right">
+                <button
+                  type="button"
+                  onClick={() => onSortChange?.(getNextSort('duration'))}
+                  className="w-full inline-flex items-center justify-end hover:text-white transition-colors"
+                >
+                  Duration
+                  {renderSortIcon('duration', 'ml-0.5')}
+                </button>
+              </th>
               <th className="px-1 py-1 font-semibold">
                 <button
                   type="button"
@@ -220,6 +273,8 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
               const ownerName = playlist.owner?.display_name || playlist.owner?.id || 'Unknown';
               const trackTotal = resolveTrackTotal(playlist);
               const trackTitle = Number.isFinite(trackTotal) ? `${trackTotal}` : 'Track count unavailable';
+              const visibility = resolveVisibility(playlist);
+              const durationLabel = resolveDurationLabel(playlist);
               return (
                 <tr
                   key={playlist.id}
@@ -259,6 +314,17 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
                   </td>
                   <td className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-spotify-gray-mid/40 text-spotify-gray-light truncate" title={ownerName}>
                     {ownerName}
+                  </td>
+                  <td className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-spotify-gray-mid/40 hidden md:table-cell">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${visibility.className}`}>
+                      {visibility.label}
+                    </span>
+                  </td>
+                  <td
+                    className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-spotify-gray-mid/40 hidden md:table-cell text-spotify-gray-light text-right tabular-nums"
+                    title={durationLabel === '—' ? 'Duration unavailable' : durationLabel}
+                  >
+                    {durationLabel}
                   </td>
                   <td
                     className="px-1 py-1 bg-spotify-gray-dark/60 group-hover:bg-spotify-gray-mid/60 border-y border-r border-spotify-gray-mid/40 rounded-r-lg text-spotify-gray-light text-right tabular-nums"

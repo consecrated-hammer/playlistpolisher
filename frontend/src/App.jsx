@@ -9,7 +9,7 @@
  * This is the entry point for the application logic.
  */
 
-import React, { useState, useEffect, useMemo, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useLayoutEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useSearchParams, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import PlaylistList from './components/PlaylistList';
@@ -81,6 +81,10 @@ const SORT_OPTIONS = new Set([
   'tracks-desc',
   'owner-asc',
   'owner-desc',
+  'visibility-asc',
+  'visibility-desc',
+  'duration-asc',
+  'duration-desc',
 ]);
 
 const normalizeViewMode = (value) => {
@@ -702,6 +706,29 @@ const PlaylistsPage = ({ user, onLogout }) => {
     });
   }, [playlists, filterOption, user]);
 
+  const resolveVisibilityLabel = useCallback((playlist) => {
+    if (playlist?.collaborative) return 'Collaborative';
+    if (playlist?.public === true) return 'Public';
+    if (playlist?.public === false) return 'Private';
+    return 'Unknown';
+  }, []);
+
+  const resolveDurationMs = useCallback((playlist) => {
+    const candidates = [
+      playlist?.total_duration_ms,
+      playlist?.duration_ms,
+      playlist?.total_duration,
+      cacheFacts?.[playlist?.id]?.total_duration_ms,
+    ];
+    for (const candidate of candidates) {
+      const value = Number(candidate);
+      if (Number.isFinite(value)) {
+        return value;
+      }
+    }
+    return null;
+  }, [cacheFacts]);
+
   const sortedPlaylists = useMemo(() => {
     const copy = [...filteredPlaylists];
     switch (effectiveSortOption) {
@@ -737,10 +764,42 @@ const PlaylistsPage = ({ user, onLogout }) => {
         return copy.sort((a, b) =>
           (b.owner?.display_name || b.owner?.id || '').localeCompare(a.owner?.display_name || a.owner?.id || '')
         );
+      case 'visibility-asc':
+        return copy.sort((a, b) => {
+          const aLabel = resolveVisibilityLabel(a);
+          const bLabel = resolveVisibilityLabel(b);
+          const cmp = aLabel.localeCompare(bLabel);
+          return cmp !== 0 ? cmp : a.name.localeCompare(b.name);
+        });
+      case 'visibility-desc':
+        return copy.sort((a, b) => {
+          const aLabel = resolveVisibilityLabel(a);
+          const bLabel = resolveVisibilityLabel(b);
+          const cmp = bLabel.localeCompare(aLabel);
+          return cmp !== 0 ? cmp : a.name.localeCompare(b.name);
+        });
+      case 'duration-asc':
+        return copy.sort((a, b) => {
+          const aVal = resolveDurationMs(a);
+          const bVal = resolveDurationMs(b);
+          if (aVal === null && bVal === null) return a.name.localeCompare(b.name);
+          if (aVal === null) return 1;
+          if (bVal === null) return -1;
+          return aVal - bVal;
+        });
+      case 'duration-desc':
+        return copy.sort((a, b) => {
+          const aVal = resolveDurationMs(a);
+          const bVal = resolveDurationMs(b);
+          if (aVal === null && bVal === null) return a.name.localeCompare(b.name);
+          if (aVal === null) return 1;
+          if (bVal === null) return -1;
+          return bVal - aVal;
+        });
       default:
         return copy;
     }
-  }, [filteredPlaylists, effectiveSortOption, cacheFacts]);
+  }, [filteredPlaylists, effectiveSortOption, cacheFacts, resolveDurationMs, resolveVisibilityLabel]);
 
   return (
     <Layout user={user} onLogout={onLogout}>
@@ -837,6 +896,10 @@ const PlaylistsPage = ({ user, onLogout }) => {
                   <option value="tracks-asc">Tracks ↑</option>
                   <option value="owner-asc">Owner A → Z</option>
                   <option value="owner-desc">Owner Z → A</option>
+                  <option value="visibility-asc">Visibility A → Z</option>
+                  <option value="visibility-desc">Visibility Z → A</option>
+                  <option value="duration-desc">Duration ↓</option>
+                  <option value="duration-asc">Duration ↑</option>
                 </select>
                 {cacheSortEnabled && effectiveSortOption === 'recently-updated-estimated' && (
                   <div className="relative group">

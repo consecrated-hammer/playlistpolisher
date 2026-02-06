@@ -198,6 +198,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
   const [duplicatesError, setDuplicatesError] = useState(null);
   const [duplicatesSelection, setDuplicatesSelection] = useState({});
   const [duplicatesMode, setDuplicatesMode] = useState('options'); // options | review
+  const [showExplicitModal, setShowExplicitModal] = useState(false);
+  const [explicitLoading, setExplicitLoading] = useState(false);
+  const [explicitError, setExplicitError] = useState(null);
+  const [explicitMessage, setExplicitMessage] = useState(null);
+  const [explicitSelection, setExplicitSelection] = useState({});
+  const [explicitRemoving, setExplicitRemoving] = useState(false);
+  const [explicitSeeded, setExplicitSeeded] = useState(false);
   const [optionsDirty, setOptionsDirty] = useState(false);
   const [showOptionsPanel, setShowOptionsPanel] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
@@ -1032,6 +1039,32 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     });
   }, [searchQuery, tracksSource]);
 
+  const explicitCandidates = useMemo(
+    () => tracksSource.filter((track) => track.explicit),
+    [tracksSource]
+  );
+
+  const explicitCandidatesSorted = useMemo(() => {
+    return [...explicitCandidates].sort((a, b) => {
+      const aIndex = Number.isFinite(a?.playlistIndex) ? a.playlistIndex : 0;
+      const bIndex = Number.isFinite(b?.playlistIndex) ? b.playlistIndex : 0;
+      return aIndex - bIndex;
+    });
+  }, [explicitCandidates]);
+
+  const explicitSelectableTracks = useMemo(
+    () => explicitCandidatesSorted.filter((track) => track.uri && Number.isFinite(track.playlistIndex)),
+    [explicitCandidatesSorted]
+  );
+
+  const explicitSelectedTracks = useMemo(
+    () => explicitSelectableTracks.filter((track) => explicitSelection[track.selectionKey]),
+    [explicitSelectableTracks, explicitSelection]
+  );
+
+  const explicitSelectedCount = explicitSelectedTracks.length;
+  const explicitSelectableCount = explicitSelectableTracks.length;
+
   const sortedTracks = useMemo(() => {
     if (!sortBy) return filteredTracks;
 
@@ -1064,6 +1097,10 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         case 'duration':
           aVal = a.duration_ms || 0;
           bVal = b.duration_ms || 0;
+          break;
+        case 'explicit':
+          aVal = a.explicit ? 1 : 0;
+          bVal = b.explicit ? 1 : 0;
           break;
         default:
           return 0;
@@ -1640,6 +1677,93 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     }
   }, [currentPlaylist?.id, navigate, setDeleting, setEditError, setEditMessage]);
 
+  const openExplicitModal = useCallback(async () => {
+    setExplicitError(null);
+    setExplicitMessage(null);
+    setExplicitSelection({});
+    setExplicitSeeded(false);
+    setShowExplicitModal(true);
+    if (needsFullLoad) {
+      setExplicitLoading(true);
+      const loaded = await loadAllTracksForSelection();
+      if (!loaded) {
+        setExplicitError('Failed to load the full playlist. Showing available tracks only.');
+      }
+      setExplicitLoading(false);
+    }
+  }, [loadAllTracksForSelection, needsFullLoad]);
+
+  const closeExplicitModal = useCallback(() => {
+    setShowExplicitModal(false);
+    setExplicitError(null);
+    setExplicitMessage(null);
+    setExplicitSelection({});
+    setExplicitSeeded(false);
+  }, []);
+
+  useEffect(() => {
+    if (!showExplicitModal || explicitLoading || explicitSeeded) return;
+    const selection = {};
+    explicitSelectableTracks.forEach((track) => {
+      selection[track.selectionKey] = true;
+    });
+    setExplicitSelection(selection);
+    setExplicitSeeded(true);
+  }, [explicitLoading, explicitSeeded, explicitSelectableTracks, showExplicitModal]);
+
+  const toggleExplicitSelection = (trackKey) => {
+    setExplicitSelection((prev) => ({
+      ...prev,
+      [trackKey]: !prev[trackKey],
+    }));
+  };
+
+  const setAllExplicitSelection = (nextValue) => {
+    const selection = {};
+    explicitSelectableTracks.forEach((track) => {
+      selection[track.selectionKey] = nextValue;
+    });
+    setExplicitSelection(selection);
+  };
+
+  const handleRemoveExplicitTracks = async () => {
+    if (!currentPlaylist?.id) return;
+    setExplicitError(null);
+    setExplicitMessage(null);
+    if (explicitSelectedTracks.length === 0) {
+      setExplicitError('Select at least one explicit track to remove.');
+      return;
+    }
+    const items = explicitSelectedTracks
+      .filter((track) => Number.isFinite(track.playlistIndex))
+      .map((track) => ({ uri: track.uri, position: track.playlistIndex }));
+    if (!items.length) {
+      setExplicitError('No removable tracks found in the selection.');
+      return;
+    }
+    setExplicitRemoving(true);
+    const snapshot = snapshotPlaylistState();
+    applyLocalTrackRemoval(items.map((item) => item.position));
+    try {
+      await playlistAPI.removeTracks(currentPlaylist.id, {
+        items,
+        snapshot_id: currentPlaylist.snapshot_id,
+      });
+      setExplicitMessage(`Removed ${items.length} explicit track${items.length === 1 ? '' : 's'}.`);
+      setShowExplicitModal(false);
+      try {
+        await runLiveRefresh(currentPlaylist.id);
+      } catch (err) {
+        // Non-blocking; keep optimistic view on refresh failure.
+      }
+    } catch (err) {
+      restorePlaylistState(snapshot);
+      setExplicitError(err.message || 'Failed to remove explicit tracks.');
+    } finally {
+      setExplicitRemoving(false);
+    }
+  };
+
   const playlistActionGroups = useMemo(() => {
     const playlistId = currentPlaylist?.id || playlist?.id;
     const historyLink = playlistId ? `/history?playlistId=${playlistId}` : '/history';
@@ -1659,6 +1783,13 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         label: 'Find duplicates',
         icon: 'manage_search',
         onClick: () => { setShowDuplicatesModal(true); setDuplicates(null); setDuplicatesError(null); setDuplicatesLoading(false); },
+        groupKey: 'organise',
+      },
+      {
+        key: 'explicit',
+        label: 'Remove explicit tracks',
+        icon: 'explicit',
+        onClick: openExplicitModal,
         groupKey: 'organise',
       },
       {
@@ -1752,6 +1883,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
     handleDeletePlaylist,
     historyAvailable,
     navigate,
+    openExplicitModal,
     playlist?.id,
   ]);
 
@@ -3977,10 +4109,18 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
           
           <button 
             onClick={() => handleSort('title')}
-            className="col-span-5 md:col-span-3 text-left hover:text-white transition-colors flex items-center gap-2 group"
+            className="col-span-5 md:col-span-2 text-left hover:text-white transition-colors flex items-center gap-2 group"
           >
             TITLE
             <SortIndicator column="title" />
+          </button>
+
+          <button
+            onClick={() => handleSort('explicit')}
+            className="hidden md:flex col-span-1 hover:text-white transition-colors items-center gap-2 group"
+          >
+            EXPLICIT
+            <SortIndicator column="explicit" />
           </button>
           
           <button
@@ -4123,7 +4263,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
             </div>
 
               {/* Title & Artist */}
-              <div className="col-span-5 md:col-span-3 flex items-center space-x-3 min-w-0">
+              <div className="col-span-5 md:col-span-2 flex items-center space-x-3 min-w-0">
                 {track.album.images && track.album.images.length > 0 && (
                   <img
                     src={getBestImage(track.album.images)}
@@ -4186,6 +4326,19 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     })}
                   </p>
                 </div>
+              </div>
+
+              {/* Explicit */}
+              <div className="hidden md:flex col-span-1 items-center">
+                {track.explicit ? (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-500/20 text-red-300 border border-red-400/40">
+                    Explicit
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-spotify-gray-mid/60 text-spotify-gray-light border border-spotify-gray-mid/60">
+                    Clean
+                  </span>
+                )}
               </div>
 
               {/* Album */}
@@ -4338,6 +4491,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                       {isExpanded && (
                         <div className="mt-1 space-y-1 text-[11px] text-spotify-gray-light">
                           <div className="truncate max-w-full">Added {formatDateTime(track.added_at)}</div>
+                          <div className="truncate max-w-full">Explicit: {track.explicit ? 'Yes' : 'No'}</div>
                           <div className="truncate max-w-full">Follow status: {followLabel}</div>
                         </div>
                       )}
@@ -5008,6 +5162,155 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
                     : `Apply changes (Follow ${followCount}, Unfollow ${unfollowCount})`}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Explicit Tracks Modal */}
+      {showExplicitModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="bg-spotify-gray-dark rounded-2xl shadow-2xl max-w-4xl w-full p-6 space-y-5 border border-spotify-gray-mid/60">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-spotify-gray-light">Playlist actions</p>
+                <h3 className="text-2xl font-semibold text-white">Remove explicit tracks</h3>
+                <p className="text-sm text-spotify-gray-light mt-1">
+                  Preview explicit tracks before removing them from this playlist.
+                </p>
+              </div>
+              <button
+                onClick={closeExplicitModal}
+                className="w-9 h-9 rounded-full bg-spotify-gray-mid hover:bg-spotify-gray-light text-white flex items-center justify-center transition-colors border border-spotify-gray-mid/60"
+                aria-label="Close explicit tracks"
+              >
+                <span className="icon text-lg">close</span>
+              </button>
+            </div>
+
+            {(explicitMessage || explicitError) && (
+              <div className="space-y-2">
+                {explicitMessage && (
+                  <div className="flex items-start gap-2 rounded-lg border border-spotify-green/40 bg-spotify-green/15 px-3 py-2 text-sm text-white">
+                    <span className="icon text-base text-spotify-green">check_circle</span>
+                    <span className="font-semibold">{explicitMessage}</span>
+                  </div>
+                )}
+                {explicitError && (
+                  <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                    <span className="icon text-base">error</span>
+                    <span className="font-semibold">{explicitError}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+              <div className="text-sm text-spotify-gray-light">
+                {explicitLoading
+                  ? 'Loading explicit tracks…'
+                  : `${explicitCandidatesSorted.length} explicit track${explicitCandidatesSorted.length === 1 ? '' : 's'} found`}
+                {!explicitLoading && explicitSelectableCount > 0 && (
+                  <span>{` · Selected ${explicitSelectedCount}`}</span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAllExplicitSelection(true)}
+                  disabled={explicitLoading || explicitSelectableCount === 0}
+                  className="px-3 py-2 rounded-lg bg-spotify-green hover:bg-spotify-green-dark text-black text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllExplicitSelection(false)}
+                  disabled={explicitLoading || explicitSelectableCount === 0}
+                  className="px-3 py-2 rounded-lg bg-spotify-gray-mid/60 hover:bg-spotify-gray-mid text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Clear selection
+                </button>
+              </div>
+            </div>
+
+            {explicitLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <LoadingSpinner text="Loading full playlist…" />
+              </div>
+            ) : explicitCandidatesSorted.length === 0 ? (
+              <div className="text-sm text-spotify-gray-light">
+                No explicit tracks found in this playlist.
+              </div>
+            ) : (
+              <div className="max-h-[360px] overflow-y-auto space-y-2 pr-1">
+                {explicitCandidatesSorted.map((track) => {
+                  const isSelectable = track.uri && Number.isFinite(track.playlistIndex);
+                  const isSelected = Boolean(explicitSelection[track.selectionKey]) && isSelectable;
+                  const artistLabel = (track.artists || []).map((artist) => artist.name).join(', ') || 'Unknown artist';
+                  return (
+                    <div
+                      key={track.selectionKey}
+                      className={`flex items-center gap-3 rounded-xl border border-spotify-gray-mid/60 bg-spotify-gray-dark/60 p-3 ${
+                        isSelected ? 'ring-1 ring-spotify-green/40' : ''
+                      } ${!isSelectable ? 'opacity-60' : ''}`}
+                    >
+                      <label className="flex items-center gap-3 flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!isSelectable}
+                          onChange={() => {
+                            if (isSelectable) {
+                              toggleExplicitSelection(track.selectionKey);
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-spotify-gray-mid text-spotify-green focus:ring-spotify-green"
+                        />
+                        {track.album?.images?.length > 0 && (
+                          <img
+                            src={getBestImage(track.album.images)}
+                            alt={track.album?.name || track.name || 'Album art'}
+                            className="w-10 h-10 rounded"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm text-white font-semibold truncate">
+                            {track.name || 'Unknown title'}
+                            <span className="ml-2 text-[10px] bg-spotify-gray-light text-black px-1 py-0.5 rounded">E</span>
+                          </p>
+                          <p className="text-xs text-spotify-gray-light truncate">{artistLabel}</p>
+                          {!isSelectable && (
+                            <p className="text-[11px] text-spotify-gray-light">Unavailable for removal</p>
+                          )}
+                        </div>
+                      </label>
+                      <div className="text-xs text-spotify-gray-light tabular-nums">
+                        {formatDuration(track.duration_ms)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-end">
+              <button
+                type="button"
+                onClick={closeExplicitModal}
+                disabled={explicitRemoving}
+                className="px-4 py-2 rounded-lg border border-spotify-gray-mid/60 text-sm text-spotify-gray-light hover:text-white hover:border-spotify-gray-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveExplicitTracks}
+                disabled={explicitRemoving || explicitSelectedCount === 0}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {explicitRemoving ? 'Removing…' : `Remove selected (${explicitSelectedCount})`}
+              </button>
             </div>
           </div>
         </div>

@@ -162,10 +162,26 @@ def get_facts_for_playlists(playlist_ids: Iterable[str]) -> Dict[str, Dict]:
             tuple(ids),
         )
         rows = cur.fetchall()
+        cur.execute(
+            f"""
+            SELECT pci.playlist_id,
+                   COALESCE(SUM(tc.duration_ms), 0) AS total_duration_ms
+            FROM playlist_cache_items pci
+            LEFT JOIN track_cache tc ON tc.track_id = pci.track_id
+            WHERE pci.playlist_id IN ({placeholders})
+            GROUP BY pci.playlist_id
+            """,
+            tuple(ids),
+        )
+        duration_rows = cur.fetchall()
 
     result = {}
     for row in rows:
         result[row["playlist_id"]] = dict(row)
+    if duration_rows:
+        for row in duration_rows:
+            if row["playlist_id"] in result:
+                result[row["playlist_id"]]["total_duration_ms"] = row["total_duration_ms"]
     return result
 
 
