@@ -448,7 +448,7 @@ class SpotifyService:
                 limit=limit,
                 offset=offset,
                 market="from_token",
-                fields="items(added_at,track(id,name,artists(id,name,uri),album(id,name,images,release_date,release_date_precision,album_type,total_tracks,uri),duration_ms,uri,preview_url,explicit,popularity,track_number,disc_number,external_ids,available_markets,is_playable)),total,next"
+                fields="items(added_at,track(id,name,artists(id,name,uri),album(id,name,images,release_date,release_date_precision,album_type,total_tracks,uri),duration_ms,uri,preview_url,explicit,popularity,track_number,disc_number,external_ids,available_markets)),total,next"
             )
             
             # Capture total on first iteration
@@ -588,7 +588,7 @@ class SpotifyService:
             limit=limit,
             offset=offset,
             market="from_token",
-            fields="items(added_at,track(id,name,artists(id,name,uri),album(id,name,images,release_date,release_date_precision,album_type,total_tracks,uri),duration_ms,uri,preview_url,explicit,popularity,track_number,disc_number,external_ids,available_markets,is_playable)),total"
+            fields="items(added_at,track(id,name,artists(id,name,uri),album(id,name,images,release_date,release_date_precision,album_type,total_tracks,uri),duration_ms,uri,preview_url,explicit,popularity,track_number,disc_number,external_ids,available_markets)),total"
         )
         
         total_tracks = results.get("total", 0)
