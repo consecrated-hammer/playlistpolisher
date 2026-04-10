@@ -2,7 +2,7 @@
 # Core Framework
 fastapi==0.108.0
 uvicorn[standard]==0.25.0
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 spotipy==2.25.2
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
