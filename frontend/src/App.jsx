@@ -9,31 +9,32 @@
  * This is the entry point for the application logic.
  */
 
-import React, { useState, useEffect, useMemo, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useLayoutEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useSearchParams, useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
-import PlaylistList from './components/PlaylistList';
-import PlaylistView from './components/PlaylistView';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorMessage from './components/ErrorMessage';
-import JobStatusModal from './components/JobStatusModal';
 import { authAPI, playlistAPI, sortAPI, preferencesAPI, cacheAPI, API_BASE_URL } from './services/api';
-import SchedulesPage from './pages/SchedulesPage';
-import HistoryPage from './pages/HistoryPage';
-import IgnoredTracksPage from './pages/IgnoredTracksPage';
-import CachePage from './pages/CachePage';
-import SettingsPage from './pages/SettingsPage';
-import SmartPlaylistBuilder from './pages/SmartPlaylistBuilder';
-import AiPlaylistBuilder from './pages/AiPlaylistBuilder';
-import BackupsLibraryPage from './pages/BackupsLibraryPage';
-import BackupDetailPage from './pages/BackupDetailPage';
-import RoadmapPage from './pages/RoadmapPage';
-import TermsPage from './pages/TermsPage';
-import PrivacyPage from './pages/PrivacyPage';
 import ActivityProvider from './context/ActivityContext';
 import useActivityContext from './context/useActivityContext';
 import PlayerProvider from './context/PlayerContext';
 import usePlayerContext from './context/usePlayerContext';
+
+const PlaylistList = lazy(() => import('./components/PlaylistList'));
+const PlaylistView = lazy(() => import('./components/PlaylistView'));
+const JobStatusModal = lazy(() => import('./components/JobStatusModal'));
+const SchedulesPage = lazy(() => import('./pages/SchedulesPage'));
+const HistoryPage = lazy(() => import('./pages/HistoryPage'));
+const IgnoredTracksPage = lazy(() => import('./pages/IgnoredTracksPage'));
+const CachePage = lazy(() => import('./pages/CachePage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const SmartPlaylistBuilder = lazy(() => import('./pages/SmartPlaylistBuilder'));
+const AiPlaylistBuilder = lazy(() => import('./pages/AiPlaylistBuilder'));
+const BackupsLibraryPage = lazy(() => import('./pages/BackupsLibraryPage'));
+const BackupDetailPage = lazy(() => import('./pages/BackupDetailPage'));
+const RoadmapPage = lazy(() => import('./pages/RoadmapPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 
 const PRIMARY_TASKS = [
   {
@@ -282,6 +283,18 @@ const ScrollToTop = () => {
     window.scrollTo(0, 0);
   }, [pathname]);
   return null;
+};
+
+const SuspenseFallback = ({ text = 'Loading…', fullPage = false }) => {
+  const className = fullPage
+    ? 'min-h-screen bg-gradient-to-br from-spotify-black via-spotify-gray-dark to-spotify-gray-mid flex items-center justify-center'
+    : 'max-w-3xl mx-auto bg-spotify-gray-dark/40 border border-spotify-gray-mid/60 rounded-2xl shadow-2xl p-8';
+
+  return (
+    <div className={className}>
+      <LoadingSpinner text={text} />
+    </div>
+  );
 };
 
 /**
@@ -947,14 +960,16 @@ const PlaylistsPage = ({ user, onLogout }) => {
             </div>
           </div>
 
+          <Suspense fallback={<SuspenseFallback text="Loading playlists…" />}>
             <PlaylistList
-            playlists={sortedPlaylists}
-            onPlaylistClick={handlePlaylistClick}
-            viewMode={viewMode}
-            sortOption={effectiveSortOption}
-            onSortChange={setSortPreference}
-            cacheFacts={cacheFacts}
-          />
+              playlists={sortedPlaylists}
+              onPlaylistClick={handlePlaylistClick}
+              viewMode={viewMode}
+              sortOption={effectiveSortOption}
+              onSortChange={setSortPreference}
+              cacheFacts={cacheFacts}
+            />
+          </Suspense>
         </>
       )}
     </Layout>
@@ -1026,15 +1041,17 @@ const PlaylistDetailPage = ({ user, onLogout, globalJob, setGlobalJob, globalJob
       ) : error ? (
         <ErrorMessage message={error} onRetry={loadPlaylistDetails} />
       ) : playlist ? (
-        <PlaylistView 
-          playlist={playlist} 
-          onBack={handleBack}
-          globalJob={globalJob}
-          setGlobalJob={setGlobalJob}
-          globalJobStatus={globalJobStatus}
-          setGlobalJobStatus={setGlobalJobStatus}
-          onDedupeStatusChange={onDedupeStatusChange}
-        />
+        <Suspense fallback={<SuspenseFallback text="Loading playlist tools…" />}>
+          <PlaylistView 
+            playlist={playlist} 
+            onBack={handleBack}
+            globalJob={globalJob}
+            setGlobalJob={setGlobalJob}
+            globalJobStatus={globalJobStatus}
+            setGlobalJobStatus={setGlobalJobStatus}
+            onDedupeStatusChange={onDedupeStatusChange}
+          />
+        </Suspense>
       ) : null}
     </Layout>
   );
@@ -1215,60 +1232,84 @@ function App() {
         } />
         <Route path="/schedules" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-            <SchedulesPage user={user} onLogout={handleLogout} />
+            <Suspense fallback={<SuspenseFallback text="Loading schedules…" fullPage />}>
+              <SchedulesPage user={user} onLogout={handleLogout} />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="/history" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-            <HistoryPage user={user} onLogout={handleLogout} />
+            <Suspense fallback={<SuspenseFallback text="Loading history…" fullPage />}>
+              <HistoryPage user={user} onLogout={handleLogout} />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="/ignored-tracks" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-            <IgnoredTracksPage user={user} onLogout={handleLogout} />
+            <Suspense fallback={<SuspenseFallback text="Loading ignored tracks…" fullPage />}>
+              <IgnoredTracksPage user={user} onLogout={handleLogout} />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="/smart-playlists/new" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-            <SmartPlaylistBuilder user={user} onLogout={handleLogout} />
+            <Suspense fallback={<SuspenseFallback text="Loading smart playlist builder…" fullPage />}>
+              <SmartPlaylistBuilder user={user} onLogout={handleLogout} />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="/ai-playlists/new" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-            <AiPlaylistBuilder user={user} onLogout={handleLogout} />
+            <Suspense fallback={<SuspenseFallback text="Loading AI playlist builder…" fullPage />}>
+              <AiPlaylistBuilder user={user} onLogout={handleLogout} />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="/cache" element={
-          <CachePage user={user} onLogout={handleLogout} />
+          <Suspense fallback={<SuspenseFallback text="Loading cache dashboard…" fullPage />}>
+            <CachePage user={user} onLogout={handleLogout} />
+          </Suspense>
         } />
         <Route path="/settings" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-            <SettingsPage user={user} onLogout={handleLogout} />
+            <Suspense fallback={<SuspenseFallback text="Loading settings…" fullPage />}>
+              <SettingsPage user={user} onLogout={handleLogout} />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="/backups" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-            <BackupsLibraryPage user={user} onLogout={handleLogout} />
+            <Suspense fallback={<SuspenseFallback text="Loading backups…" fullPage />}>
+              <BackupsLibraryPage user={user} onLogout={handleLogout} />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="/backups/:backupId" element={
           <ProtectedRoute isAuthenticated={isAuthenticated} loading={loading}>
-            <BackupDetailPage user={user} onLogout={handleLogout} />
+            <Suspense fallback={<SuspenseFallback text="Loading backup detail…" fullPage />}>
+              <BackupDetailPage user={user} onLogout={handleLogout} />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="/roadmap" element={
           <Layout user={user} onLogout={handleLogout}>
-            <RoadmapPage />
+            <Suspense fallback={<SuspenseFallback text="Loading roadmap…" />}>
+              <RoadmapPage />
+            </Suspense>
           </Layout>
         } />
         <Route path="/terms" element={
           <Layout user={user} onLogout={handleLogout}>
-            <TermsPage />
+            <Suspense fallback={<SuspenseFallback text="Loading terms…" />}>
+              <TermsPage />
+            </Suspense>
           </Layout>
         } />
         <Route path="/privacy" element={
           <Layout user={user} onLogout={handleLogout}>
-            <PrivacyPage />
+            <Suspense fallback={<SuspenseFallback text="Loading privacy policy…" />}>
+              <PrivacyPage />
+            </Suspense>
           </Layout>
         } />
         
@@ -1277,10 +1318,12 @@ function App() {
         
           {/* Global job status modal */}
           {showJobModal && globalJobStatus && (
-            <JobStatusModal
-              jobStatus={globalJobStatus}
-              onClose={handleCloseJobModal}
-            />
+            <Suspense fallback={null}>
+              <JobStatusModal
+                jobStatus={globalJobStatus}
+                onClose={handleCloseJobModal}
+              />
+            </Suspense>
           )}
         </Router>
       </PlayerProvider>
