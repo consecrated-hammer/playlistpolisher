@@ -4,13 +4,13 @@
  * Tailwind CSS imports and custom global styles.
  */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../tailwind.config.js";
 
 @layer base {
   html, body {
-    @apply antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
       'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
       sans-serif;
@@ -24,7 +24,7 @@
   }
 
   * {
-    @apply box-border;
+    box-sizing: border-box;
   }
 }
 
@@ -45,20 +45,25 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
-    @apply bg-spotify-gray-dark;
+    background-color: #282828;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-spotify-gray-mid rounded;
+    background-color: #404040;
+    border-radius: 0.25rem;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-spotify-gray-light;
+    background-color: #B3B3B3;
   }
 
   /* Tooltip bubble */
   .tooltip {
-    @apply absolute text-white text-xs z-50;
+    position: absolute;
+    color: #fff;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    z-index: 50;
     top: calc(100% + 10px);
     left: 50%;
     transform: translateX(-50%) translateY(-4px);
