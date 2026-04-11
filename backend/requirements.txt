@@ -1,6 +1,6 @@
 # FastAPI Backend Dependencies
 # Core Framework
-fastapi==0.108.0
+fastapi==0.135.3
 uvicorn[standard]==0.25.0
 python-dotenv==1.0.0
 spotipy==2.25.2
