@@ -38,7 +38,7 @@ RUN export VITE_APP_VERSION=${VITE_APP_VERSION:-unknown} && \
 
 # =============================================================================
 # Build final image with backend + frontend static files
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
