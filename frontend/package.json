@@ -1,7 +1,7 @@
 {
   "name": "playlist-polisher-frontend",
   "private": true,
-  "version": "1.6.6",
+  "version": "1.6.7",
   "type": "module",
   "description": "Modern React frontend for Playlist Polisher",
   "scripts": {
@@ -26,7 +26,7 @@
     "autoprefixer": "^10.4.27",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.4",
-    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "@tailwindcss/postcss": "^4.2.2",
