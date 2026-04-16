@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.6.7 - 2026-04-16
+**Fix ESLint compatibility**
+- Update eslint-plugin-react to v7.37.5 for ESLint 10 compatibility
+
 ## v1.6.6 - 2026-02-06
 **Explicit tools + playlist table upgrades**
 - Playlists: add explicit column sorting and a bulk explicit-removal modal with previews.
