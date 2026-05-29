@@ -102,7 +102,7 @@ const Layout = ({ children, user, onLogout, jobStatus, onJobIndicatorClick }) =>
               </div>
               <div>
                 <h1 className="text-xl font-bold text-white">Playlist Polisher</h1>
-                <p className="text-xs text-spotify-gray-light">Clean, sort, and shine your playlists</p>
+                <p className="text-xs text-spotify-gray-light hidden sm:block">Clean, sort, and shine your playlists</p>
               </div>
             </Link>
 

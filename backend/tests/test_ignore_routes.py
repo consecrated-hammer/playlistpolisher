@@ -97,7 +97,7 @@ def mock_session(monkeypatch, client):
 
 def test_add_ignored_pair_playlist_scope(client, mock_session):
     """Test adding an ignored pair with playlist scope"""
-    response = client.post("/ignore/pair", json={
+    response = client.post("/api/ignore/pair", json={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": "playlist789"
@@ -112,7 +112,7 @@ def test_add_ignored_pair_playlist_scope(client, mock_session):
 
 def test_add_ignored_pair_global_scope(client, mock_session):
     """Test adding an ignored pair with global scope (no playlist_id)"""
-    response = client.post("/ignore/pair", json={
+    response = client.post("/api/ignore/pair", json={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": None
@@ -127,7 +127,7 @@ def test_add_ignored_pair_global_scope(client, mock_session):
 def test_add_ignored_pair_sorts_track_ids(client, mock_session):
     """Test that track IDs are sorted to avoid duplicate pairs"""
     # Add pair in one order
-    response1 = client.post("/ignore/pair", json={
+    response1 = client.post("/api/ignore/pair", json={
         "track_id_1": "trackZZZ",
         "track_id_2": "trackAAA",
         "playlist_id": "playlist789"
@@ -135,7 +135,7 @@ def test_add_ignored_pair_sorts_track_ids(client, mock_session):
     assert response1.status_code == 200
     
     # Try to add same pair in reverse order - should fail with 409
-    response2 = client.post("/ignore/pair", json={
+    response2 = client.post("/api/ignore/pair", json={
         "track_id_1": "trackAAA",
         "track_id_2": "trackZZZ",
         "playlist_id": "playlist789"
@@ -153,18 +153,18 @@ def test_add_ignored_pair_duplicate_constraint(client, mock_session):
     }
     
     # First insertion should succeed
-    response1 = client.post("/ignore/pair", json=payload)
+    response1 = client.post("/api/ignore/pair", json=payload)
     assert response1.status_code == 200
     
     # Second insertion should fail
-    response2 = client.post("/ignore/pair", json=payload)
+    response2 = client.post("/api/ignore/pair", json=payload)
     assert response2.status_code == 409
     assert "already ignored" in response2.json()["detail"].lower()
 
 
 def test_list_ignored_pairs_empty(client, mock_session):
     """Test listing ignored pairs when none exist"""
-    response = client.get("/ignore/list")
+    response = client.get("/api/ignore/list")
     
     assert response.status_code == 200
     data = response.json()
@@ -175,24 +175,24 @@ def test_list_ignored_pairs_empty(client, mock_session):
 def test_list_ignored_pairs_multiple(client, mock_session):
     """Test listing multiple ignored pairs"""
     # Add three pairs
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track1",
         "track_id_2": "track2",
         "playlist_id": "playlistA"
     })
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track3",
         "track_id_2": "track4",
         "playlist_id": "playlistB"
     })
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track5",
         "track_id_2": "track6",
         "playlist_id": None  # Global
     })
     
     # List all pairs
-    response = client.get("/ignore/list")
+    response = client.get("/api/ignore/list")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 3
@@ -209,24 +209,24 @@ def test_list_ignored_pairs_multiple(client, mock_session):
 def test_list_ignored_pairs_filtered_by_playlist(client, mock_session):
     """Test listing ignored pairs filtered by playlist"""
     # Add pairs for different playlists
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track1",
         "track_id_2": "track2",
         "playlist_id": "playlistA"
     })
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track3",
         "track_id_2": "track4",
         "playlist_id": "playlistB"
     })
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track5",
         "track_id_2": "track6",
         "playlist_id": None  # Global
     })
     
     # List pairs for playlistA (should include playlistA-specific and global)
-    response = client.get("/ignore/list?playlist_id=playlistA")
+    response = client.get("/api/ignore/list?playlist_id=playlistA")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2  # playlistA + global
@@ -239,7 +239,7 @@ def test_list_ignored_pairs_filtered_by_playlist(client, mock_session):
 def test_remove_ignored_pair(client, mock_session):
     """Test removing an ignored pair"""
     # Add a pair
-    response = client.post("/ignore/pair", json={
+    response = client.post("/api/ignore/pair", json={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": "playlist789"
@@ -247,18 +247,18 @@ def test_remove_ignored_pair(client, mock_session):
     pair_id = response.json()["id"]
     
     # Remove it
-    response = client.delete(f"/ignore/{pair_id}")
+    response = client.delete(f"/api/ignore/{pair_id}")
     assert response.status_code == 200
     assert "removed" in response.json()["message"].lower()
     
     # Verify it's gone
-    response = client.get("/ignore/list")
+    response = client.get("/api/ignore/list")
     assert len(response.json()) == 0
 
 
 def test_remove_nonexistent_pair(client, mock_session):
     """Test removing a pair that doesn't exist"""
-    response = client.delete("/ignore/99999")
+    response = client.delete("/api/ignore/99999")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
@@ -266,14 +266,14 @@ def test_remove_nonexistent_pair(client, mock_session):
 def test_check_if_ignored_true(client, mock_session):
     """Test checking if a pair is ignored (positive case)"""
     # Add a pair
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": "playlist789"
     })
     
     # Check if it's ignored
-    response = client.get("/ignore/check", params={
+    response = client.get("/api/ignore/check", params={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": "playlist789"
@@ -285,7 +285,7 @@ def test_check_if_ignored_true(client, mock_session):
 
 def test_check_if_ignored_false(client, mock_session):
     """Test checking if a pair is ignored (negative case)"""
-    response = client.get("/ignore/check", params={
+    response = client.get("/api/ignore/check", params={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": "playlist789"
@@ -298,14 +298,14 @@ def test_check_if_ignored_false(client, mock_session):
 def test_check_if_ignored_global_match(client, mock_session):
     """Test that global ignores match any playlist check"""
     # Add a global ignore
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": None
     })
     
     # Check against a specific playlist - should still match
-    response = client.get("/ignore/check", params={
+    response = client.get("/api/ignore/check", params={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": "any-playlist"
@@ -318,14 +318,14 @@ def test_check_if_ignored_global_match(client, mock_session):
 def test_check_if_ignored_reversed_ids(client, mock_session):
     """Test that reversed track IDs are handled correctly"""
     # Add pair
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "trackZZZ",
         "track_id_2": "trackAAA",
         "playlist_id": "playlist789"
     })
     
     # Check with reversed IDs - should still match due to sorting
-    response = client.get("/ignore/check", params={
+    response = client.get("/api/ignore/check", params={
         "track_id_1": "trackAAA",
         "track_id_2": "trackZZZ",
         "playlist_id": "playlist789"
@@ -341,25 +341,25 @@ def test_unauthenticated_requests(client):
     test_client = TestClient(app)
     
     # Try to add pair without auth
-    response = test_client.post("/ignore/pair", json={
+    response = test_client.post("/api/ignore/pair", json={
         "track_id_1": "track123",
         "track_id_2": "track456"
     })
     assert response.status_code == 401
     
     # Try to list pairs without auth
-    response = test_client.get("/ignore/list")
+    response = test_client.get("/api/ignore/list")
     assert response.status_code == 401
     
     # Try to delete pair without auth
-    response = test_client.delete("/ignore/1")
+    response = test_client.delete("/api/ignore/1")
     assert response.status_code == 401
 
 
 def test_session_isolation(client, mock_session):
     """Test that ignored pairs are isolated by session"""
     # Add pair for first session
-    client.post("/ignore/pair", json={
+    client.post("/api/ignore/pair", json={
         "track_id_1": "track123",
         "track_id_2": "track456",
         "playlist_id": "playlist789"
@@ -391,13 +391,13 @@ def test_session_isolation(client, mock_session):
     client.cookies.set(SESSION_COOKIE_NAME, new_session_id)
     
     # List pairs - should be empty for different session
-    response = client.get("/ignore/list")
+    response = client.get("/api/ignore/list")
     assert response.status_code == 200
     assert len(response.json()) == 0
 
     # Restore original session cookie and ensure the pair remains visible
     client.cookies.set(SESSION_COOKIE_NAME, mock_session["session_id"])
-    response2 = client.get("/ignore/list")
+    response2 = client.get("/api/ignore/list")
     assert response2.status_code == 200
     data = response2.json()
     assert len(data) == 1

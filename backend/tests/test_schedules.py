@@ -65,6 +65,57 @@ def test_disable_and_delete(temp_db):
     assert deleted
 
 
+def test_replace_existing_keeps_single_schedule(temp_db):
+    # Default behavior (replace_existing=True) used by global cache/backup schedules.
+    first = schedules.create_schedule(
+        playlist_id="__cache_global__",
+        user_id="u_single",
+        session_id=None,
+        action_type="cache_refresh",
+        params={"hour_of_day": 3},
+        frequency_minutes=1440,
+    )
+    second = schedules.create_schedule(
+        playlist_id="__cache_global__",
+        user_id="u_single",
+        session_id=None,
+        action_type="cache_refresh",
+        params={"hour_of_day": 4},
+        frequency_minutes=1440,
+    )
+    all_scheds = schedules.list_schedules("__cache_global__", "u_single")
+    assert len(all_scheds) == 1
+    assert all_scheds[0]["id"] == second
+    assert schedules.get_schedule(first, "u_single") is None
+
+
+def test_multiple_schedules_per_playlist(temp_db):
+    # replace_existing=False allows multiple schedules for the same playlist/action,
+    # e.g. sorting the same playlist at different times of day.
+    morning = schedules.create_schedule(
+        playlist_id="pl_multi",
+        user_id="u_multi",
+        session_id=None,
+        action_type="sort",
+        params={"sort_by": "date_added", "hour_of_day": 9},
+        frequency_minutes=1440,
+        replace_existing=False,
+    )
+    evening = schedules.create_schedule(
+        playlist_id="pl_multi",
+        user_id="u_multi",
+        session_id=None,
+        action_type="sort",
+        params={"sort_by": "date_added", "hour_of_day": 18},
+        frequency_minutes=1440,
+        replace_existing=False,
+    )
+    all_scheds = schedules.list_schedules("pl_multi", "u_multi")
+    assert len(all_scheds) == 2
+    ids = {s["id"] for s in all_scheds}
+    assert ids == {morning, evening}
+
+
 def test_mark_run(temp_db):
     sched_id = schedules.create_schedule(
         playlist_id="pl3",

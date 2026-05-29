@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.7.0 - 2026-05-29
+**Mobile playlists, multiple schedules, API namespacing**
+- Playlists: mobile-friendly layouts for the list and detail views — responsive toolbar, compact header, in-list mobile sort bar, and a bottom-sheet for track actions.
+- Schedules: allow multiple schedules per playlist (e.g. sort the same playlist at several times of day); global cache/backup schedules remain singletons.
+- API: serve all data endpoints under `/api` so directly navigating to or refreshing a frontend route (e.g. `/schedules`) no longer returns raw JSON. Auth stays at `/auth` (no Spotify redirect change needed).
+
 ## v1.6.7 - 2026-04-16
 **Fix ESLint compatibility**
 - Update eslint-plugin-react to v7.37.5 for ESLint 10 compatibility

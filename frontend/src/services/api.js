@@ -23,42 +23,63 @@ const rawApiBaseUrl = import.meta.env.VITE_API_URL;
 const normalizedApiBaseUrl = normalizeApiBaseUrl(rawApiBaseUrl);
 export const API_BASE_URL = normalizedApiBaseUrl !== null ? normalizedApiBaseUrl : `http://${fallbackHost}:${fallbackPort}`;
 
+// Data API endpoints are served under the "/api" namespace so they never collide
+// with client-side SPA routes (e.g. "/schedules", "/playlists"). Auth endpoints stay
+// at the root ("/auth/...") to keep the externally-registered Spotify OAuth redirect
+// URI stable, so they use a separate root-based client below.
+const API_ROOT_URL = API_BASE_URL;
+const API_URL = `${API_BASE_URL}/api`;
+
 /**
- * Axios instance configured for API communication
+ * Shared response interceptor for consistent error handling
  */
-const api = axios.create({
-  baseURL: API_BASE_URL,
+const attachErrorInterceptor = (instance) => {
+  instance.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      // Log errors in development
+      if (import.meta.env.DEV) {
+        console.error('API Error:', error.response?.data || error.message);
+      }
+
+      // Transform error for consistent handling
+      const errorMessage = error.response?.data?.detail ||
+                           error.response?.data?.message ||
+                           error.message ||
+                           'An unexpected error occurred';
+
+      return Promise.reject({
+        status: error.response?.status,
+        statusCode: error.response?.status, // Add statusCode for backwards compatibility
+        message: errorMessage,
+        original: error
+      });
+    }
+  );
+  return instance;
+};
+
+/**
+ * Axios instance for data API communication (served under "/api")
+ */
+const api = attachErrorInterceptor(axios.create({
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: true, // Important for cookie-based sessions
-});
+}));
 
 /**
- * Response interceptor for consistent error handling
+ * Axios instance for root-level endpoints (auth), served outside the "/api" namespace
  */
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Log errors in development
-    if (import.meta.env.DEV) {
-      console.error('API Error:', error.response?.data || error.message);
-    }
-    
-    // Transform error for consistent handling
-    const errorMessage = error.response?.data?.detail || 
-                         error.response?.data?.message || 
-                         error.message ||
-                         'An unexpected error occurred';
-    
-    return Promise.reject({
-      status: error.response?.status,
-      statusCode: error.response?.status, // Add statusCode for backwards compatibility
-      message: errorMessage,
-      original: error
-    });
-  }
-);
+const rootApi = attachErrorInterceptor(axios.create({
+  baseURL: API_ROOT_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true,
+}));
 
 /**
  * Authentication API
@@ -69,7 +90,7 @@ export const authAPI = {
    * @returns {Promise<string>} Authorization URL to redirect user to
    */
   getAuthUrl: async (forceDialog = false) => {
-    const response = await api.get('/auth/login', { params: { show_dialog: forceDialog } });
+    const response = await rootApi.get('/auth/login', { params: { show_dialog: forceDialog } });
     return response.data.auth_url;
   },
 
@@ -79,7 +100,7 @@ export const authAPI = {
    * @returns {Promise<{message: string}>}
    */
   exchangeCode: async (code) => {
-    const response = await api.post('/auth/exchange', { code });
+    const response = await rootApi.post('/auth/exchange', { code });
     return response.data;
   },
 
@@ -88,7 +109,7 @@ export const authAPI = {
    * @returns {Promise<{authenticated: boolean, user: object|null}>}
    */
   checkStatus: async () => {
-    const response = await api.get('/auth/status');
+    const response = await rootApi.get('/auth/status');
     return response.data;
   },
 
@@ -97,7 +118,7 @@ export const authAPI = {
    * @returns {Promise<object>} User profile data
    */
   getCurrentUser: async () => {
-    const response = await api.get('/auth/user');
+    const response = await rootApi.get('/auth/user');
     return response.data;
   },
 
@@ -106,7 +127,7 @@ export const authAPI = {
    * @returns {Promise<{access_token: string, token_type: string, expires_in: number, scope: string}>}
    */
   getPlaybackToken: async () => {
-    const response = await api.get('/auth/player-token');
+    const response = await rootApi.get('/auth/player-token');
     return response.data;
   },
 
@@ -115,7 +136,7 @@ export const authAPI = {
    * @returns {Promise<{message: string}>}
    */
   logout: async () => {
-    const response = await api.post('/auth/logout');
+    const response = await rootApi.post('/auth/logout');
     return response.data;
   },
 };

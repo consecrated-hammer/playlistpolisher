@@ -170,9 +170,10 @@ def init_db():
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_playlist_schedules_user ON playlist_schedules(user_id, playlist_id)
     """)
-    cursor.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_playlist_schedules_unique ON playlist_schedules(user_id, playlist_id)
-    """)
+    # Migration: multiple schedules per playlist are now allowed (e.g. sort at several times
+    # of day), so drop the legacy unique (user_id, playlist_id) index. Singleton schedules
+    # (global cache/backup/cleanup) are enforced at the application layer via replace_existing.
+    cursor.execute("DROP INDEX IF EXISTS idx_playlist_schedules_unique")
     
     # Ignored duplicate track pairs
     cursor.execute("""
