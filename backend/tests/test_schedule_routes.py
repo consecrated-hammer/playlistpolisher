@@ -64,7 +64,7 @@ def test_list_user_schedules_returns_valid_entries(client):
         frequency_minutes=60,
     )
 
-    response = client.get("/schedules")
+    response = client.get("/api/schedules")
     assert response.status_code == 200
     payload = response.json()
     assert payload["schedules"][0]["id"] == sched_id
@@ -104,7 +104,7 @@ def test_invalid_schedule_records_are_filtered_out(client):
         )
         conn.commit()
 
-    response = client.get("/schedules")
+    response = client.get("/api/schedules")
     assert response.status_code == 200
     payload = response.json()
     ids = [s["id"] for s in payload["schedules"]]
@@ -115,7 +115,7 @@ def test_invalid_schedule_records_are_filtered_out(client):
 def test_cache_schedule_create_and_update(client):
     client, schedules_module, _, _, _ = client
 
-    resp = client.post("/schedules/cache", json={"action_type": "cache_clear"})
+    resp = client.post("/api/schedules/cache", json={"action_type": "cache_clear"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["action_type"] == "cache_clear"
@@ -123,13 +123,13 @@ def test_cache_schedule_create_and_update(client):
     cache_id = data["id"]
 
     # List should include the cache schedule
-    list_resp = client.get("/schedules")
+    list_resp = client.get("/api/schedules")
     assert list_resp.status_code == 200
     cache_entries = [s for s in list_resp.json().get("schedules", []) if s["action_type"] == "cache_clear"]
     assert len(cache_entries) == 1
 
     # Update schedule (disable and change hour)
-    update_resp = client.patch(f"/schedules/cache/{cache_id}", json={"enabled": False, "hour_of_day": 5})
+    update_resp = client.patch(f"/api/schedules/cache/{cache_id}", json={"enabled": False, "hour_of_day": 5})
     assert update_resp.status_code == 200
     updated = update_resp.json()
     assert updated["enabled"] is False

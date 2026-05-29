@@ -3671,19 +3671,19 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {/* Back Button */}
       <button
         onClick={onBack}
-        className="mb-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold shadow-md transition-all hover:scale-[1.02]"
+        className="mb-4 inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-spotify-green hover:bg-spotify-green-dark text-black font-semibold shadow-md transition-all hover:scale-[1.02] text-sm sm:text-base"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
         </svg>
         <span>Back to Playlists</span>
       </button>
 
       {/* Playlist Header */}
-      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-5 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-visible">
-        <div className="flex flex-col md:flex-row gap-6 min-w-0 max-w-full">
+      <div className="bg-gradient-to-b from-spotify-gray-dark to-transparent rounded-lg p-4 sm:p-6 md:p-8 mb-6 w-full max-w-full overflow-visible">
+        <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-w-0 max-w-full">
           {/* Cover Image */}
-          <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative z-10 group mx-auto md:mx-0">
+          <div className="w-32 h-32 sm:w-48 sm:h-48 md:w-60 md:h-60 flex-shrink-0 shadow-2xl relative z-10 group mx-auto md:mx-0">
             <div className="absolute inset-0 rounded-lg overflow-hidden bg-spotify-gray-mid">
               {currentPlaylist.images && currentPlaylist.images.length > 0 ? (
                 <img
@@ -3719,7 +3719,7 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
       {/* Playlist Info */}
       <div className="flex flex-col justify-end min-w-0 w-full overflow-visible">
             <p className="text-sm text-spotify-gray-light uppercase font-semibold mb-2">Playlist</p>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full min-w-0 w-full md:whitespace-normal md:overflow-visible md:break-words">
+            <h1 className="text-2xl sm:text-4xl md:text-6xl font-bold text-white mb-4 truncate max-w-full min-w-0 w-full md:whitespace-normal md:overflow-visible md:break-words">
               {currentPlaylist.name}
             </h1>
             {playlistDescription && (
@@ -4437,6 +4437,53 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
         </div>
         </div>
         <div className="md:hidden overflow-x-hidden max-w-full">
+          {/* Mobile sort control */}
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-spotify-gray-mid/30 bg-spotify-gray-dark/40">
+            <span className="icon text-sm text-spotify-gray-light flex-shrink-0">sort</span>
+            <select
+              value={sortBy || ''}
+              onChange={(e) => {
+                const col = e.target.value || null;
+                if (col === sortBy) {
+                  setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+                } else {
+                  setSortBy(col);
+                  setSortDirection('asc');
+                }
+              }}
+              aria-label="Sort tracks"
+              className="flex-1 min-w-0 bg-transparent text-white text-xs border-none focus:outline-none focus:ring-0 py-1"
+            >
+              <option value="">Playlist order</option>
+              <option value="title">Title</option>
+              <option value="artist">Artist</option>
+              <option value="album">Album</option>
+              <option value="date_added">Date added</option>
+              <option value="release_date">Release date</option>
+              <option value="duration">Duration</option>
+              <option value="explicit">Explicit</option>
+            </select>
+            {sortBy && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                  className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-spotify-green hover:bg-spotify-gray-mid/60 transition-colors"
+                  aria-label={sortDirection === 'asc' ? 'Sort descending' : 'Sort ascending'}
+                >
+                  <span className="icon text-sm">{sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSortBy(null); setSortDirection('asc'); }}
+                  className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-spotify-gray-light hover:text-white hover:bg-spotify-gray-mid/60 transition-colors"
+                  aria-label="Clear sort"
+                >
+                  <span className="icon text-sm">close</span>
+                </button>
+              </>
+            )}
+          </div>
           <div className="divide-y divide-spotify-gray-mid/30">
             {sortedTracks.map((track, index) => {
               const isCurrentTrack = isSamePlaylistEntry(track);
@@ -4543,13 +4590,28 @@ const PlaylistView = ({ playlist, onBack, globalJob, setGlobalJob, globalJobStat
 
       {contextMenu && (
         <div className="fixed inset-0 z-[70] pointer-events-none">
+          {isMobile && (
+            <div
+              className="absolute inset-0 bg-black/50 pointer-events-auto"
+              onClick={closeContextMenu}
+            />
+          )}
           <div
             key={`${contextMenu.x}-${contextMenu.y}`}
             data-context-menu
-            className="absolute w-72 max-h-[400px] overflow-y-auto bg-spotify-gray-dark border border-spotify-gray-mid/60 rounded-xl shadow-2xl p-2 text-sm text-spotify-gray-light pointer-events-auto animate-fade-in"
-            style={{ top: contextMenu.y, left: contextMenu.x }}
+            className={
+              isMobile
+                ? 'absolute bottom-0 left-0 right-0 w-full max-h-[60vh] overflow-y-auto bg-spotify-gray-dark border-t border-spotify-gray-mid/60 rounded-t-2xl shadow-2xl p-2 pb-6 text-sm text-spotify-gray-light pointer-events-auto animate-fade-in'
+                : 'absolute w-72 max-h-[400px] overflow-y-auto bg-spotify-gray-dark border border-spotify-gray-mid/60 rounded-xl shadow-2xl p-2 text-sm text-spotify-gray-light pointer-events-auto animate-fade-in'
+            }
+            style={isMobile ? {} : { top: contextMenu.y, left: contextMenu.x }}
             onContextMenu={(event) => event.preventDefault()}
           >
+            {isMobile && (
+              <div className="flex justify-center pt-1 pb-3">
+                <div className="w-10 h-1 rounded-full bg-spotify-gray-mid/80" />
+              </div>
+            )}
             {contextMenu.kind === 'artist' ? (
               (() => {
                 const artist = contextMenu.artist;

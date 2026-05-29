@@ -135,30 +135,41 @@ app.add_middleware(
 
 
 # Include routers
+#
+# All data API routers live under the "/api" namespace so their paths never
+# collide with client-side SPA routes (e.g. "/schedules", "/playlists", "/cache").
+# Without this, a hard refresh or direct navigation to a frontend route would be
+# matched by an API endpoint and return raw JSON instead of the app.
+#
+# The auth router is intentionally kept at "/auth" (un-prefixed): the Spotify OAuth
+# redirect URI ("/auth/callback") is registered externally in the Spotify dashboard,
+# and "/auth/*" does not collide with any frontend route.
+API_PREFIX = "/api"
+
 app.include_router(auth.router)
-app.include_router(playlists.router)
-app.include_router(sort.router)
-app.include_router(schedule.router)
-app.include_router(schedule.router_user)
-app.include_router(ignore.router)
-app.include_router(player.router)
-app.include_router(app_settings.router)
+app.include_router(playlists.router, prefix=API_PREFIX)
+app.include_router(sort.router, prefix=API_PREFIX)
+app.include_router(schedule.router, prefix=API_PREFIX)
+app.include_router(schedule.router_user, prefix=API_PREFIX)
+app.include_router(ignore.router, prefix=API_PREFIX)
+app.include_router(player.router, prefix=API_PREFIX)
+app.include_router(app_settings.router, prefix=API_PREFIX)
 
 # Import and include cache router
 from app.routes import cache
-app.include_router(cache.router)
+app.include_router(cache.router, prefix=API_PREFIX)
 
 # Import and include preferences router
 from app.routes import preferences
-app.include_router(preferences.router)
+app.include_router(preferences.router, prefix=API_PREFIX)
 
 # Import and include smart playlist builder router
 from app.routes import smart_playlists
-app.include_router(smart_playlists.router)
+app.include_router(smart_playlists.router, prefix=API_PREFIX)
 
 # Import and include AI playlist builder router
 from app.routes import ai_playlists
-app.include_router(ai_playlists.router)
+app.include_router(ai_playlists.router, prefix=API_PREFIX)
 
 # Security and cache headers middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -215,6 +226,10 @@ if static_dir.exists():
     @app.get("/{full_path:path}", response_class=FileResponse)
     async def catch_all(full_path: str):
         """Catch-all route for frontend routing"""
+        # Unknown API/system paths should not be masked by the SPA shell; return a
+        # real 404 so API clients get JSON instead of an HTML page.
+        if full_path == "api" or full_path.startswith(("api/", "auth/")):
+            raise HTTPException(status_code=404, detail="Not found")
         file_path = static_file_map.get(full_path)
         if file_path and file_path.is_file():
             return FileResponse(str(file_path))

@@ -343,11 +343,11 @@ const PlaylistList = ({ playlists, onPlaylistClick, viewMode = 'grid', sortOptio
 
   return (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
         {playlists.map((playlist) => (
           <div
             key={playlist.id}
-            className="bg-spotify-gray-dark hover:bg-spotify-gray-mid rounded-lg p-4 transition-all duration-200 hover:scale-105 hover:z-30 animate-fade-in group relative"
+            className="bg-spotify-gray-dark hover:bg-spotify-gray-mid rounded-lg p-3 sm:p-4 transition-all duration-200 hover:scale-105 hover:z-30 animate-fade-in group relative"
           >
             {/* Playlist Cover */}
             <div className="relative mb-4 aspect-square rounded-md cursor-pointer group" onClick={() => onPlaylistClick(playlist.id)}>

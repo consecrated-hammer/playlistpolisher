@@ -230,11 +230,14 @@ const SchedulesPage = ({ user, onLogout }) => {
       return;
     }
     
-    // Check for duplicate when creating new (one per playlist/action)
-    if (creatingNew && !isCache && !isBackupCleanup) {
-      const existing = schedules.find((s) => s.playlist_id === editForm.playlistId);
+    // Only one global "all playlists" backup schedule is allowed. Per-playlist sort
+    // and backup schedules may have multiple entries (e.g. different times of day).
+    if (creatingNew && isBackupGlobal) {
+      const existing = schedules.find(
+        (s) => s.action_type === 'backup' && s.playlist_id === BACKUP_GLOBAL_PLAYLIST_ID
+      );
       if (existing) {
-        showToast('This playlist already has a schedule', 'error');
+        showToast('A backup schedule for all playlists already exists', 'error');
         return;
       }
     }
@@ -359,14 +362,8 @@ const SchedulesPage = ({ user, onLogout }) => {
     }
   };
 
-  // Get available playlists for dropdown (exclude already scheduled when creating new)
-  const availablePlaylists = useMemo(() => {
-    if (creatingNew) {
-      const scheduledIds = new Set(schedules.map(s => s.playlist_id));
-      return playlists.filter(p => !scheduledIds.has(p.id));
-    }
-    return playlists;
-  }, [playlists, schedules, creatingNew]);
+  // All playlists are selectable; multiple schedules per playlist are allowed.
+  const availablePlaylists = playlists;
 
   // Render edit row (shared for new and edit modes)
   const renderEditRow = () => {
@@ -599,7 +596,7 @@ const SchedulesPage = ({ user, onLogout }) => {
             <p className="text-sm text-spotify-gray-light mt-1">
               {playlistFilterId
                 ? `Showing schedules for ${filteredPlaylist?.name || 'this playlist'}.`
-                : 'Create and manage recurring operations. One schedule per playlist.'}
+                : 'Create and manage recurring operations. Add multiple schedules per playlist to run at different times.'}
             </p>
           </div>
           <div className="flex flex-col items-start gap-3 md:items-end">

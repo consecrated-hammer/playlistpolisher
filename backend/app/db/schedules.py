@@ -77,6 +77,7 @@ def create_schedule(
     params: Dict[str, Any],
     frequency_minutes: int,
     first_run_at: Optional[str] = None,
+    replace_existing: bool = True,
 ) -> int:
     created_at = _now_iso()
     schedule_data = {
@@ -86,11 +87,13 @@ def create_schedule(
     next_run_at = first_run_at or _compute_next_run(schedule_data)
     with get_db_connection() as conn:
         cur = conn.cursor()
-        # Ensure only one schedule per playlist/user/action by replacing any existing row
-        cur.execute(
-            "DELETE FROM playlist_schedules WHERE playlist_id = ? AND user_id = ? AND action_type = ?",
-            (playlist_id, user_id, action_type),
-        )
+        if replace_existing:
+            # Enforce a single schedule per playlist/user/action by replacing any existing row.
+            # Used for global/singleton schedules (cache, backup-all, backup cleanup).
+            cur.execute(
+                "DELETE FROM playlist_schedules WHERE playlist_id = ? AND user_id = ? AND action_type = ?",
+                (playlist_id, user_id, action_type),
+            )
         cur.execute(
             """
             INSERT INTO playlist_schedules

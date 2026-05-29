@@ -116,6 +116,7 @@ async def create_schedule(
         params=schedule_params,
         frequency_minutes=freq_minutes,
         first_run_at=body.first_run_at,
+        replace_existing=False,  # Allow multiple sort schedules per playlist (e.g. different times of day)
     )
     sched = schedule_store.get_schedule(sched_id, session_mgr.get_user_id())
     return _to_response(sched)
@@ -145,6 +146,7 @@ async def create_backup_schedule(
         params=schedule_params,
         frequency_minutes=freq_minutes,
         first_run_at=body.first_run_at,
+        replace_existing=False,  # Allow multiple backup schedules per playlist
     )
     sched = schedule_store.get_schedule(sched_id, session_mgr.get_user_id())
     return _to_response(sched)

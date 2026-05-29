@@ -822,9 +822,39 @@ const PlaylistsPage = ({ user, onLogout }) => {
         <ErrorMessage message={error} onRetry={loadPlaylists} />
       ) : (
         <>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
-            <h2 className="text-2xl font-bold text-white">Your Playlists ({sortedPlaylists.length})</h2>
-            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <div className="mb-6 space-y-3">
+            {/* Row 1: Title + View toggle */}
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl sm:text-2xl font-bold text-white truncate">Your Playlists ({sortedPlaylists.length})</h2>
+              <div className="flex items-center gap-1 shrink-0 bg-spotify-gray-dark/60 border border-spotify-gray-mid/60 rounded-lg p-1">
+                {VIEW_MODE_OPTIONS.map((option) => {
+                  const isActive = viewMode === option.value;
+                  return (
+                    <div key={option.value} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => handleViewModeChange(option.value)}
+                        aria-pressed={isActive}
+                        aria-label={option.label}
+                        className={`w-9 h-9 rounded-md flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-spotify-green ${
+                          isActive
+                            ? 'bg-spotify-green text-black shadow-sm'
+                            : 'text-spotify-gray-light hover:text-white hover:bg-spotify-gray-mid/60'
+                        }`}
+                      >
+                        <span className="icon text-base">{option.icon}</span>
+                      </button>
+                      <div className="tooltip tooltip-up group-hover:tooltip-visible">
+                        {option.label}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Row 2: Create + Filter + Sort */}
+            <div className="flex flex-wrap items-center gap-2">
               <div className="relative" ref={createMenuRef}>
                 <button
                   type="button"
@@ -834,13 +864,14 @@ const PlaylistsPage = ({ user, onLogout }) => {
                   aria-expanded={createMenuOpen}
                 >
                   <span className="icon text-base">auto_awesome</span>
-                  Create playlist
+                  <span className="hidden xs:inline">Create playlist</span>
+                  <span className="xs:hidden">Create</span>
                   <span className={`icon text-base transition-transform ${createMenuOpen ? 'rotate-180' : ''}`}>
                     expand_more
                   </span>
                 </button>
                 {createMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-72 bg-spotify-gray-dark border border-spotify-gray-mid/60 rounded-xl shadow-2xl z-50 p-1">
+                  <div className="absolute left-0 sm:right-0 sm:left-auto mt-2 w-72 bg-spotify-gray-dark border border-spotify-gray-mid/60 rounded-xl shadow-2xl z-50 p-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -872,15 +903,14 @@ const PlaylistsPage = ({ user, onLogout }) => {
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="playlist-filter" className="text-sm text-spotify-gray-light">
-                  Filter:
-                </label>
+
+              <div className="flex flex-1 items-center gap-2 min-w-0">
                 <select
                   id="playlist-filter"
                   value={filterOption}
                   onChange={(e) => setFilterOption(e.target.value)}
-                  className="bg-spotify-gray-dark text-white text-sm rounded-md px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                  aria-label="Filter playlists"
+                  className="flex-1 min-w-0 bg-spotify-gray-dark text-white text-sm rounded-md px-2 sm:px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
                 >
                   <option value="all">All playlists</option>
                   <option value="owned">Owned by me</option>
@@ -888,20 +918,17 @@ const PlaylistsPage = ({ user, onLogout }) => {
                   <option value="private">Private</option>
                   <option value="collaborative">Collaborative</option>
                 </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <label htmlFor="playlist-sort" className="text-sm text-spotify-gray-light">
-                  Sort:
-                </label>
+
                 <select
                   id="playlist-sort"
                   value={effectiveSortOption}
                   onChange={(e) => setSortPreference(e.target.value)}
-                  className="bg-spotify-gray-dark text-white text-sm rounded-md px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
+                  aria-label="Sort playlists"
+                  className="flex-1 min-w-0 bg-spotify-gray-dark text-white text-sm rounded-md px-2 sm:px-3 py-2 border border-spotify-gray-mid focus:outline-none focus:ring-2 focus:ring-spotify-green"
                 >
-                  <option value="default">Default (Spotify order)</option>
+                  <option value="default">Default order</option>
                   {cacheSortEnabled && (
-                    <option value="recently-updated-estimated">Recently updated (estimated)</option>
+                    <option value="recently-updated-estimated">Recently updated</option>
                   )}
                   <option value="name-asc">Name A → Z</option>
                   <option value="name-desc">Name Z → A</option>
@@ -914,8 +941,9 @@ const PlaylistsPage = ({ user, onLogout }) => {
                   <option value="duration-desc">Duration ↓</option>
                   <option value="duration-asc">Duration ↑</option>
                 </select>
+
                 {cacheSortEnabled && effectiveSortOption === 'recently-updated-estimated' && (
-                  <div className="relative group">
+                  <div className="relative group shrink-0">
                     <button
                       type="button"
                       className="w-8 h-8 rounded-full flex items-center justify-center text-spotify-gray-light hover:text-white hover:bg-spotify-gray-mid/60 transition-colors"
@@ -928,34 +956,6 @@ const PlaylistsPage = ({ user, onLogout }) => {
                     </div>
                   </div>
                 )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-spotify-gray-light">View:</span>
-                <div className="flex items-center gap-1 bg-spotify-gray-dark/60 border border-spotify-gray-mid/60 rounded-lg p-1">
-                  {VIEW_MODE_OPTIONS.map((option) => {
-                    const isActive = viewMode === option.value;
-                    return (
-                      <div key={option.value} className="relative group">
-                        <button
-                          type="button"
-                          onClick={() => handleViewModeChange(option.value)}
-                          aria-pressed={isActive}
-                          aria-label={option.label}
-                          className={`w-9 h-9 rounded-md flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-spotify-green ${
-                            isActive
-                              ? 'bg-spotify-green text-black shadow-sm'
-                              : 'text-spotify-gray-light hover:text-white hover:bg-spotify-gray-mid/60'
-                          }`}
-                        >
-                          <span className="icon text-base">{option.icon}</span>
-                        </button>
-                        <div className="tooltip tooltip-up group-hover:tooltip-visible">
-                          {option.label}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             </div>
           </div>
