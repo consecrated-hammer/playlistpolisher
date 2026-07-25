@@ -1,0 +1,85 @@
+# Docker Compose configuration for dev deployment with Traefik
+# Uses local build with separate dev domain and database
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_APP_VERSION=${VITE_APP_VERSION}
+        - VITE_BUILD_TIME=${VITE_BUILD_TIME}
+        - VITE_IMAGE_TAG=${VITE_IMAGE_TAG:-dev}
+        - VITE_BUILD_ENV=development
+        - VITE_COMMIT_SHA=${VITE_COMMIT_SHA}
+    container_name: playlistpolisher-dev
+    restart: unless-stopped
+
+    env_file: .env.dev
+
+    environment:
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=production
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8001
+      - FRONTEND_URL=${FRONTEND_URL}
+      - FRONTEND_ALLOWED_ORIGINS=${FRONTEND_ALLOWED_ORIGINS}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      # Traefik enforces the public per-client limit before proxying requests.
+      # The app cannot reliably identify clients after the proxy hop.
+      - RATE_LIMIT_ENABLED=false
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-120}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
+      - TRACK_CACHE_TTL_DAYS=${TRACK_CACHE_TTL_DAYS:-30}
+
+    volumes:
+      - playlistpolisher-dev-data:/data
+      - ${DEV_LOG_DIR:-./backend/.data/logs}:/data/logs
+
+    networks:
+      - traefik_proxy
+
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_proxy"
+
+      # Dev router - serves both frontend and API on dev subdomain
+      - "traefik.http.routers.playlistpolisher-dev.rule=Host(`playlistpolisher-dev.${DOMAIN_PRIMARY}`) || Host(`www.playlistpolisher-dev.${DOMAIN_PRIMARY}`)"
+      - "traefik.http.routers.playlistpolisher-dev.entrypoints=websecure"
+      - "traefik.http.routers.playlistpolisher-dev.tls.certresolver=letsencrypt"
+      - "traefik.http.services.playlistpolisher-dev.loadbalancer.server.port=8001"
+
+      # Security headers
+      - "traefik.http.middlewares.playlistpolisher-dev-sec.headers.customResponseHeaders.X-Content-Type-Options=nosniff"
+      - "traefik.http.middlewares.playlistpolisher-dev-sec.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
+      - "traefik.http.middlewares.playlistpolisher-dev-rate-limit.ratelimit.average=120"
+      - "traefik.http.middlewares.playlistpolisher-dev-rate-limit.ratelimit.period=1m"
+      - "traefik.http.middlewares.playlistpolisher-dev-rate-limit.ratelimit.burst=60"
+      - "traefik.http.routers.playlistpolisher-dev.middlewares=playlistpolisher-dev-sec,playlistpolisher-dev-rate-limit"
+
+      # Homepage dashboard integration
+      - "homepage.enable=true"
+      - "homepage.name=Playlist Polisher Dev"
+      - "homepage.href=https://playlistpolisher-dev.${DOMAIN_PRIMARY}"
+      - "homepage.icon=https://playlistpolisher-dev.${DOMAIN_PRIMARY}/favicon.svg"
+      - "homepage.group=Projects"
+
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  playlistpolisher-dev-data:
+    driver: local
+
+networks:
+  traefik_proxy:
+    external: true
+    name: traefik_proxy

@@ -1,0 +1,74 @@
+# Docker Compose configuration for production deployment with Traefik
+# Uses unified container architecture (frontend + backend in one)
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: playlistpolisher
+    restart: unless-stopped
+
+    environment:
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=production
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8001
+      - FRONTEND_URL=${FRONTEND_URL}
+      - FRONTEND_ALLOWED_ORIGINS=${FRONTEND_ALLOWED_ORIGINS}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Traefik enforces the public per-client limit before proxying requests.
+      # The app cannot reliably identify clients after the proxy hop.
+      - RATE_LIMIT_ENABLED=false
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-120}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-60}
+
+    volumes:
+      - playlistpolisher-data:/data
+
+    networks:
+      - traefik_proxy
+
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_proxy"
+
+      # Main router - serves both frontend and API
+      - "traefik.http.routers.playlistpolisher.rule=Host(`${DOMAIN_PRIMARY:-playlistpolisher.com}`) || Host(`www.${DOMAIN_PRIMARY:-playlistpolisher.com}`)"
+      - "traefik.http.routers.playlistpolisher.entrypoints=websecure"
+      - "traefik.http.routers.playlistpolisher.tls.certresolver=letsencrypt"
+      - "traefik.http.services.playlistpolisher.loadbalancer.server.port=8001"
+
+      # Security headers
+      - "traefik.http.middlewares.playlistpolisher-sec.headers.customResponseHeaders.X-Content-Type-Options=nosniff"
+      - "traefik.http.middlewares.playlistpolisher-sec.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
+      - "traefik.http.middlewares.playlistpolisher-rate-limit.ratelimit.average=120"
+      - "traefik.http.middlewares.playlistpolisher-rate-limit.ratelimit.period=1m"
+      - "traefik.http.middlewares.playlistpolisher-rate-limit.ratelimit.burst=60"
+      - "traefik.http.routers.playlistpolisher.middlewares=playlistpolisher-sec,playlistpolisher-rate-limit"
+
+      # Homepage dashboard integration (optional)
+      - "homepage.enable=true"
+      - "homepage.name=Playlist Polisher"
+      - "homepage.href=https://${DOMAIN_PRIMARY:-playlistpolisher.com}"
+      - "homepage.icon=https://${DOMAIN_PRIMARY:-playlistpolisher.com}/favicon.svg"
+      - "homepage.group=Projects"
+
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  playlistpolisher-data:
+    driver: local
+
+networks:
+  traefik_proxy:
+    external: true

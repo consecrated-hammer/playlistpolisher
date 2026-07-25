@@ -15,7 +15,6 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Request, Response
 from fastapi.responses import RedirectResponse, JSONResponse
 import logging
 import spotipy
-from urllib.parse import urlparse
 import secrets
 import hmac
 import hashlib
@@ -43,15 +42,10 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 # Session cookie settings
 SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60  # 7 days
 SESSION_COOKIE_SECURE = settings.is_production
-# Use SameSite=None for production cross-site; Lax for dev
-SESSION_COOKIE_SAMESITE = "none" if settings.is_production else "lax"
-_parsed_frontend = urlparse(settings.frontend_url)
-# Don't set domain for IP addresses in development - let browser handle it
-SESSION_COOKIE_DOMAIN = (
-    f".{_parsed_frontend.hostname}" 
-    if _parsed_frontend and _parsed_frontend.hostname and not _parsed_frontend.hostname.replace('.', '').isdigit()
-    else None
-)
+# The unified deployment is same-origin. Lax prevents cross-site state changes.
+SESSION_COOKIE_SAMESITE = "lax"
+# Use a host-only cookie so unrelated subdomains cannot receive it.
+SESSION_COOKIE_DOMAIN = None
 STATE_TTL_SECONDS = 10 * 60  # 10 minutes
 AUTH_EXCHANGE_TTL_SECONDS = 5 * 60  # 5 minutes
 
