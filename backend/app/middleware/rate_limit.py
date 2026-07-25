@@ -45,9 +45,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if path in self.exclude_paths:
             return await call_next(request)
 
-        client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
-            request.client.host if request.client else "unknown"
-        )
+        client_ip = request.client.host if request.client else "unknown"
         key = f"{client_ip}:{path}"
         allowed = await self.limiter.is_allowed(key)
         if not allowed:
