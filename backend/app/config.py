@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     log_dir: str = "/data/logs"
     log_file_enabled: bool = True
 
+    # Optional shared BatServer notification webhook.  It is supplied only at
+    # runtime and must never be returned by an API or written to application logs.
+    discord_webhook_url: str | None = None
+
     # Rate limiting
     rate_limit_enabled: bool = True
     rate_limit_requests_per_minute: int = 120
