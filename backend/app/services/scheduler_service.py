@@ -15,6 +15,7 @@ from app.services.job_service import SortJobService
 from app.utils.session_manager import SessionManager
 from app.services.cache_service import CacheService
 from app.services.cache_warm_service import start_cache_warm_job
+from app.services.discord_notifications import send_schedule_failure_notification
 from app.db import playlist_cache as playlist_cache_store
 
 logger = logging.getLogger(__name__)
@@ -86,13 +87,25 @@ class SchedulerService:
                 self._run_cache_refresh_schedule(action_type, user_id, session_id, schedule_id)
             else:
                 logger.warning("Unsupported scheduled action %s", action_type)
-                schedule_store.mark_run(schedule_id, user_id, frequency_minutes, success=False, error="Unsupported action")
+                error = "Unsupported action"
+                schedule_store.mark_run(schedule_id, user_id, frequency_minutes, success=False, error=error)
+                send_schedule_failure_notification(
+                    schedule_id=schedule_id,
+                    action_type=action_type or "unknown",
+                    error=error,
+                )
                 return
 
             schedule_store.mark_run(schedule_id, user_id, frequency_minutes, success=True, error=None)
         except Exception as exc:
             logger.error("Scheduled action failed (id=%s): %s", schedule_id, exc, exc_info=True)
-            schedule_store.mark_run(schedule_id, user_id, frequency_minutes, success=False, error=str(exc))
+            error = str(exc)
+            schedule_store.mark_run(schedule_id, user_id, frequency_minutes, success=False, error=error)
+            send_schedule_failure_notification(
+                schedule_id=schedule_id,
+                action_type=action_type or "unknown",
+                error=error,
+            )
 
     def _run_sort_schedule(self, playlist_id: str, user_id: str, session_id: Optional[str], params: dict, schedule_id: int):
         sort_by = params.get("sort_by", "date_added")
