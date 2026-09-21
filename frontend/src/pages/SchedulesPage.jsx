@@ -376,9 +376,9 @@ const SchedulesPage = ({ user, onLogout }) => {
     const selectedAction = actionConfigs[editForm.action_type] || actionConfigs.sort;
     
     return (
-      <div className="grid grid-cols-12 px-4 py-3 text-sm items-center bg-spotify-green/5 border-l-4 border-spotify-green">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,2fr)_minmax(0,0.9fr)_minmax(0,1.3fr)_9rem_7.5rem] px-4 py-3 text-sm items-center bg-spotify-green/5 border-l-4 border-spotify-green">
         {/* Type */}
-        <div className="col-span-2 pr-2">
+        <div className="pr-2">
           <Tooltip.Provider delayDuration={120}>
             <Select.Root
               value={editForm.action_type}
@@ -444,7 +444,7 @@ const SchedulesPage = ({ user, onLogout }) => {
         </div>
 
         {/* Playlist */}
-        <div className="col-span-2 pr-2">
+        <div className="pr-2">
           {isCacheAction || isBackupCleanupAction ? (
             <input
               value={isBackupCleanupAction ? 'Backup cleanup' : 'Global cache'}
@@ -470,7 +470,7 @@ const SchedulesPage = ({ user, onLogout }) => {
         </div>
 
         {/* Action-specific fields */}
-        <div className="col-span-3 pr-2 flex gap-1">
+        <div className="pr-2 flex gap-1">
           {editForm.action_type === 'sort' && (
             <>
               <select
@@ -505,7 +505,7 @@ const SchedulesPage = ({ user, onLogout }) => {
         </div>
 
         {/* Frequency */}
-        <div className="col-span-1 pr-2">
+        <div className="pr-2">
           <select
             value={editForm.schedule_type}
             onChange={(e) => setEditForm({ ...editForm, schedule_type: e.target.value })}
@@ -518,7 +518,7 @@ const SchedulesPage = ({ user, onLogout }) => {
         </div>
 
         {/* Next run details (hour + optional day) */}
-        <div className="col-span-2 pr-2 flex gap-1">
+        <div className="pr-2 flex gap-1">
           <select
             value={editForm.hour_of_day}
             onChange={(e) => setEditForm({ ...editForm, hour_of_day: e.target.value })}
@@ -557,10 +557,10 @@ const SchedulesPage = ({ user, onLogout }) => {
         </div>
 
         {/* Outcome placeholder to keep grid alignment */}
-        <div className="col-span-1 text-spotify-gray-light text-xs">—</div>
+        <div className="text-spotify-gray-light text-xs">—</div>
 
         {/* Actions */}
-        <div className="col-span-1 flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
           <div className="relative group">
             <button
               onClick={handleSaveEdit}
@@ -651,14 +651,14 @@ const SchedulesPage = ({ user, onLogout }) => {
 
             <div className="bg-spotify-gray-mid/20 rounded-lg border border-spotify-gray-mid/60">
               {/* Table Header */}
-              <div className="grid grid-cols-12 px-4 py-3 text-xs text-spotify-gray-light font-semibold border-b border-spotify-gray-mid/60">
-                <div className="col-span-2">Type</div>
-                <div className="col-span-2">Scope</div>
-                <div className="col-span-3">Action Details</div>
-                <div className="col-span-1">Frequency</div>
-                <div className="col-span-2">Next run</div>
-                <div className="col-span-1">Outcome</div>
-                <div className="col-span-1 text-right">Actions</div>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,2fr)_minmax(0,0.9fr)_minmax(0,1.3fr)_9rem_7.5rem] px-4 py-3 text-xs text-spotify-gray-light font-semibold border-b border-spotify-gray-mid/60">
+                <div>Type</div>
+                <div>Scope</div>
+                <div>Action Details</div>
+                <div>Frequency</div>
+                <div>Next run</div>
+                <div>Outcome</div>
+                <div className="text-right">Actions</div>
               </div>
 
               {/* Table Body */}
@@ -694,17 +694,17 @@ const SchedulesPage = ({ user, onLogout }) => {
                   return (
                     <div 
                       key={s.id} 
-                      className={`grid grid-cols-12 px-4 py-3 text-sm items-center transition-colors ${
+                      className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,2fr)_minmax(0,0.9fr)_minmax(0,1.3fr)_9rem_7.5rem] px-4 py-3 text-sm items-center transition-colors ${
                         creatingNew || editingRowId ? 'opacity-50' : 'hover:bg-spotify-gray-mid/20'
                       }`}
                     >
                       {/* Type */}
-                      <div className="col-span-2 text-spotify-gray-light capitalize">
+                      <div className="text-spotify-gray-light capitalize">
                         {config?.label || actionType}
                       </div>
 
                       {/* Scope */}
-                      <div className="col-span-2 truncate text-white">
+                      <div className="truncate text-white">
                         {isCache ? (
                           <span>Global cache</span>
                         ) : isBackupGlobal ? (
@@ -719,17 +719,17 @@ const SchedulesPage = ({ user, onLogout }) => {
                       </div>
 
                       {/* Action Details */}
-                      <div className="col-span-3 text-spotify-gray-light truncate">
+                      <div className="text-spotify-gray-light truncate">
                         {actionSummary}
                       </div>
 
                       {/* Frequency */}
-                      <div className="col-span-1 text-spotify-gray-light capitalize">
+                      <div className="text-spotify-gray-light capitalize">
                         {params.schedule_type || `${s.frequency_minutes}m`}
                       </div>
 
                       {/* Next run */}
-                      <div className="col-span-2 text-spotify-gray-light text-xs">
+                      <div className="text-spotify-gray-light text-xs">
                         {s.next_run_at ? (() => {
                           const d = new Date(s.next_run_at);
                           return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
@@ -737,7 +737,7 @@ const SchedulesPage = ({ user, onLogout }) => {
                       </div>
 
                       {/* Outcome */}
-                      <div className="col-span-1 text-xs flex items-center gap-2">
+                      <div className="text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                         {s.status && s.last_run_at ? (
                           <>
                             <a
@@ -767,7 +767,7 @@ const SchedulesPage = ({ user, onLogout }) => {
                       </div>
 
                       {/* Actions */}
-                      <div className="col-span-1 flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2">
                         <div className="relative group">
                           <button
                             onClick={() => toggleEnabled(s)}
