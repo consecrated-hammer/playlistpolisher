@@ -128,6 +128,24 @@ def list_for_user(user_id: str) -> List[Dict[str, Any]]:
     return [_row_to_dict(r) for r in rows]
 
 
+def rebind_failed_auth_sessions_for_user(user_id: str, session_id: str) -> int:
+    """Repair schedules that have already failed with expired Spotify auth."""
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE playlist_schedules
+            SET session_id = ?, status = 'scheduled', last_error = NULL, updated_at = ?
+            WHERE user_id = ?
+              AND status = 'failed'
+              AND last_error LIKE 'Spotify authentication expired for scheduled%'
+            """,
+            (session_id, _now_iso(), user_id),
+        )
+        conn.commit()
+        return cur.rowcount
+
+
 def get_schedule(schedule_id: int, user_id: str) -> Optional[Dict[str, Any]]:
     with get_db_connection() as conn:
         cur = conn.cursor()
