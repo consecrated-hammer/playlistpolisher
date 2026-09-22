@@ -130,3 +130,61 @@ def test_mark_run(temp_db):
     assert sched["last_run_at"] is not None
     assert sched["next_run_at"] is not None
     assert sched["status"] == "ok"
+
+
+def test_rebind_failed_auth_sessions_only_updates_matching_schedules(temp_db):
+    first = schedules.create_schedule(
+        playlist_id="pl-rebind-1",
+        user_id="u-rebind",
+        session_id="old-session",
+        action_type="sort",
+        params={},
+        frequency_minutes=60,
+        replace_existing=False,
+    )
+    second = schedules.create_schedule(
+        playlist_id="pl-rebind-2",
+        user_id="u-rebind",
+        session_id="still-valid-session",
+        action_type="backup",
+        params={},
+        frequency_minutes=60,
+        replace_existing=False,
+    )
+    other = schedules.create_schedule(
+        playlist_id="pl-other",
+        user_id="u-other",
+        session_id="other-session",
+        action_type="sort",
+        params={},
+        frequency_minutes=60,
+        replace_existing=False,
+    )
+
+    schedules.update_schedule(
+        first,
+        "u-rebind",
+        status="failed",
+        last_error="Spotify authentication expired for scheduled task",
+    )
+    schedules.update_schedule(
+        second,
+        "u-rebind",
+        status="failed",
+        last_error="A different failure",
+    )
+    schedules.update_schedule(
+        other,
+        "u-other",
+        status="failed",
+        last_error="Spotify authentication expired for scheduled task",
+    )
+
+    assert schedules.rebind_failed_auth_sessions_for_user("u-rebind", "new-session") == 1
+    repaired = schedules.get_schedule(first, "u-rebind")
+    assert repaired["session_id"] == "new-session"
+    assert repaired["status"] == "scheduled"
+    assert repaired["last_error"] is None
+    assert schedules.get_schedule(second, "u-rebind")["session_id"] == "still-valid-session"
+    assert schedules.get_schedule(other, "u-other")["session_id"] == "other-session"
+    assert schedules.rebind_failed_auth_sessions_for_user("u-rebind", "new-session") == 0

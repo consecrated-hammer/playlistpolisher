@@ -34,6 +34,7 @@ from app.models.schemas import (
 )
 from app.utils.session_manager import SessionManager, SESSION_COOKIE_NAME
 from app.db.database import get_db_connection
+from app.db import schedules as schedule_store
 
 logger = logging.getLogger(__name__)
 
@@ -252,8 +253,17 @@ async def callback(
             token_type=token_info.get("token_type", "Bearer"),
             scope=token_info.get("scope", "")
         )
+        try:
+            rebound_schedules = schedule_store.rebind_failed_auth_sessions_for_user(user_id, session_id)
+        except Exception as exc:
+            rebound_schedules = None
+            logger.warning("Could not rebind failed schedules after OAuth callback: %s", exc)
         
-        logger.info(f"OAuth callback successful for user {user_id}, session created")
+        logger.info(
+            "OAuth callback successful for user %s, session created; rebound failed schedules=%s",
+            user_id,
+            rebound_schedules,
+        )
         
         # Create short-lived exchange code for frontend session establishment
         auth_code = secrets.token_urlsafe(32)
